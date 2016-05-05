@@ -29,12 +29,7 @@ const keyboardProfile = new ControllerProfile("Keyboard", {
   90: "b"
 });
 
-var gameboy = new GameBoy();
-
-var inFullscreen = false;
-var mainCanvas = null;
-var fullscreenCanvas = null;
-var showAsMinimal = false;
+const gameboy = new GameBoy();
 
 function getSpeedValue(button) {
   return (button.value * 2) + 1;
@@ -169,20 +164,11 @@ function windowingInitialize() {
 
   $(canvas).on("dblclick", toggleFullscreen);
 
-  function getCanvasSize() {
-    return {
-      height: canvas.clientHeight,
-      width: canvas.clientWidth
-    };
-  }
-
   romElement.addEventListener("change", function () {
     if (this.files.length >= 1) {
-      console.log("Reading the local file \"" + this.files[0].name + "\"");
       var binaryHandle = new FileReader();
       binaryHandle.onload = function () {
         if (this.readyState === 2) {
-          console.log("file loaded.");
           gameboy.start(canvas, this.result);
         }
       };
@@ -215,7 +201,7 @@ function keyUp(e) {
   }
 }
 
-var isInFullscreen = false;
+let isInFullscreen = false;
 
 function toggleFullscreen() {
   if (isInFullscreen) {

@@ -4,8 +4,6 @@ import {
   Buffer
 } from "buffer";
 
-var gbRunInterval = null; //GameBoyCore Timer
-
 export default class GameBoy {
   constructor() {
 
@@ -24,7 +22,7 @@ export default class GameBoy {
     this.core.stopEmulator &= 1;
     this.core.firstIteration = new Date().getTime();
     this.core.iterations = 0;
-    gbRunInterval = setInterval(() => {
+    this.interval = setInterval(() => {
       if (!document.hidden && !document.msHidden && !document.mozHidden && !document.webkitHidden) {
         this.core.run();
       }
@@ -90,9 +88,10 @@ export default class GameBoy {
   }
 
   openState(filename) {
-    if (this.findLocalStorageValue(filename) !== null) {
+    const value = this.findLocalStorageValue(filename);
+    if (value) {
       this.core.savedStateFileName = filename;
-      this.core.returnFromState(this.findLocalStorageValue(filename));
+      this.core.returnFromState(value);
     }
   }
 
