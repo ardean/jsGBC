@@ -42,7 +42,7 @@ controller.on("press", function (index, button) {
   } else if (action === "load") {
     openAndNotifyState();
   } else if (action === "speed") {
-    gameboy.setSpeed(getSpeedValue(button));
+    gameboy.core.setSpeed(getSpeedValue(button));
   } else if (action === "fullscreen") {
     toggleFullscreen();
   } else {
@@ -53,14 +53,14 @@ controller.on("press", function (index, button) {
 controller.on("changed", function (index, button) {
   const action = xboxControllerProfile.getAction(index);
   if (action === "speed") {
-    gameboy.setSpeed(getSpeedValue(button));
+    gameboy.core.setSpeed(getSpeedValue(button));
   }
 });
 
 controller.on("release", function (index) {
   const action = xboxControllerProfile.getAction(index);
   if (action === "speed") {
-    gameboy.setSpeed(1);
+    gameboy.core.setSpeed(1);
   } else {
     gameboy.actionUp(action);
   }
