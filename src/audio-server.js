@@ -51,21 +51,17 @@ export default class AudioServer {
       }
     }
 
-    if (WebAudioAudioNode) {
-      WebAudioAudioNode.disconnect();
-      WebAudioAudioNode.onaudioprocess = null;
-      WebAudioAudioNode = null;
-    }
+    if (!WebAudioAudioNode) {
+      try {
+        WebAudioAudioNode = WebAudioContextHandle.createScriptProcessor(SamplesPerCallback, 0, ChannelsAllocated);
+      } catch (error) {
+        WebAudioAudioNode = WebAudioContextHandle.createJavaScriptNode(SamplesPerCallback, 0, ChannelsAllocated);
+      }
 
-    try {
-      WebAudioAudioNode = WebAudioContextHandle.createScriptProcessor(SamplesPerCallback, 0, ChannelsAllocated); //Create the js event node.
-    } catch (error) {
-      WebAudioAudioNode = WebAudioContextHandle.createJavaScriptNode(SamplesPerCallback, 0, ChannelsAllocated); //Create the js event node.
+      WebAudioAudioNode.onaudioprocess = WebAudioEvent;
+      WebAudioAudioNode.connect(WebAudioContextHandle.destination);
+      this.resetCallbackAPIAudioBuffer(WebAudioContextHandle.sampleRate);
     }
-
-    WebAudioAudioNode.onaudioprocess = WebAudioEvent; //Connect the audio processing event to a handling function so we can manipulate output
-    WebAudioAudioNode.connect(WebAudioContextHandle.destination); //Send and chain the output of the audio manipulation to the system audio output.
-    this.resetCallbackAPIAudioBuffer(WebAudioContextHandle.sampleRate);
   }
 
   changeVolume(newVolume) {
