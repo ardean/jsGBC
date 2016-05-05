@@ -150,8 +150,8 @@ function windowingInitialize() {
       var binaryHandle = new FileReader();
       binaryHandle.onload = function () {
         if (this.readyState === 2) {
-          gameboy.savedStateFileName = file.name;
-          gameboy.returnFromState(JSON.parse(this.result));
+          gameboy.core.savedStateFileName = file.name;
+          gameboy.core.returnFromState(JSON.parse(this.result));
         }
       };
       binaryHandle.readAsBinaryString(file);
