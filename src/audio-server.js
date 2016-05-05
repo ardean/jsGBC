@@ -43,10 +43,12 @@ export default class AudioServer {
   }
 
   initializeAudio() {
-    try {
-      WebAudioContextHandle = new AudioContext();
-    } catch (error) {
-      WebAudioContextHandle = new webkitAudioContext();
+    if (!WebAudioContextHandle) {
+      try {
+        WebAudioContextHandle = new AudioContext();
+      } catch (error) {
+        WebAudioContextHandle = new webkitAudioContext();
+      }
     }
 
     if (WebAudioAudioNode) {
