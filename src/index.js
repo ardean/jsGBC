@@ -88,8 +88,9 @@ document.body.appendChild(notifyElement);
 
 var saveData = (function () {
   var a = document.createElement("a");
+  a.style.display = "none";
   document.body.appendChild(a);
-  a.style = "display: none";
+
   return function (data, fileName) {
     var json = JSON.stringify(data);
     var blob = new Blob([json], {

@@ -9,7 +9,7 @@ function Resize(widthOriginal, heightOriginal, targetWidth, targetHeight, blendA
 	this.colorChannels = (!!blendAlpha) ? 4 : 3;
 	this.interpolationPass = !!interpolationPass;
 	this.useWebWorker = !!useWebWorker;
-	this.resizeCallback = (typeof resizeCallback == "function") ? resizeCallback : function (returnedArray) {};
+	this.resizeCallback = (typeof resizeCallback === "function") ? resizeCallback : function (returnedArray) {};
 	this.targetWidthMultipliedByChannels = this.targetWidth * this.colorChannels;
 	this.originalWidthMultipliedByChannels = this.widthOriginal * this.colorChannels;
 	this.originalHeightMultipliedByChannels = this.heightOriginal * this.colorChannels;
@@ -49,7 +49,7 @@ Resize.prototype.configureWorker = function () {
 	}
 }
 Resize.prototype.configurePasses = function () {
-	if (this.widthOriginal == this.targetWidth) {
+	if (this.widthOriginal === this.targetWidth) {
 		//Bypass the width resizer pass:
 		this.resizeWidth = this.bypassResizer;
 	}
@@ -58,14 +58,14 @@ Resize.prototype.configurePasses = function () {
 		this.ratioWeightWidthPass = this.widthOriginal / this.targetWidth;
 		if (this.ratioWeightWidthPass < 1 && this.interpolationPass) {
 			this.initializeFirstPassBuffers(true);
-			this.resizeWidth = (this.colorChannels == 4) ? this.resizeWidthInterpolatedRGBA : this.resizeWidthInterpolatedRGB;
+			this.resizeWidth = (this.colorChannels === 4) ? this.resizeWidthInterpolatedRGBA : this.resizeWidthInterpolatedRGB;
 		}
 		else {
 			this.initializeFirstPassBuffers(false);
-			this.resizeWidth = (this.colorChannels == 4) ? this.resizeWidthRGBA : this.resizeWidthRGB;
+			this.resizeWidth = (this.colorChannels === 4) ? this.resizeWidthRGBA : this.resizeWidthRGB;
 		}
 	}
-	if (this.heightOriginal == this.targetHeight) {
+	if (this.heightOriginal === this.targetHeight) {
 		//Bypass the height resizer pass:
 		this.resizeHeight = this.bypassResizer;
 	}
@@ -78,7 +78,7 @@ Resize.prototype.configurePasses = function () {
 		}
 		else {
 			this.initializeSecondPassBuffers(false);
-			this.resizeHeight = (this.colorChannels == 4) ? this.resizeHeightRGBA : this.resizeHeightRGB;
+			this.resizeHeight = (this.colorChannels === 4) ? this.resizeHeightRGBA : this.resizeHeightRGB;
 		}
 	}
 }

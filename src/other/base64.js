@@ -27,7 +27,7 @@ function base64(data) {
 			if (remainder > 0) {
 				//Fill in the padding and recalulate the trailing six-bit group...
 				base64[base64.length - 1] = "=";
-				if (remainder == 2) {
+				if (remainder === 2) {
 					base64[base64.length - 2] = "=";
 					base64[base64.length - 3] = toBase64[(bytes[0] & 0x3) << 4];
 				}
@@ -47,7 +47,7 @@ function base64_decode(data) {
 		//Defaulting to non-native base64 decoding...
 		var decode64 = "";
 		var dataLength = data.length;
-		if (dataLength > 3 && dataLength % 4 == 0) {
+		if (dataLength > 3 && dataLength % 4 === 0) {
 			var sixbits = [0, 0, 0, 0];	//Declare this out of the loop, to speed up the ops.
 			var index = 0;
 			while (index < dataLength) {
@@ -79,7 +79,7 @@ function arrayToBase64(arrayIn) {
 	var binString = "";
 	var length = arrayIn.length;
 	for (var index = 0; index < length; ++index) {
-		if (typeof arrayIn[index] == "number") {
+		if (typeof arrayIn[index] === "number") {
 			binString += String.fromCharCode(arrayIn[index]);
 		}
 	}
