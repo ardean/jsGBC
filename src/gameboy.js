@@ -5,20 +5,19 @@ import {
 } from "buffer";
 
 export default class GameBoy {
-  constructor() {
-
-  }
-
-  start(canvas, rom) {
-    this.core = new GameBoyCore(canvas, rom);
+  constructor(canvas) {
+    this.core = new GameBoyCore(canvas);
     this.core.openMBC = this.openSRAM.bind(this);
     this.core.openRTC = this.openRTC.bind(this);
-    this.core.start();
 
-    this.run();
+    this.isOn = false;
   }
 
-  run() {
+  turnOn() {
+    if (this.isOn) return;
+    this.isOn = true;
+
+    this.core.start();
     this.core.stopEmulator &= 1;
     this.core.firstIteration = new Date().getTime();
     this.core.iterations = 0;
@@ -26,7 +25,26 @@ export default class GameBoy {
       if (!document.hidden && !document.msHidden && !document.mozHidden && !document.webkitHidden) {
         this.core.run();
       }
-    }, settings[6]);
+    }, settings.runInterval);
+  }
+
+  turnOff() {
+    if (!this.isOn) return;
+    this.isOn = false;
+
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+
+  restart() {
+    this.turnOff();
+    this.turnOn();
+  }
+
+  insertROM(rom) {
+    this.core.ROMImage = rom;
   }
 
   actionDown(action) {
@@ -35,6 +53,10 @@ export default class GameBoy {
 
   actionUp(action) {
     this.core.JoyPadEvent(this.getButtonIndex(action), false);
+  }
+
+  setSpeed(multiplier) {
+    this.core.setSpeed(multiplier);
   }
 
   getButtonIndex(action) {
@@ -59,7 +81,7 @@ export default class GameBoy {
     }
   }
 
-  saveRTC() { //Execute this when SRAM is being saved as well.
+  saveRTC() {
     if (this.core.cTIMER) {
       this.setLocalStorageValue("RTC_" + this.core.name, this.core.saveRTCState());
     }

@@ -4633,12 +4633,14 @@ GameBoyCore.prototype.returnFromRTCState = function () {
     this.RTCHALT = rtcData[index];
   }
 }
-GameBoyCore.prototype.start = function () {
+GameBoyCore.prototype.init = function () {
   this.initMemory(); //Write the startup memory.
-  this.ROMLoad(); //Load the ROM into memory and get cartridge information from it.
   this.initLCD(); //Initialize the graphics.
   this.initSound(); //Sound object initialization.
-  this.run(); //Start the emulation.
+};
+GameBoyCore.prototype.start = function () {
+  this.init();
+  this.ROMLoad();
 }
 GameBoyCore.prototype.initMemory = function () {
   //Initialize the RAM:
@@ -5198,15 +5200,6 @@ GameBoyCore.prototype.recomputeDimension = function () {
   //Cache some dimension info:
   this.onscreenWidth = this.width;
   this.onscreenHeight = this.height;
-  if (window && window.mozRequestAnimationFrame || (navigator.userAgent.toLowerCase().indexOf("gecko") != -1 && navigator.userAgent.toLowerCase().indexOf("like gecko") === -1)) {
-    //Firefox slowness hack:
-    this.width = this.onscreenWidth = this.width;
-    this.height = this.onscreenHeight = this.height;
-  } else {
-    this.onscreenWidth = this.width;
-    this.onscreenHeight = this.height;
-  }
-
   this.offscreenWidth = 160;
   this.offscreenHeight = 144;
   this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
@@ -5296,7 +5289,7 @@ GameBoyCore.prototype.GyroEvent = function (x, y) {
 GameBoyCore.prototype.initSound = function () {
   this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xFFFF / 0x1E0)), 1);
   this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
-  if (settings[0]) {
+  if (settings.soundOn) {
     this.audioServer = new AudioServer(
       2,
       this.clocksPerSecond / this.audioResamplerFirstPassFactor,
@@ -5305,7 +5298,7 @@ GameBoyCore.prototype.initSound = function () {
       null,
       settings[3],
       function () {
-        settings[0] = false;
+        settings.soundOn = false;
       }
     );
     this.initAudioBuffer();
@@ -5315,7 +5308,7 @@ GameBoyCore.prototype.initSound = function () {
   }
 }
 GameBoyCore.prototype.changeVolume = function () {
-  if (settings[0] && this.audioServer) {
+  if (settings.soundOn && this.audioServer) {
     this.audioServer.changeVolume(settings[3]);
   }
 }
@@ -5387,7 +5380,7 @@ GameBoyCore.prototype.intializeWhiteNoise = function () {
   this.noiseSampleTable = this.LSFR15Table;
 }
 GameBoyCore.prototype.audioUnderrunAdjustment = function () {
-  if (settings[0]) {
+  if (settings.soundOn) {
     var underrunAmount = this.audioServer.remainingBuffer();
     if (typeof underrunAmount === "number") {
       underrunAmount = this.bufferContainAmount - Math.max(underrunAmount, 0);
@@ -5541,7 +5534,7 @@ GameBoyCore.prototype.generateAudioFake = function (numSamples) {
 }
 GameBoyCore.prototype.audioJIT = function () {
   //Audio Sample Generation Timing:
-  if (settings[0]) {
+  if (settings.soundOn) {
     this.generateAudio(this.audioTicks);
   } else {
     this.generateAudioFake(this.audioTicks);

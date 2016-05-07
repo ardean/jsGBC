@@ -1,7 +1,10 @@
 import $ from "jquery";
+import notifier from "./notifier";
 import GameBoy from "./gameboy";
 import controller from "./controller";
 import ControllerProfile from "./controller-profile";
+
+notifier.appendTo(document.body);
 
 const xboxControllerProfile = new ControllerProfile("Xbox Controller", {
   0: "b",
@@ -29,7 +32,8 @@ const keyboardProfile = new ControllerProfile("Keyboard", {
   90: "b"
 });
 
-const gameboy = new GameBoy();
+const canvas = document.getElementById("canvas");
+const gameboy = new GameBoy(canvas);
 
 function getSpeedValue(button) {
   return (button.value * 2) + 1;
@@ -42,7 +46,7 @@ controller.on("press", function (index, button) {
   } else if (action === "load") {
     openAndNotifyState();
   } else if (action === "speed") {
-    gameboy.core.setSpeed(getSpeedValue(button));
+    gameboy.setSpeed(getSpeedValue(button));
   } else if (action === "fullscreen") {
     toggleFullscreen();
   } else {
@@ -53,14 +57,14 @@ controller.on("press", function (index, button) {
 controller.on("changed", function (index, button) {
   const action = xboxControllerProfile.getAction(index);
   if (action === "speed") {
-    gameboy.core.setSpeed(getSpeedValue(button));
+    gameboy.setSpeed(getSpeedValue(button));
   }
 });
 
 controller.on("release", function (index) {
   const action = xboxControllerProfile.getAction(index);
   if (action === "speed") {
-    gameboy.core.setSpeed(1);
+    gameboy.setSpeed(1);
   } else {
     gameboy.actionUp(action);
   }
@@ -68,23 +72,69 @@ controller.on("release", function (index) {
 
 controller.startListener();
 
-window.addEventListener("load", function () {
-  windowingInitialize();
+$(document)
+  .on("keydown", function (e) {
+    const action = keyboardProfile.getAction(e.keyCode);
+    if (action) {
+      if (action === "save") {
+        saveAndNotifyState();
+      } else if (action === "load") {
+        openAndNotifyState();
+      } else {
+        gameboy.actionDown(action);
+      }
+
+      e.preventDefault();
+    }
+  })
+  .on("keyup", function (e) {
+    const action = keyboardProfile.getAction(e.keyCode);
+    if (action) {
+      gameboy.actionUp(action);
+
+      e.preventDefault();
+    }
+  });
+$(canvas).on("dblclick", toggleFullscreen);
+
+var uploadStateElement = document.getElementById("uploadState");
+uploadStateElement.addEventListener("change", function () {
+  if (this.files.length > 0) {
+    var file = this.files[0];
+    var binaryHandle = new FileReader();
+    binaryHandle.onload = function () {
+      if (this.readyState === 2) {
+        gameboy.core.savedStateFileName = file.name;
+        gameboy.core.returnFromState(JSON.parse(this.result));
+      }
+    };
+    binaryHandle.readAsBinaryString(file);
+  }
+});
+
+var downloadSnapshot = document.getElementById("downloadState");
+downloadSnapshot.addEventListener("click", function () {
+  saveData(gameboy.core.saveState(), gameboy.core.name + ".s0");
+});
+
+var romElement = document.getElementById("rom");
+romElement.addEventListener("change", function () {
+  if (this.files.length > 0) {
+    var file = this.files[0];
+    var binaryHandle = new FileReader();
+    binaryHandle.onload = function () {
+      if (this.readyState === 2) {
+        gameboy.insertROM(this.result);
+        gameboy.restart();
+      }
+    };
+    binaryHandle.readAsBinaryString(file);
+  }
 });
 
 window.addEventListener("unload", function () {
   gameboy.autoSave();
 });
-
-var canvas;
-var notifyElement = document.createElement("div");
-notifyElement.style.display = "none";
-notifyElement.style.position = "absolute";
-notifyElement.style.top = "5px";
-notifyElement.style.right = "5px";
-notifyElement.style.fontSize = "25px";
-notifyElement.style.color = "red";
-document.body.appendChild(notifyElement);
 
 var saveData = (function () {
   var a = document.createElement("a");
@@ -104,102 +154,18 @@ var saveData = (function () {
   };
 }());
 
-var lastTimeout;
-
 function saveAndNotifyState() {
   var filename = gameboy.core.name + ".s0";
   gameboy.saveState(filename);
 
-  if (lastTimeout) {
-    clearTimeout(lastTimeout);
-  }
-
-  lastTimeout = setTimeout(function () {
-    notifyElement.style.display = "none";
-  }, 500);
-
-  notifyElement.textContent = "Save " + filename;
-  notifyElement.style.display = "block";
+  notifier.notify("Save " + filename);
 }
 
 function openAndNotifyState() {
   var filename = gameboy.core.name + ".s0";
   gameboy.openState(filename, canvas);
 
-  if (lastTimeout) {
-    clearTimeout(lastTimeout);
-  }
-
-  lastTimeout = setTimeout(function () {
-    notifyElement.style.display = "none";
-  }, 500);
-
-  notifyElement.textContent = "Loaded " + filename;
-  notifyElement.style.display = "block";
-}
-
-function windowingInitialize() {
-  $(document).on("keydown", keyDown);
-  $(document).on("keyup", keyUp);
-  canvas = document.getElementById("canvas");
-  var romElement = document.getElementById("rom");
-  var uploadStateElement = document.getElementById("uploadState");
-  uploadStateElement.addEventListener("change", function () {
-    if (this.files.length > 0) {
-      var file = this.files[0];
-      var binaryHandle = new FileReader();
-      binaryHandle.onload = function () {
-        if (this.readyState === 2) {
-          gameboy.core.savedStateFileName = file.name;
-          gameboy.core.returnFromState(JSON.parse(this.result));
-        }
-      };
-      binaryHandle.readAsBinaryString(file);
-    }
-  });
-
-  var downloadSnapshot = document.getElementById("downloadState");
-  downloadSnapshot.addEventListener("click", function () {
-    saveData(gameboy.saveState(), gameboy.core.name + ".s0");
-  });
-
-  $(canvas).on("dblclick", toggleFullscreen);
-
-  romElement.addEventListener("change", function () {
-    if (this.files.length >= 1) {
-      var binaryHandle = new FileReader();
-      binaryHandle.onload = function () {
-        if (this.readyState === 2) {
-          gameboy.start(canvas, this.result);
-        }
-      };
-      binaryHandle.readAsBinaryString(this.files[this.files.length - 1]);
-    }
-  });
-}
-
-function keyDown(e) {
-  const action = keyboardProfile.getAction(e.keyCode);
-  if (action) {
-    if (action === "save") {
-      saveAndNotifyState();
-    } else if (action === "load") {
-      openAndNotifyState();
-    } else {
-      gameboy.actionDown(action);
-    }
-
-    e.preventDefault();
-  }
-}
-
-function keyUp(e) {
-  const action = keyboardProfile.getAction(e.keyCode);
-  if (action) {
-    gameboy.actionUp(action);
-
-    e.preventDefault();
-  }
+  notifier.notify("Loaded " + filename);
 }
 
 let isInFullscreen = false;

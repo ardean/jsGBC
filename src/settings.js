@@ -1,4 +1,4 @@
-export default [ //Some settings.
+const settings = [ //Some settings.
   true, //Turn on sound.
   true, //Boot with boot ROM first?
   false, //Give priority to GameBoy mode
@@ -15,3 +15,8 @@ export default [ //Some settings.
   true, //Use image smoothing based scaling?
   [true, true, true, true] //User controlled channel enables.
 ];
+
+settings.soundOn = true;
+settings.runInterval = 8;
+
+export default settings;
