@@ -124,7 +124,7 @@ romElement.addEventListener("change", function () {
     var binaryHandle = new FileReader();
     binaryHandle.onload = function () {
       if (this.readyState === 2) {
-        gameboy.insertROM(this.result);
+        gameboy.injectRom(this.result);
         gameboy.restart();
       }
     };
@@ -133,7 +133,7 @@ romElement.addEventListener("change", function () {
 });
 
 window.addEventListener("unload", function () {
-  gameboy.autoSave();
+  // gameboy.autoSave();
 });
 
 var saveData = (function () {

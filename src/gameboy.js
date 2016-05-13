@@ -1,8 +1,8 @@
-import settings from "./settings";
-import GameBoyCore from "./gameboy-core";
 import {
   Buffer
 } from "buffer";
+import settings from "./settings";
+import GameBoyCore from "./core";
 
 export default class GameBoy {
   constructor(canvas) {
@@ -17,7 +17,7 @@ export default class GameBoy {
     if (this.isOn) return;
     this.isOn = true;
 
-    this.core.start();
+    this.core.start(this.ROMImage);
     this.core.stopEmulator &= 1;
     this.core.firstIteration = new Date().getTime();
     this.core.iterations = 0;
@@ -43,8 +43,8 @@ export default class GameBoy {
     this.turnOn();
   }
 
-  insertROM(rom) {
-    this.core.ROMImage = rom;
+  injectRom(rom) {
+    this.ROMImage = rom;
   }
 
   actionDown(action) {

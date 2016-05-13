@@ -17,6 +17,11 @@ const settings = [ //Some settings.
 ];
 
 settings.soundOn = true;
+settings.bootBootRomFirst = true;
+settings.gbHasPriority = false;
+settings.colorizeGBMode = true;
 settings.runInterval = 8;
+settings.allowMBC1Override = false;
+settings.forceGBBootRom = false;
 
 export default settings;
