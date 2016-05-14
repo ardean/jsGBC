@@ -185,7 +185,6 @@ function fullscreen() {
   canvas.style.width = "100%";
 
   requestFullscreen();
-  recomputeSize();
 }
 
 function exitFullscreen() {
@@ -195,7 +194,6 @@ function exitFullscreen() {
   canvas.style.width = "";
 
   requestExitFullscreen();
-  recomputeSize();
 }
 
 function requestExitFullscreen() {
@@ -222,17 +220,4 @@ function requestFullscreen() {
       document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
     }
   }
-}
-
-function recomputeSize() {
-  gameboy.core.width = 160;
-  gameboy.core.height = 144;
-  gameboy.core.onscreenWidth = 160;
-  gameboy.core.onscreenHeight = 144;
-
-  gameboy.core.offscreenWidth = 160;
-  gameboy.core.offscreenHeight = 144;
-  gameboy.core.offscreenRGBCount = gameboy.core.offscreenWidth * gameboy.core.offscreenHeight * 4;
-
-  gameboy.core.initLCD();
 }

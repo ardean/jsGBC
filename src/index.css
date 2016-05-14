@@ -1,4 +1,22 @@
 body {
-	margin: 0;
-	padding: 0;
+  margin: 0;
+  padding: 0;
+}
+.pixelated {
+  /* Legal fallback */
+  image-rendering: optimizeSpeed;
+  /* Firefox        */
+  image-rendering: -moz-crisp-edges;
+  /* Opera          */
+  image-rendering: -o-crisp-edges;
+  /* Safari         */
+  image-rendering: -webkit-optimize-contrast;
+  /* CSS3 Proposed  */
+  image-rendering: optimize-contrast;
+  /* CSS4 Proposed  */
+  image-rendering: crisp-edges;
+  /* CSS4 Proposed  */
+  image-rendering: pixelated;
+  /* IE8+           */
+  -ms-interpolation-mode: nearest-neighbor;
 }

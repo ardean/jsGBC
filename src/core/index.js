@@ -4,14 +4,10 @@ import CartridgeSlot from "./cartridge-slot";
 import AudioServer from "../audio-server";
 import instructionSet from "./instruction-set";
 import util from "./util";
+import LCD from "./lcd";
 
 function GameBoyCore(canvas, options) {
   options = options || {};
-
-  this.width = options.width || 160;
-  this.height = options.height || 144;
-  this.canvas = canvas; //Canvas DOM object for drawing out the graphics to.
-  this.drawContext = null; // LCD Context
 
   //CPU Registers and Flags:
   this.registerA = 0x01; //Register A (Accumulator)
@@ -224,20 +220,11 @@ function GameBoyCore(canvas, options) {
   this.WindowLayerRender = null; //Reference to the window rendering function.
   this.SpriteLayerRender = null; //Reference to the OAM rendering function.
   this.frameBuffer = []; //The internal frame-buffer.
-  this.swizzledFrame = null; //The secondary gfx buffer that holds the converted RGBA values.
-  this.canvasBuffer = null; //imageData handle
   this.pixelStart = 0; //Temp variable for holding the current working framebuffer offset.
   //Variables used for scaling in JS:
-  this.onscreenWidth = this.width;
-  this.onscreenHeight = this.height;
-
-  this.offscreenWidth = 160;
-  this.offscreenHeight = 144;
-  this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
-
-  this.resizePathClear = true;
 
   this.cartridgeSlot = new CartridgeSlot(this);
+  this.lcd = new LCD(canvas, options, this);
 
   //Initialize the white noise cache tables ahead of time:
   this.intializeWhiteNoise();
@@ -771,8 +758,8 @@ GameBoyCore.prototype.start = function (rom) {
   this.checkIRQMatching();
 }
 GameBoyCore.prototype.init = function () {
-  this.initMemory(); //Write the startup memory.
-  this.initLCD(); //Initialize the graphics.
+  this.initMemory(); // Write the startup memory.
+  this.lcd.init(); // Initialize the graphics.
   this.initSound(); //Sound object initialization.
 };
 GameBoyCore.prototype.setupRAM = function () {
@@ -1017,69 +1004,6 @@ GameBoyCore.prototype.setSpeed = function (speed) {
     this.initSound();
   }
 }
-GameBoyCore.prototype.recomputeDimension = function () {
-  //Cache some dimension info:
-  this.onscreenWidth = this.width;
-  this.onscreenHeight = this.height;
-  this.offscreenWidth = 160;
-  this.offscreenHeight = 144;
-  this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
-}
-GameBoyCore.prototype.destroy = function () {
-  this.offscreenCanvas.remove();
-}
-GameBoyCore.prototype.initLCD = function () {
-  this.recomputeDimension();
-
-  if (!this.offscreenCanvas) this.offscreenCanvas = document.createElement("canvas");
-  if (!this.offscreenContext) this.offscreenContext = this.offscreenCanvas.getContext("2d");
-  if (!this.onscreenContext) this.onscreenContext = this.canvas.getContext("2d");
-
-  this.offscreenCanvas.width = this.offscreenWidth;
-  this.offscreenCanvas.height = this.offscreenHeight;
-
-  this.offscreenContext.imageSmoothingEnabled = false;
-  this.offscreenContext.mozImageSmoothingEnabled = false;
-  this.offscreenContext.webkitImageSmoothingEnabled = false;
-
-  this.onscreenContext.imageSmoothingEnabled = false;
-  this.onscreenContext.mozImageSmoothingEnabled = false;
-  this.onscreenContext.webkitImageSmoothingEnabled = false;
-
-  //Get a CanvasPixelArray buffer:
-  try {
-    this.canvasBuffer = this.offscreenContext.createImageData(this.offscreenWidth, this.offscreenHeight);
-  } catch (error) {
-    console.log("Falling back to the getImageData initialization (Error \"" + error.message + "\").", 1);
-    this.canvasBuffer = this.offscreenContext.getImageData(0, 0, this.offscreenWidth, this.offscreenHeight);
-  }
-
-  var index = this.offscreenRGBCount;
-  while (index > 0) {
-    index -= 4;
-    this.canvasBuffer.data[index] = 0xF8;
-    this.canvasBuffer.data[index + 1] = 0xF8;
-    this.canvasBuffer.data[index + 2] = 0xF8;
-    this.canvasBuffer.data[index + 3] = 0xFF;
-  }
-
-  this.graphicsBlit();
-  if (this.swizzledFrame === null) {
-    this.swizzledFrame = util.getTypedArray(69120, 0xFF, "uint8");
-  }
-
-  //Test the draw system and browser vblank latching:
-  this.drewFrame = true; //Copy the latest graphics to buffer.
-  this.requestDraw();
-}
-GameBoyCore.prototype.graphicsBlit = function () {
-  if (this.offscreenWidth === this.onscreenWidth && this.offscreenHeight === this.onscreenHeight) {
-    this.onscreenContext.putImageData(this.canvasBuffer, 0, 0);
-  } else {
-    this.offscreenContext.putImageData(this.canvasBuffer, 0, 0);
-    this.onscreenContext.drawImage(this.offscreenCanvas, 0, 0, this.onscreenWidth, this.onscreenHeight);
-  }
-}
 GameBoyCore.prototype.JoyPadEvent = function (key, down) {
   if (down) {
     this.JoyPad &= 0xFF ^ (1 << key);
@@ -1108,8 +1032,15 @@ GameBoyCore.prototype.GyroEvent = function (x, y) {
   this.lowY = y & 0xFF;
 }
 GameBoyCore.prototype.initSound = function () {
-  this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xFFFF / 0x1E0)), 1);
+  this.audioResamplerFirstPassFactor = Math.max(
+    Math.min(
+      Math.floor(this.clocksPerSecond / 44100),
+      Math.floor(0xFFFF / 0x1E0)
+    ),
+    1
+  );
   this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
+
   if (settings.soundOn) {
     this.audioServer = new AudioServer(
       2,
@@ -1124,12 +1055,11 @@ GameBoyCore.prototype.initSound = function () {
     );
     this.initAudioBuffer();
   } else if (this.audioServer) {
-    //Mute the audio output, as it has an immediate silencing effect:
     this.audioServer.changeVolume(0);
   }
 }
 GameBoyCore.prototype.changeVolume = function () {
-  if (settings.soundOn && this.audioServer) {
+  if (this.audioServer) {
     this.audioServer.changeVolume(settings[3]);
   }
 }
@@ -1737,7 +1667,7 @@ GameBoyCore.prototype.run = function () {
           }
         }
         //Request the graphics target to be updated:
-        this.requestDraw();
+        this.lcd.requestDraw();
       } else {
         this.audioUnderrunAdjustment();
         this.audioTicks += this.CPUCyclesTotal;
@@ -2098,7 +2028,7 @@ GameBoyCore.prototype.initializeLCDController = function () {
               //Make sure our gfx are up-to-date:
               parentObj.graphicsJITVBlank();
               //Draw the frame:
-              parentObj.prepareFrame();
+              parentObj.lcd.prepareFrame();
             }
           } else {
             //LCD off takes at least 2 frames:
@@ -2157,14 +2087,6 @@ GameBoyCore.prototype.initializeLCDController = function () {
     ++line;
   }
 }
-GameBoyCore.prototype.DisplayShowOff = function () {
-  if (this.drewBlank === 0) {
-    //Output a blank screen to the output framebuffer:
-    this.clearFrameBuffer();
-    this.drewFrame = true;
-  }
-  this.drewBlank = 2;
-}
 GameBoyCore.prototype.executeHDMA = function () {
   this.DMAWrite(1);
   if (this.halt) {
@@ -2208,71 +2130,6 @@ GameBoyCore.prototype.clockUpdate = function () {
         }
       }
     }
-  }
-}
-GameBoyCore.prototype.prepareFrame = function () {
-  //Copy the internal frame buffer to the output buffer:
-  this.swizzleFrameBuffer();
-  this.drewFrame = true;
-}
-GameBoyCore.prototype.requestDraw = function () {
-  if (this.drewFrame) {
-    this.dispatchDraw();
-  }
-}
-GameBoyCore.prototype.dispatchDraw = function () {
-  if (this.offscreenRGBCount > 0) {
-    //We actually updated the graphics internally, so copy out:
-    if (this.offscreenRGBCount === 92160) {
-      this.processDraw(this.swizzledFrame);
-    } else {
-      this.resizeFrameBuffer();
-    }
-  }
-}
-GameBoyCore.prototype.processDraw = function (frameBuffer) {
-  var canvasRGBALength = this.offscreenRGBCount;
-  var canvasData = this.canvasBuffer.data;
-  var bufferIndex = 0;
-  for (var canvasIndex = 0; canvasIndex < canvasRGBALength; ++canvasIndex) {
-    canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-    canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-    canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-  }
-  this.graphicsBlit();
-  this.drewFrame = false;
-}
-GameBoyCore.prototype.swizzleFrameBuffer = function () {
-  //Convert our dirty 24-bit (24-bit, with internal render flags above it) framebuffer to an 8-bit buffer with separate indices for the RGB channels:
-  var frameBuffer = this.frameBuffer;
-  var swizzledFrame = this.swizzledFrame;
-  var bufferIndex = 0;
-  for (var canvasIndex = 0; canvasIndex < 69120;) {
-    swizzledFrame[canvasIndex++] = (frameBuffer[bufferIndex] >> 16) & 0xFF; //Red
-    swizzledFrame[canvasIndex++] = (frameBuffer[bufferIndex] >> 8) & 0xFF; //Green
-    swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex++] & 0xFF; //Blue
-  }
-}
-GameBoyCore.prototype.clearFrameBuffer = function () {
-  var bufferIndex = 0;
-  var frameBuffer = this.swizzledFrame;
-  if (this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes) {
-    while (bufferIndex < 69120) {
-      frameBuffer[bufferIndex++] = 248;
-    }
-  } else {
-    while (bufferIndex < 69120) {
-      frameBuffer[bufferIndex++] = 239;
-      frameBuffer[bufferIndex++] = 255;
-      frameBuffer[bufferIndex++] = 222;
-    }
-  }
-}
-GameBoyCore.prototype.resizeFrameBuffer = function () {
-  //Resize in javascript with resize.js:
-  if (this.resizePathClear) {
-    this.resizePathClear = false;
-    this.resizer.resize(this.swizzledFrame);
   }
 }
 GameBoyCore.prototype.renderScanLine = function (scanlineToRender) {
@@ -5026,7 +4883,7 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
           } else {
             parentObj.modeSTAT = 0;
             parentObj.LCDCONTROL = parentObj.DISPLAYOFFCONTROL;
-            parentObj.DisplayShowOff();
+            parentObj.lcd.DisplayShowOff();
           }
           parentObj.interruptsRequested &= 0xFD;
         }
@@ -5203,7 +5060,7 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
           } else {
             parentObj.modeSTAT = 0;
             parentObj.LCDCONTROL = parentObj.DISPLAYOFFCONTROL;
-            parentObj.DisplayShowOff();
+            parentObj.lcd.DisplayShowOff();
           }
           parentObj.interruptsRequested &= 0xFD;
         }

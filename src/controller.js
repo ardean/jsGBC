@@ -34,6 +34,7 @@ class Controller extends EventEmitter {
   }
 
   gamepadTick() {
+    if (!navigator.getGamepads) return console.warn("Your Browser does not support gamepad api!");
     if (!this.isListening) return;
 
     const gamepad = navigator.getGamepads()[0];
