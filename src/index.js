@@ -21,6 +21,21 @@ const xboxControllerProfile = new ControllerProfile("Xbox Controller", {
   15: "right"
 });
 
+const gameCubeControllerProfile = new ControllerProfile("GameCube Controller", {
+  3: "b",
+  2: "a",
+  0: "fullscreen",
+  4: "load",
+  5: "save",
+  1: "speed",
+  6: "select",
+  9: "start",
+  12: "up",
+  13: "down",
+  14: "left",
+  15: "right"
+});
+
 const keyboardProfile = new ControllerProfile("Keyboard", {
   13: "start",
   16: "select",
@@ -32,6 +47,8 @@ const keyboardProfile = new ControllerProfile("Keyboard", {
   90: "b"
 });
 
+let currentGamepadProfile;
+
 const canvas = document.getElementById("canvas");
 const gameboy = new GameBoy(canvas);
 
@@ -40,7 +57,7 @@ function getSpeedValue(button) {
 }
 
 controller.on("press", function (index, button) {
-  const action = xboxControllerProfile.getAction(index);
+  const action = currentGamepadProfile.getAction(index);
   if (action === "save") {
     saveAndNotifyState();
   } else if (action === "load") {
@@ -55,14 +72,14 @@ controller.on("press", function (index, button) {
 });
 
 controller.on("changed", function (index, button) {
-  const action = xboxControllerProfile.getAction(index);
+  const action = currentGamepadProfile.getAction(index);
   if (action === "speed") {
     gameboy.setSpeed(getSpeedValue(button));
   }
 });
 
 controller.on("release", function (index) {
-  const action = xboxControllerProfile.getAction(index);
+  const action = currentGamepadProfile.getAction(index);
   if (action === "speed") {
     gameboy.setSpeed(1);
   } else {
@@ -71,6 +88,25 @@ controller.on("release", function (index) {
 });
 
 controller.startListener();
+
+function controllerChange(e) {
+  const selectedOption = e.target.options[e.target.selectedIndex];
+  setControllerProfile(selectedOption);
+}
+
+function setControllerProfile(item) {
+  if (item.value === "gamecube-usb") {
+    currentGamepadProfile = gameCubeControllerProfile;
+  } else if (item.value === "xbox-one") {
+    currentGamepadProfile = xboxControllerProfile;
+  } else {
+    console.warn("Controller Profile not found!");
+  }
+}
+
+const firstChild = $("#controller-profile").children().get(0);
+setControllerProfile(firstChild);
+$("#controller-profile").on("change", controllerChange);
 
 $(document)
   .on("keydown", function (e) {
@@ -155,15 +191,15 @@ var saveData = (function () {
 }());
 
 function saveAndNotifyState() {
-  var filename = gameboy.core.name + ".s0";
-  gameboy.saveState(filename);
+  var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
+  // gameboy.saveState(filename);
 
   notifier.notify("Save " + filename);
 }
 
 function openAndNotifyState() {
-  var filename = gameboy.core.name + ".s0";
-  gameboy.openState(filename, canvas);
+  var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
+  // gameboy.openState(filename, canvas);
 
   notifier.notify("Loaded " + filename);
 }

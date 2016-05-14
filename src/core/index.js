@@ -1007,7 +1007,7 @@ GameBoyCore.prototype.setSpeed = function (speed) {
 GameBoyCore.prototype.JoyPadEvent = function (key, down) {
   if (down) {
     this.JoyPad &= 0xFF ^ (1 << key);
-    if (!this.cartridgeSlot.cartridge.cGBC && (!this.usedBootROM || !this.usedGBCBootROM)) {
+    if (this.cartridgeSlot.cartridge && !this.cartridgeSlot.cartridge.cGBC && (!this.usedBootROM || !this.usedGBCBootROM)) {
       this.interruptsRequested |= 0x10; //A real GBC doesn't set this!
       this.remainingClocks = 0;
       this.checkIRQMatching();
