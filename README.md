@@ -1,4 +1,4 @@
-# jsgbc
+# jsGBC
 
 [![NPM Version][npm-image]][downloads-url] [![NPM Downloads][downloads-image]][downloads-url]
 
