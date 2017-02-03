@@ -2,7 +2,7 @@ const settings = [ //Some settings.
   true, //Turn on sound.
   true, //Boot with boot ROM first?
   false, //Give priority to GameBoy mode
-  1, //Volume level set.
+  0.7, //Volume level set.
   true, //Colorize GB mode?
   false, //Disallow typed arrays?
   8, //Interval for the emulator loop.
@@ -17,6 +17,7 @@ const settings = [ //Some settings.
 ];
 
 settings.soundOn = true;
+settings.soundVolume = 0.7;
 settings.bootBootRomFirst = true;
 settings.gbHasPriority = false;
 settings.colorizeGBMode = true;

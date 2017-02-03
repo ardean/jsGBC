@@ -1,10 +1,10 @@
-import settings from "../settings";
-import Cartridge from "./cartridge";
-import CartridgeSlot from "./cartridge-slot";
-import AudioServer from "../audio-server";
-import instructionSet from "./instruction-set";
-import util from "./util";
-import LCD from "./lcd";
+import settings from "./settings";
+import Cartridge from "./core/cartridge";
+import CartridgeSlot from "./core/cartridge-slot";
+import AudioServer from "./audio-server";
+import instructionSet from "./core/instruction-set";
+import util from "./core/util";
+import LCD from "./core/lcd";
 
 function GameBoyCore(canvas, options) {
   options = options || {};
@@ -992,7 +992,7 @@ GameBoyCore.prototype.disableBootROM = function () {
 GameBoyCore.prototype.initializeTiming = function () {
   //Emulator Timing:
   this.clocksPerSecond = this.emulatorSpeed * 0x400000;
-  this.baseCPUCyclesPerIteration = this.clocksPerSecond / 1000 * settings[6];
+  this.baseCPUCyclesPerIteration = this.clocksPerSecond / 1000 * settings.runInterval;
   this.CPUCyclesTotalRoundoff = this.baseCPUCyclesPerIteration % 4;
   this.CPUCyclesTotalBase = this.CPUCyclesTotal = (this.baseCPUCyclesPerIteration - this.CPUCyclesTotalRoundoff) | 0;
   this.CPUCyclesTotalCurrent = 0;
@@ -1016,8 +1016,8 @@ GameBoyCore.prototype.JoyPadEvent = function (key, down) {
     this.JoyPad |= (1 << key);
   }
   this.memory[0xFF00] = (this.memory[0xFF00] & 0x30) + (
-    (((this.memory[0xFF00] & 0x20) === 0) ? (this.JoyPad >> 4) : 0xF) &
-    (((this.memory[0xFF00] & 0x10) === 0) ? (this.JoyPad & 0xF) : 0xF)
+    ((this.memory[0xFF00] & 0x20) === 0 ? this.JoyPad >> 4 : 0xF) &
+    ((this.memory[0xFF00] & 0x10) === 0 ? this.JoyPad & 0xF : 0xF)
   );
   this.CPUStopped = false;
 }
@@ -1048,7 +1048,7 @@ GameBoyCore.prototype.initSound = function () {
       0,
       Math.max(this.baseCPUCyclesPerIteration * settings[8] / this.audioResamplerFirstPassFactor, 8192) << 1,
       null,
-      settings[3],
+      settings.soundVolume,
       function () {
         settings.soundOn = false;
       }
@@ -1060,7 +1060,7 @@ GameBoyCore.prototype.initSound = function () {
 }
 GameBoyCore.prototype.changeVolume = function () {
   if (this.audioServer) {
-    this.audioServer.changeVolume(settings[3]);
+    this.audioServer.changeVolume(settings.soundVolume);
   }
 }
 GameBoyCore.prototype.initAudioBuffer = function () {
@@ -1958,8 +1958,10 @@ GameBoyCore.prototype.initializeLCDController = function () {
               parentObj.interruptsRequested |= 0x2;
             }
           }
+
           //Update the scanline registers and assert the LYC counter:
           parentObj.actualScanLine = ++parentObj.memory[0xFF44];
+
           //Perform a LYC counter assert:
           if (parentObj.actualScanLine === parentObj.memory[0xFF45]) {
             parentObj.memory[0xFF41] |= 0x04;
@@ -4855,7 +4857,7 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
     //GameBoy Color Specific I/O:
     //SC (Serial Transfer Control Register)
     this.memoryHighWriter[0x2] = this.memoryWriter[0xFF02] = function (parentObj, address, data) {
-      if (((data & 0x1) === 0x1)) {
+      if ((data & 0x1) === 0x1) {
         //Internal clock:
         parentObj.memory[0xFF02] = (data & 0x7F);
         parentObj.serialTimer = ((data & 0x2) === 0) ? 4096 : 128; //Set the Serial IRQ counter.

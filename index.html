@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>jsGBC</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="./index.css">
+</head>
+
+<body>
+  <div class="loading">
+    <h1>Loading...</h1>
+  </div>
+
+  <canvas class="screen pixelated"></canvas>
+
+  <div class="toolbar">
+    <div class="item">
+      <h2>ROM</h2>
+      <input type="file" accept=".gb, .gbc" class="rom" />
+    </div>
+    <div class="item">
+      <h2>Download State</h2>
+      <input type="button" value="Download" class="download-state" />
+    </div>
+    <div class="item">
+      <h2>Load State</h2>
+      <input type="file" accept=".s0" class="upload-state" />
+    </div>
+    <div class="item">
+      <h2>Controller</h2>
+      <select class="controller-profile-selector"></select>
+    </div>
+  </div>
+
+  <!-- <script src="index.js"></script> -->
+  <script src="jspm_packages/system.js"></script>
+  <script src="jspm.config.js"></script>
+  <script>
+    System.import("demo/index.js");
+  </script>
+</body>
+
+</html>

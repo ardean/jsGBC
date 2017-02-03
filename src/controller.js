@@ -1,6 +1,4 @@
-import {
-  EventEmitter
-} from "events";
+import EventEmitter from "events";
 
 class Controller extends EventEmitter {
   constructor() {

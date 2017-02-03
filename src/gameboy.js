@@ -1,6 +1,4 @@
-import {
-  Buffer
-} from "buffer";
+import { Buffer } from "buffer";
 import settings from "./settings";
 import GameBoyCore from "./core";
 
