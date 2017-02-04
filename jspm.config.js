@@ -9,7 +9,17 @@ SystemJS.config({
   },
   devConfig: {
     "map": {
-      "plugin-babel": "npm:systemjs-plugin-babel@0.0.20"
+      "plugin-babel": "npm:systemjs-plugin-babel@0.0.20",
+      "jquery": "npm:jquery@3.1.1",
+      "jsfullscreen": "github:ardean/jsFullscreen@0.1.0"
+    },
+    "packages": {
+      "github:ardean/jsFullscreen@0.1.0": {
+        "map": {
+          "events": "npm:jspm-nodelibs-events@0.2.0",
+          "jquery": "npm:jquery@3.1.1"
+        }
+      }
     }
   },
   transpiler: "plugin-babel",
@@ -38,7 +48,6 @@ SystemJS.config({
     "crypto": "npm:jspm-nodelibs-crypto@0.2.0",
     "events": "npm:jspm-nodelibs-events@0.2.0",
     "fs": "npm:jspm-nodelibs-fs@0.2.0",
-    "jquery": "npm:jquery@3.1.1",
     "os": "npm:jspm-nodelibs-os@0.2.0",
     "path": "npm:jspm-nodelibs-path@0.2.1",
     "process": "npm:jspm-nodelibs-process@0.2.0",

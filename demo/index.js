@@ -1,7 +1,7 @@
 import { GameBoy, controller, ControllerProfile } from "../src/index.js";
 import $ from "jquery";
 import notifier from "./notifier.js";
-import Fullscreen from "./fullscreen.js";
+import Fullscreen from "jsfullscreen";
 import controllerProfileMap from "./controller-profiles.js";
 
 let currentControllerProfile;
@@ -62,7 +62,7 @@ const keyboardProfile = new ControllerProfile("Keyboard", {
 });
 
 fullscreen.on("change", () => {
-  if (fullscreen.isOn) {
+  if (fullscreen.isActive) {
     $canvas.addClass("fullscreen");
   } else {
     $canvas.removeClass("fullscreen");
@@ -160,8 +160,8 @@ var saveData = (function () {
 }());
 
 function toggleFullscreen() {
-  if (fullscreen.isOn) {
-    fullscreen.exitFullscreen();
+  if (fullscreen.isActive) {
+    Fullscreen.exitFullscreen();
   } else {
     fullscreen.requestFullscreen();
   }

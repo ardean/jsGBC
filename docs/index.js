@@ -12424,8 +12424,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   }
 
   function toggleFullscreen() {
-    if (fullscreen.isOn) {
-      fullscreen.exitFullscreen();
+    if (fullscreen.isActive) {
+      Fullscreen.exitFullscreen();
     } else {
       fullscreen.requestFullscreen();
     }
@@ -22440,55 +22440,78 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
           _this.$element = $(element);
           _this.element = _this.$element.get(0);
-          _this.isOn = _this.getFullscreenState();
 
-          $(document).on("fullscreenchange mozfullscreenchange webkitfullscreenchange msfullscreenchange", _this.fullscreenChange.bind(_this));
+          $(document).on("fullscreenchange webkitfullscreenchange mozfullscreenchange msfullscreenchange", _this.fullscreenChange.bind(_this)).on("fullscreenerror webkitfullscreenerror mozfullscreenerror msfullscreenerror", _this.fullscreenError.bind(_this));
+
+          setTimeout(function () {
+            if (!Fullscreen.isSupported) {
+              _this.emit("unsupported");
+            }
+          }, 0);
           return _this;
         }
 
         _createClass(Fullscreen, [{
-          key: "getFullscreenState",
-          value: function getFullscreenState() {
-            return this.getFullscreenElement() === this.element;
-          }
-        }, {
-          key: "fullscreenChange",
-          value: function fullscreenChange() {
-            this.isOn = this.getFullscreenState();
-            this.emit("change", this.isOn);
-          }
-        }, {
           key: "requestFullscreen",
           value: function requestFullscreen() {
             var element = this.element;
 
             if (element.requestFullscreen) {
-              element.requestFullscreen();
+              return element.requestFullscreen();
             } else if (element.webkitRequestFullscreen) {
-              element.webkitRequestFullscreen();
+              return element.webkitRequestFullscreen();
             } else if (element.mozRequestFullScreen) {
-              element.mozRequestFullScreen();
+              return element.mozRequestFullScreen();
             } else if (element.msRequestFullscreen) {
-              element.msRequestFullscreen();
+              return element.msRequestFullscreen();
             }
           }
         }, {
+          key: "fullscreenChange",
+          value: function fullscreenChange(e) {
+            var isActive = this.isActive;
+            this.emit("change", isActive, e);
+            this.emit("fullscreenchange", isActive, e);
+          }
+        }, {
+          key: "fullscreenError",
+          value: function fullscreenError(e) {
+            var err = new Error("fullscreen failed");
+            this.emit("error", err, e);
+            this.emit("fullscreenerror", err, e);
+          }
+        }, {
+          key: "isActive",
+          get: function get() {
+            return Fullscreen.fullscreenElement === this.element;
+          }
+        }], [{
           key: "exitFullscreen",
           value: function exitFullscreen() {
             if (document.exitFullscreen) {
-              document.exitFullscreen();
+              return document.exitFullscreen();
             } else if (document.webkitExitFullscreen) {
-              document.webkitExitFullscreen();
+              return document.webkitExitFullscreen();
             } else if (document.mozCancelFullScreen) {
-              document.mozCancelFullScreen();
+              return document.mozCancelFullScreen();
             } else if (document.msExitFullscreen) {
-              document.msExitFullscreen();
+              return document.msExitFullscreen();
             }
           }
         }, {
-          key: "getFullscreenElement",
-          value: function getFullscreenElement() {
-            return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullscreenElement || document.msFullscreenElement || null;
+          key: "fullscreenElement",
+          get: function get() {
+            return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || null;
+          }
+        }, {
+          key: "fullscreenEnabled",
+          get: function get() {
+            return document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled || document.msFullscreenEnabled || false;
+          }
+        }, {
+          key: "isSupported",
+          get: function get() {
+            return Fullscreen.fullscreenEnabled;
           }
         }]);
 
@@ -22583,7 +22606,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
 
       fullscreen.on("change", function () {
-        if (fullscreen.isOn) {
+        if (fullscreen.isActive) {
           $canvas.addClass("fullscreen");
         } else {
           $canvas.removeClass("fullscreen");
