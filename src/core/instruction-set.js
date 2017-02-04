@@ -1499,7 +1499,7 @@ export default [
     //Increment the program counter to the next instruction:
     parentObj.programCounter = (parentObj.programCounter + 1) & 0xFFFF;
     //Get how many CPU cycles the current 0xCBXX op code counts for:
-    parentObj.CPUTicks += parentObj.SecondaryTICKTable[opcode];
+    parentObj.CPUTicks += parentObj.SecondaryTickTable[opcode];
     //Execute secondary OP codes for the 0xCB OP code call.
     secondInstructionSet[opcode](parentObj);
   },

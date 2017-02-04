@@ -2337,13 +2337,13 @@ $__System.registerDynamic('10', [], true, function ($__require, exports, module)
 $__System.register('a', ['f', '10'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, Cartridge, CartridgeSlot, Resampler, AudioServer, WebAudioContextHandle, WebAudioAudioNode, AudioContextSampleBuffer, ResampledBuffer, MinBufferSize, MaxBufferSize, ChannelsAllocated, Volume, ResampleControl, AudioBufferSize, ResampleBufferStart, ResampleBufferEnd, ResampleBufferSize, SamplesPerCallback, secondInstructionSet, instructionSet, LCD, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile;
+  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, Volume, AudioServer, WebAudioContextHandle, WebAudioAudioNode, AudioContextSampleBuffer, ResampledBuffer, MinBufferSize, MaxBufferSize, ChannelsAllocated, ResampleControl, AudioBufferSize, ResampleBufferStart, ResampleBufferEnd, ResampleBufferSize, SamplesPerCallback, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile;
 
   //Has to be between 2048 and 4096 (If over, then samples are ignored, if under then silence is added).
 
-  function WebAudioEvent(event) {
+  function WebAudioEvent(e) {
     for (var bufferCount = 0, buffers = []; bufferCount < ChannelsAllocated; ++bufferCount) {
-      buffers[bufferCount] = event.outputBuffer.getChannelData(bufferCount);
+      buffers[bufferCount] = e.outputBuffer.getChannelData(bufferCount);
     }
 
     ResampleRefill();
@@ -2395,6 +2395,9 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
 
   function GameBoyCore(canvas, options) {
     options = options || {};
+
+    this.TickTable = TickTable;
+    this.SecondaryTickTable = SecondaryTickTable;
 
     //CPU Registers and Flags:
     this.registerA = 0x01; //Register A (Accumulator)
@@ -2643,38 +2646,26 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         };
       }();
 
-      settings = [//Some settings.
-      true, //Turn on sound.
-      true, //Boot with boot ROM first?
-      false, //Give priority to GameBoy mode
-      0.7, //Volume level set.
-      true, //Colorize GB mode?
-      false, //Disallow typed arrays?
-      8, //Interval for the emulator loop.
-      10, //Audio buffer minimum span amount over x interpreter iterations.
-      20, //Audio buffer maximum span amount over x interpreter iterations.
-      false, //Override to allow for MBC1 instead of ROM only (compatibility for broken 3rd-party cartridges).
-      false, //Override MBC RAM disabling and always allow reading and writing to the banks.
-      false, //Use the GameBoy boot ROM instead of the GameBoy Color boot ROM.
-      false, //Scale the canvas in JS, or let the browser scale the canvas?
-      true, //Use image smoothing based scaling?
-      [true, true, true, true] //User controlled channel enables.
-      ];
-
-
-      settings.soundOn = true;
-      settings.soundVolume = 0.7;
-      settings.bootBootRomFirst = true;
-      settings.gbHasPriority = false;
-      settings.colorizeGBMode = true;
-      settings.runInterval = 8;
-      settings.allowMBC1Override = false;
-      settings.forceGBBootRom = false;
-
+      settings = {
+        soundOn: true, // Turn on sound.
+        bootBootRomFirst: true, // Boot with boot ROM first?
+        gbHasPriority: false, // Give priority to GameBoy mode
+        soundVolume: 0.7, // Volume level set.
+        colorizeGBMode: true, // Colorize GB mode?
+        disallowTypedArrays: false, // Disallow typed arrays?
+        runInterval: 8, // Interval for the emulator loop.
+        minAudioBufferSpanAmountOverXInterpreterIterations: 10, // Audio buffer minimum span amount over x interpreter iterations.
+        maxAudioBufferSpanAmountOverXInterpreterIterations: 20, // Audio buffer maximum span amount over x interpreter iterations.
+        enableMBC1Override: false, // Override to allow for MBC1 instead of ROM only (compatibility for broken 3rd-party cartridges).
+        alwaysAllowRWtoBanks: false, // Override MBC RAM disabling and always allow reading and writing to the banks.
+        forceGBBootRom: false, // Use the GameBoy boot ROM instead of the GameBoy Color boot ROM.
+        enabledChannels: [// User controlled channel enables.
+        true, true, true, true]
+      };
       util = {
         toTypedArray: function toTypedArray(baseArray, memtype) {
           try {
-            if (settings[5]) {
+            if (settings.disallowTypedArrays) {
               return baseArray;
             }
             if (!baseArray || !baseArray.length) {
@@ -2725,7 +2716,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         getTypedArray: function getTypedArray(length, defaultValue, numberType) {
           var arrayHandle = void 0;
           try {
-            if (settings[5]) {
+            if (settings.disallowTypedArrays) {
               throw new Error("Settings forced typed arrays to be disabled.");
             }
             switch (numberType) {
@@ -2758,6 +2749,185 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
           return arrayHandle;
         }
       };
+
+      LCD = function () {
+        function LCD(canvas, options, gameboy) {
+          _classCallCheck(this, LCD);
+
+          options = options || {};
+
+          this.canvas = canvas;
+          this.gameboy = gameboy;
+
+          this.width = options.width || 160;
+          this.height = options.height || 144;
+
+          this.drawContext = null; // LCD Context
+          this.swizzledFrame = null; //The secondary gfx buffer that holds the converted RGBA values.
+          this.canvasBuffer = null; //imageData handle
+          this.onscreenWidth = this.width;
+          this.onscreenHeight = this.height;
+          this.offscreenWidth = 160;
+          this.offscreenHeight = 144;
+          this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
+
+          this.resizePathClear = true;
+
+          this.onscreenContext = this.canvas.getContext("2d");
+
+          this.offscreenCanvas = document.createElement("canvas");
+          this.offscreenContext = this.offscreenCanvas.getContext("2d");
+        }
+
+        _createClass(LCD, [{
+          key: "init",
+          value: function init() {
+            this.recomputeDimension();
+
+            this.offscreenCanvas.width = this.offscreenWidth;
+            this.offscreenCanvas.height = this.offscreenHeight;
+
+            this.offscreenContext.msImageSmoothingEnabled = false;
+            this.offscreenContext.mozImageSmoothingEnabled = false;
+            this.offscreenContext.webkitImageSmoothingEnabled = false;
+            this.offscreenContext.imageSmoothingEnabled = false;
+
+            this.onscreenContext.msImageSmoothingEnabled = false;
+            this.onscreenContext.mozImageSmoothingEnabled = false;
+            this.onscreenContext.webkitImageSmoothingEnabled = false;
+            this.onscreenContext.imageSmoothingEnabled = false;
+
+            this.canvasBuffer = this.offscreenContext.createImageData(this.offscreenWidth, this.offscreenHeight);
+
+            var index = this.offscreenRGBCount;
+            while (index > 0) {
+              index -= 4;
+              this.canvasBuffer.data[index] = 0xF8;
+              this.canvasBuffer.data[index + 1] = 0xF8;
+              this.canvasBuffer.data[index + 2] = 0xF8;
+              this.canvasBuffer.data[index + 3] = 0xFF;
+            }
+
+            this.graphicsBlit();
+            if (!this.swizzledFrame) this.swizzledFrame = util.getTypedArray(69120, 0xFF, "uint8");
+
+            //Test the draw system and browser vblank latching:
+            this.drewFrame = true; //Copy the latest graphics to buffer.
+            this.requestDraw();
+          }
+        }, {
+          key: "recomputeDimension",
+          value: function recomputeDimension() {
+            //Cache some dimension info:
+            this.onscreenWidth = this.width;
+            this.onscreenHeight = this.height;
+            this.offscreenWidth = 160;
+            this.offscreenHeight = 144;
+            this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
+          }
+        }, {
+          key: "graphicsBlit",
+          value: function graphicsBlit() {
+            if (this.offscreenWidth === this.onscreenWidth && this.offscreenHeight === this.onscreenHeight) {
+              this.onscreenContext.putImageData(this.canvasBuffer, 0, 0);
+            } else {
+              this.offscreenContext.putImageData(this.canvasBuffer, 0, 0);
+              this.onscreenContext.drawImage(this.offscreenCanvas, 0, 0, this.onscreenWidth, this.onscreenHeight);
+            }
+          }
+        }, {
+          key: "requestDraw",
+          value: function requestDraw() {
+            if (this.drewFrame) {
+              this.dispatchDraw();
+            }
+          }
+        }, {
+          key: "dispatchDraw",
+          value: function dispatchDraw() {
+            if (this.offscreenRGBCount > 0) {
+              //We actually updated the graphics internally, so copy out:
+              if (this.offscreenRGBCount === 92160) {
+                this.processDraw(this.swizzledFrame);
+              } else {
+                // this.resizeFrameBuffer();
+              }
+            }
+          }
+        }, {
+          key: "resizeFrameBuffer",
+          value: function resizeFrameBuffer() {
+            //Resize in javascript with resize.js:
+            if (this.resizePathClear) {
+              this.resizePathClear = false;
+              this.resizer.resize(this.swizzledFrame);
+            }
+          }
+        }, {
+          key: "processDraw",
+          value: function processDraw(frameBuffer) {
+            var canvasRGBALength = this.offscreenRGBCount;
+            var canvasData = this.canvasBuffer.data;
+            var bufferIndex = 0;
+            for (var canvasIndex = 0; canvasIndex < canvasRGBALength; ++canvasIndex) {
+              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
+              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
+              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
+            }
+            this.graphicsBlit();
+            this.drewFrame = false;
+          }
+        }, {
+          key: "prepareFrame",
+          value: function prepareFrame() {
+            //Copy the internal frame buffer to the output buffer:
+            this.swizzleFrameBuffer();
+            this.drewFrame = true;
+          }
+        }, {
+          key: "swizzleFrameBuffer",
+          value: function swizzleFrameBuffer() {
+            //Convert our dirty 24-bit (24-bit, with internal render flags above it) framebuffer to an 8-bit buffer with separate indices for the RGB channels:
+            var frameBuffer = this.gameboy.frameBuffer;
+            var swizzledFrame = this.swizzledFrame;
+            var bufferIndex = 0;
+            for (var canvasIndex = 0; canvasIndex < 69120;) {
+              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 16 & 0xFF; //Red
+              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 8 & 0xFF; //Green
+              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex++] & 0xFF; //Blue
+            }
+          }
+        }, {
+          key: "DisplayShowOff",
+          value: function DisplayShowOff() {
+            if (this.drewBlank === 0) {
+              //Output a blank screen to the output framebuffer:
+              this.clearFrameBuffer();
+              this.drewFrame = true;
+            }
+            this.drewBlank = 2;
+          }
+        }, {
+          key: "clearFrameBuffer",
+          value: function clearFrameBuffer() {
+            var bufferIndex = 0;
+            var frameBuffer = this.swizzledFrame;
+            if (this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes) {
+              while (bufferIndex < 69120) {
+                frameBuffer[bufferIndex++] = 248;
+              }
+            } else {
+              while (bufferIndex < 69120) {
+                frameBuffer[bufferIndex++] = 239;
+                frameBuffer[bufferIndex++] = 255;
+                frameBuffer[bufferIndex++] = 222;
+              }
+            }
+          }
+        }]);
+
+        return LCD;
+      }();
 
       Cartridge = function () {
         function Cartridge(rom, gameboy) {
@@ -2965,7 +3135,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
             switch (this.type) {
               case 0x00:
                 //ROM w/o bank switching
-                if (!settings.allowMBC1Override) {
+                if (!settings.enableMBC1Override) {
                   this.typeName = "ROM";
                 }
               case 0x01:
@@ -3359,6 +3529,8 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         return Resampler;
       }();
 
+      Volume = 1;
+
       AudioServer = function () {
         function AudioServer(channels, sampleRate, minBufferSize, maxBufferSize, underRunCallback, volume) {
           _classCallCheck(this, AudioServer);
@@ -3368,7 +3540,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
           MinBufferSize = minBufferSize >= SamplesPerCallback * ChannelsAllocated && minBufferSize < maxBufferSize ? minBufferSize & -ChannelsAllocated : SamplesPerCallback * ChannelsAllocated;
           MaxBufferSize = Math.floor(maxBufferSize) > MinBufferSize + ChannelsAllocated ? maxBufferSize & -ChannelsAllocated : MinBufferSize * ChannelsAllocated;
           this.underRunCallback = typeof underRunCallback === "function" ? underRunCallback : function () {};
-          Volume = volume >= 0 && volume <= 1 ? volume : 1;
+          Volume = Math.max(0, Math.min(1, volume));
           this.initializeAudio();
         }
 
@@ -3474,7 +3646,6 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       MinBufferSize = 15000;
       MaxBufferSize = 25000;
       ChannelsAllocated = 1;
-      Volume = 1;
       ResampleControl = null;
       AudioBufferSize = 0;
       ResampleBufferStart = 0;
@@ -6862,7 +7033,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         //Increment the program counter to the next instruction:
         parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
         //Get how many CPU cycles the current 0xCBXX op code counts for:
-        parentObj.CPUTicks += parentObj.SecondaryTICKTable[opcode];
+        parentObj.CPUTicks += parentObj.SecondaryTickTable[opcode];
         //Execute secondary OP codes for the 0xCB OP code call.
         secondInstructionSet[opcode](parentObj);
       },
@@ -7297,195 +7468,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
         parentObj.programCounter = 0x38;
       }];
-
-      LCD = function () {
-        function LCD(canvas, options, gameboy) {
-          _classCallCheck(this, LCD);
-
-          options = options || {};
-
-          this.canvas = canvas;
-          this.gameboy = gameboy;
-
-          this.width = options.width || 160;
-          this.height = options.height || 144;
-
-          this.drawContext = null; // LCD Context
-          this.swizzledFrame = null; //The secondary gfx buffer that holds the converted RGBA values.
-          this.canvasBuffer = null; //imageData handle
-          this.onscreenWidth = this.width;
-          this.onscreenHeight = this.height;
-          this.offscreenWidth = 160;
-          this.offscreenHeight = 144;
-          this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
-
-          this.resizePathClear = true;
-
-          this.onscreenContext = this.canvas.getContext("2d");
-
-          this.offscreenCanvas = document.createElement("canvas");
-          this.offscreenContext = this.offscreenCanvas.getContext("2d");
-        }
-
-        _createClass(LCD, [{
-          key: "init",
-          value: function init() {
-            this.recomputeDimension();
-
-            this.offscreenCanvas.width = this.offscreenWidth;
-            this.offscreenCanvas.height = this.offscreenHeight;
-
-            this.offscreenContext.msImageSmoothingEnabled = false;
-            this.offscreenContext.mozImageSmoothingEnabled = false;
-            this.offscreenContext.webkitImageSmoothingEnabled = false;
-            this.offscreenContext.imageSmoothingEnabled = false;
-
-            this.onscreenContext.msImageSmoothingEnabled = false;
-            this.onscreenContext.mozImageSmoothingEnabled = false;
-            this.onscreenContext.webkitImageSmoothingEnabled = false;
-            this.onscreenContext.imageSmoothingEnabled = false;
-
-            this.canvasBuffer = this.offscreenContext.createImageData(this.offscreenWidth, this.offscreenHeight);
-
-            var index = this.offscreenRGBCount;
-            while (index > 0) {
-              index -= 4;
-              this.canvasBuffer.data[index] = 0xF8;
-              this.canvasBuffer.data[index + 1] = 0xF8;
-              this.canvasBuffer.data[index + 2] = 0xF8;
-              this.canvasBuffer.data[index + 3] = 0xFF;
-            }
-
-            this.graphicsBlit();
-            if (!this.swizzledFrame) this.swizzledFrame = util.getTypedArray(69120, 0xFF, "uint8");
-
-            //Test the draw system and browser vblank latching:
-            this.drewFrame = true; //Copy the latest graphics to buffer.
-            this.requestDraw();
-          }
-        }, {
-          key: "recomputeDimension",
-          value: function recomputeDimension() {
-            //Cache some dimension info:
-            this.onscreenWidth = this.width;
-            this.onscreenHeight = this.height;
-            this.offscreenWidth = 160;
-            this.offscreenHeight = 144;
-            this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
-          }
-        }, {
-          key: "graphicsBlit",
-          value: function graphicsBlit() {
-            if (this.offscreenWidth === this.onscreenWidth && this.offscreenHeight === this.onscreenHeight) {
-              this.onscreenContext.putImageData(this.canvasBuffer, 0, 0);
-            } else {
-              this.offscreenContext.putImageData(this.canvasBuffer, 0, 0);
-              this.onscreenContext.drawImage(this.offscreenCanvas, 0, 0, this.onscreenWidth, this.onscreenHeight);
-            }
-          }
-        }, {
-          key: "requestDraw",
-          value: function requestDraw() {
-            if (this.drewFrame) {
-              this.dispatchDraw();
-            }
-          }
-        }, {
-          key: "dispatchDraw",
-          value: function dispatchDraw() {
-            if (this.offscreenRGBCount > 0) {
-              //We actually updated the graphics internally, so copy out:
-              if (this.offscreenRGBCount === 92160) {
-                this.processDraw(this.swizzledFrame);
-              } else {
-                // this.resizeFrameBuffer();
-              }
-            }
-          }
-        }, {
-          key: "resizeFrameBuffer",
-          value: function resizeFrameBuffer() {
-            //Resize in javascript with resize.js:
-            if (this.resizePathClear) {
-              this.resizePathClear = false;
-              this.resizer.resize(this.swizzledFrame);
-            }
-          }
-        }, {
-          key: "processDraw",
-          value: function processDraw(frameBuffer) {
-            var canvasRGBALength = this.offscreenRGBCount;
-            var canvasData = this.canvasBuffer.data;
-            var bufferIndex = 0;
-            for (var canvasIndex = 0; canvasIndex < canvasRGBALength; ++canvasIndex) {
-              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-              canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
-            }
-            this.graphicsBlit();
-            this.drewFrame = false;
-          }
-        }, {
-          key: "prepareFrame",
-          value: function prepareFrame() {
-            //Copy the internal frame buffer to the output buffer:
-            this.swizzleFrameBuffer();
-            this.drewFrame = true;
-          }
-        }, {
-          key: "swizzleFrameBuffer",
-          value: function swizzleFrameBuffer() {
-            //Convert our dirty 24-bit (24-bit, with internal render flags above it) framebuffer to an 8-bit buffer with separate indices for the RGB channels:
-            var frameBuffer = this.gameboy.frameBuffer;
-            var swizzledFrame = this.swizzledFrame;
-            var bufferIndex = 0;
-            for (var canvasIndex = 0; canvasIndex < 69120;) {
-              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 16 & 0xFF; //Red
-              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 8 & 0xFF; //Green
-              swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex++] & 0xFF; //Blue
-            }
-          }
-        }, {
-          key: "DisplayShowOff",
-          value: function DisplayShowOff() {
-            if (this.drewBlank === 0) {
-              //Output a blank screen to the output framebuffer:
-              this.clearFrameBuffer();
-              this.drewFrame = true;
-            }
-            this.drewBlank = 2;
-          }
-        }, {
-          key: "clearFrameBuffer",
-          value: function clearFrameBuffer() {
-            var bufferIndex = 0;
-            var frameBuffer = this.swizzledFrame;
-            if (this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes) {
-              while (bufferIndex < 69120) {
-                frameBuffer[bufferIndex++] = 248;
-              }
-            } else {
-              while (bufferIndex < 69120) {
-                frameBuffer[bufferIndex++] = 239;
-                frameBuffer[bufferIndex++] = 255;
-                frameBuffer[bufferIndex++] = 222;
-              }
-            }
-          }
-        }]);
-
-        return LCD;
-      }();
-
-      GameBoyCore.prototype.GBBOOTROM = [//GB BOOT ROM
-        //Add 256 byte boot rom here if you are going to use it.
-      ];
-      GameBoyCore.prototype.GBCBOOTROM = [//GBC BOOT ROM
-        //Add 2048 byte boot rom here if you are going to use it.
-      ];
-      GameBoyCore.prototype.ffxxDump = [//Dump of the post-BOOT I/O register state (From gambatte):
-      0x0F, 0x00, 0x7C, 0xFF, 0x00, 0x00, 0x00, 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x80, 0xBF, 0xF3, 0xFF, 0xBF, 0xFF, 0x3F, 0x00, 0xFF, 0xBF, 0x7F, 0xFF, 0x9F, 0xFF, 0xBF, 0xFF, 0xFF, 0x00, 0x00, 0xBF, 0x77, 0xF3, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x91, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7E, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC0, 0xFF, 0xC1, 0x00, 0xFE, 0xFF, 0xFF, 0xFF, 0xF8, 0xFF, 0x00, 0x00, 0x00, 0x8F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 0x45, 0xEC, 0x52, 0xFA, 0x08, 0xB7, 0x07, 0x5D, 0x01, 0xFD, 0xC0, 0xFF, 0x08, 0xFC, 0x00, 0xE5, 0x0B, 0xF8, 0xC2, 0xCE, 0xF4, 0xF9, 0x0F, 0x7F, 0x45, 0x6D, 0x3D, 0xFE, 0x46, 0x97, 0x33, 0x5E, 0x08, 0xEF, 0xF1, 0xFF, 0x86, 0x83, 0x24, 0x74, 0x12, 0xFC, 0x00, 0x9F, 0xB4, 0xB7, 0x06, 0xD5, 0xD0, 0x7A, 0x00, 0x9E, 0x04, 0x5F, 0x41, 0x2F, 0x1D, 0x77, 0x36, 0x75, 0x81, 0xAA, 0x70, 0x3A, 0x98, 0xD1, 0x71, 0x02, 0x4D, 0x01, 0xC1, 0xFF, 0x0D, 0x00, 0xD3, 0x05, 0xF9, 0x00, 0x0B, 0x00];
-      GameBoyCore.prototype.TICKTable = [//Number of machine cycles for each instruction:
+      TickTable = [// Number of machine cycles for each instruction:
       /*   0,  1,  2,  3,  4,  5,  6,  7,      8,  9,  A, B,  C,  D, E,  F*/
       4, 12, 8, 8, 4, 4, 8, 4, 20, 8, 8, 8, 4, 4, 8, 4, //0
       4, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, //1
@@ -7507,7 +7490,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       12, 12, 8, 4, 4, 16, 8, 16, 16, 4, 16, 4, 4, 4, 8, 16, //E
       12, 12, 8, 4, 4, 16, 8, 16, 12, 8, 16, 4, 0, 4, 8, 16 //F
       ];
-      GameBoyCore.prototype.SecondaryTICKTable = [//Number of machine cycles for each 0xCBXX instruction:
+      SecondaryTickTable = [// Number of machine cycles for each 0xCBXX instruction:
       /*  0, 1, 2, 3, 4, 5,  6, 7,        8, 9, A, B, C, D,  E, F*/
       8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //0
       8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //1
@@ -7528,6 +7511,14 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //D
       8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //E
       8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8 //F
+      ];
+      PostBootRegisterState = [// Dump of the post-BOOT I/O register state (From gambatte):
+      0x0F, 0x00, 0x7C, 0xFF, 0x00, 0x00, 0x00, 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x80, 0xBF, 0xF3, 0xFF, 0xBF, 0xFF, 0x3F, 0x00, 0xFF, 0xBF, 0x7F, 0xFF, 0x9F, 0xFF, 0xBF, 0xFF, 0xFF, 0x00, 0x00, 0xBF, 0x77, 0xF3, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x91, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7E, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC0, 0xFF, 0xC1, 0x00, 0xFE, 0xFF, 0xFF, 0xFF, 0xF8, 0xFF, 0x00, 0x00, 0x00, 0x8F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 0x45, 0xEC, 0x52, 0xFA, 0x08, 0xB7, 0x07, 0x5D, 0x01, 0xFD, 0xC0, 0xFF, 0x08, 0xFC, 0x00, 0xE5, 0x0B, 0xF8, 0xC2, 0xCE, 0xF4, 0xF9, 0x0F, 0x7F, 0x45, 0x6D, 0x3D, 0xFE, 0x46, 0x97, 0x33, 0x5E, 0x08, 0xEF, 0xF1, 0xFF, 0x86, 0x83, 0x24, 0x74, 0x12, 0xFC, 0x00, 0x9F, 0xB4, 0xB7, 0x06, 0xD5, 0xD0, 0x7A, 0x00, 0x9E, 0x04, 0x5F, 0x41, 0x2F, 0x1D, 0x77, 0x36, 0x75, 0x81, 0xAA, 0x70, 0x3A, 0x98, 0xD1, 0x71, 0x02, 0x4D, 0x01, 0xC1, 0xFF, 0x0D, 0x00, 0xD3, 0x05, 0xF9, 0x00, 0x0B, 0x00];
+      GameBoyCore.prototype.GBBOOTROM = [//GB BOOT ROM
+        //Add 256 byte boot rom here if you are going to use it.
+      ];
+      GameBoyCore.prototype.GBCBOOTROM = [//GBC BOOT ROM
+        //Add 2048 byte boot rom here if you are going to use it.
       ];
       GameBoyCore.prototype.saveSRAMState = function () {
         if (!this.cartridgeSlot.cartridge.cBATT || this.cartridgeSlot.cartridge.MBCRam.length === 0) {
@@ -7740,8 +7731,8 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.audioClocksUntilNextEvent = state[index++];
         this.audioClocksUntilNextEventCounter = state[index];
         this.fromSaveState = true;
-        this.TICKTable = util.toTypedArray(this.TICKTable, "uint8");
-        this.SecondaryTICKTable = util.toTypedArray(this.SecondaryTICKTable, "uint8");
+        this.TickTable = util.toTypedArray(this.TickTable, "uint8");
+        this.SecondaryTickTable = util.toTypedArray(this.SecondaryTickTable, "uint8");
         this.initializeReferencesFromSaveState();
         this.memoryReadJumpCompile();
         this.memoryWriteJumpCompile();
@@ -7813,8 +7804,8 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.memory = util.getTypedArray(0x10000, 0, "uint8");
         this.frameBuffer = util.getTypedArray(23040, 0xF8F8F8, "int32");
         this.BGCHRBank1 = util.getTypedArray(0x800, 0, "uint8");
-        this.TICKTable = util.toTypedArray(this.TICKTable, "uint8");
-        this.SecondaryTICKTable = util.toTypedArray(this.SecondaryTICKTable, "uint8");
+        this.TickTable = util.toTypedArray(this.TickTable, "uint8");
+        this.SecondaryTickTable = util.toTypedArray(this.SecondaryTickTable, "uint8");
         this.channel3PCM = util.getTypedArray(0x20, 0, "int8");
       };
       GameBoyCore.prototype.generateCacheArray = function (tileAmount) {
@@ -7831,7 +7822,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         var index = 0xFF;
         while (index >= 0) {
           if (index >= 0x30 && index < 0x40) {
-            this.memoryWrite(0xFF00 | index, this.ffxxDump[index]);
+            this.memoryWrite(0xFF00 | index, PostBootRegisterState[index]);
           } else {
             switch (index) {
               case 0x00:
@@ -7841,10 +7832,10 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
               case 0x07:
               case 0x0F:
               case 0xFF:
-                this.memoryWrite(0xFF00 | index, this.ffxxDump[index]);
+                this.memoryWrite(0xFF00 | index, PostBootRegisterState[index]);
                 break;
               default:
-                this.memory[0xFF00 | index] = this.ffxxDump[index];
+                this.memory[0xFF00 | index] = PostBootRegisterState[index];
             }
           }
           --index;
@@ -8065,7 +8056,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
 
         if (settings.soundOn) {
-          this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings[8] / this.audioResamplerFirstPassFactor, 8192) << 1, null, settings.soundVolume, function () {
+          this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1, null, settings.soundVolume, function () {
             settings.soundOn = false;
           });
           this.initAudioBuffer();
@@ -8082,7 +8073,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.audioIndex = 0;
         this.audioDestinationPosition = 0;
         this.downsampleInput = 0;
-        this.bufferContainAmount = Math.max(this.baseCPUCyclesPerIteration * settings[7] / this.audioResamplerFirstPassFactor, 4096) << 1;
+        this.bufferContainAmount = Math.max(this.baseCPUCyclesPerIteration * settings.minAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 4096) << 1;
         this.numSamplesTotal = this.baseCPUCyclesPerIteration / this.audioResamplerFirstPassFactor << 1;
         this.audioBuffer = util.getTypedArray(this.numSamplesTotal, 0, "float32");
       };
@@ -8553,7 +8544,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.channel1OutputLevelTrimaryCache();
       };
       GameBoyCore.prototype.channel1OutputLevelTrimaryCache = function () {
-        if (this.channel1CachedDuty[this.channel1DutyTracker] && settings[14][0]) {
+        if (this.channel1CachedDuty[this.channel1DutyTracker] && settings.enabledChannels[0]) {
           this.channel1currentSampleLeftTrimary = this.channel1currentSampleLeftSecondary;
           this.channel1currentSampleRightTrimary = this.channel1currentSampleRightSecondary;
         } else {
@@ -8587,7 +8578,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.channel2OutputLevelTrimaryCache();
       };
       GameBoyCore.prototype.channel2OutputLevelTrimaryCache = function () {
-        if (this.channel2CachedDuty[this.channel2DutyTracker] && settings[14][1]) {
+        if (this.channel2CachedDuty[this.channel2DutyTracker] && settings.enabledChannels[1]) {
           this.channel2currentSampleLeftTrimary = this.channel2currentSampleLeftSecondary;
           this.channel2currentSampleRightTrimary = this.channel2currentSampleRightSecondary;
         } else {
@@ -8606,7 +8597,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.channel3OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel3OutputLevelSecondaryCache = function () {
-        if (this.channel3Enabled && settings[14][2]) {
+        if (this.channel3Enabled && settings.enabledChannels[2]) {
           this.channel3currentSampleLeftSecondary = this.channel3currentSampleLeft;
           this.channel3currentSampleRightSecondary = this.channel3currentSampleRight;
         } else {
@@ -8630,7 +8621,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.channel4OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel4OutputLevelSecondaryCache = function () {
-        if (this.channel4Enabled && settings[14][3]) {
+        if (this.channel4Enabled && settings.enabledChannels[3]) {
           this.channel4currentSampleLeftSecondary = this.channel4currentSampleLeft;
           this.channel4currentSampleRightSecondary = this.channel4currentSampleRight;
         } else {
@@ -8724,7 +8715,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
             this.skipPCIncrement = false;
           }
           //Get how many CPU cycles the current instruction counts for:
-          this.CPUTicks = this.TICKTable[opcodeToExecute];
+          this.CPUTicks = this.TickTable[opcodeToExecute];
 
           //Execute the current instruction:
           instructionSet[opcodeToExecute](this);
@@ -10775,7 +10766,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       };
       GameBoyCore.prototype.memoryReadMBC = function (parentObj, address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings[10]) {
+        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           return parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition];
         }
         //console.log("Reading from disabled RAM.", 1);
@@ -10783,7 +10774,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       };
       GameBoyCore.prototype.memoryReadMBC7 = function (parentObj, address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings[10]) {
+        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           switch (address) {
             case 0xA000:
             case 0xA060:
@@ -10813,7 +10804,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       };
       GameBoyCore.prototype.memoryReadMBC3 = function (parentObj, address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings[10]) {
+        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           switch (parentObj.cartridgeSlot.cartridge.currMBCRAMBank) {
             case 0x00:
             case 0x01:
@@ -11105,13 +11096,13 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         parentObj.memory[0xFF00 | address] = data;
       };
       GameBoyCore.prototype.memoryWriteMBCRAM = function (parentObj, address, data) {
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings[10]) {
+        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           console.log("writing mbc...");
           parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition] = data;
         }
       };
       GameBoyCore.prototype.memoryWriteMBC3RAM = function (parentObj, address, data) {
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings[10]) {
+        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           switch (parentObj.cartridgeSlot.cartridge.currMBCRAMBank) {
             case 0x00:
             case 0x01:

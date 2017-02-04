@@ -1,6 +1,6 @@
 import { Buffer } from "buffer";
-import settings from "./settings";
-import GameBoyCore from "./core";
+import settings from "./settings.js";
+import GameBoyCore from "./core/index.js";
 
 export default class GameBoy {
   constructor(canvas) {

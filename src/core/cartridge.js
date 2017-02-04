@@ -201,7 +201,7 @@ export default class Cartridge {
     switch (this.type) {
     case 0x00:
       //ROM w/o bank switching
-      if (!settings.allowMBC1Override) {
+      if (!settings.enableMBC1Override) {
         this.typeName = "ROM";
       }
     case 0x01:

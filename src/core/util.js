@@ -3,7 +3,7 @@ import settings from "../settings";
 export default {
   toTypedArray: function (baseArray, memtype) {
     try {
-      if (settings[5]) {
+      if (settings.disallowTypedArrays) {
         return baseArray;
       }
       if (!baseArray || !baseArray.length) {
@@ -54,7 +54,7 @@ export default {
   getTypedArray: function (length, defaultValue, numberType) {
     let arrayHandle;
     try {
-      if (settings[5]) {
+      if (settings.disallowTypedArrays) {
         throw (new Error("Settings forced typed arrays to be disabled."));
       }
       switch (numberType) {

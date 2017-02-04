@@ -1,13 +1,15 @@
 import Resampler from "./resampler";
 
+let Volume = 1;
+
 export default class AudioServer {
   constructor(channels, sampleRate, minBufferSize, maxBufferSize, underRunCallback, volume) {
     ChannelsAllocated = Math.max(channels, 1);
     this.SampleRate = Math.abs(sampleRate);
     MinBufferSize = (minBufferSize >= (SamplesPerCallback * ChannelsAllocated) && minBufferSize < maxBufferSize) ? (minBufferSize & (-ChannelsAllocated)) : (SamplesPerCallback * ChannelsAllocated);
     MaxBufferSize = (Math.floor(maxBufferSize) > MinBufferSize + ChannelsAllocated) ? (maxBufferSize & (-ChannelsAllocated)) : (MinBufferSize * ChannelsAllocated);
-    this.underRunCallback = (typeof underRunCallback === "function") ? underRunCallback : function () {};
-    Volume = (volume >= 0 && volume <= 1) ? volume : 1;
+    this.underRunCallback = typeof underRunCallback === "function" ? underRunCallback : function () {};
+    Volume = Math.max(0, Math.min(1, volume));
     this.initializeAudio();
   }
 
@@ -99,7 +101,6 @@ var ResampledBuffer = [];
 var MinBufferSize = 15000;
 var MaxBufferSize = 25000;
 var ChannelsAllocated = 1;
-var Volume = 1;
 var ResampleControl = null;
 var AudioBufferSize = 0;
 var ResampleBufferStart = 0;
@@ -107,9 +108,9 @@ var ResampleBufferEnd = 0;
 var ResampleBufferSize = 0;
 var SamplesPerCallback = 2048; //Has to be between 2048 and 4096 (If over, then samples are ignored, if under then silence is added).
 
-function WebAudioEvent(event) {
+function WebAudioEvent(e) {
   for (var bufferCount = 0, buffers = []; bufferCount < ChannelsAllocated; ++bufferCount) {
-    buffers[bufferCount] = event.outputBuffer.getChannelData(bufferCount);
+    buffers[bufferCount] = e.outputBuffer.getChannelData(bufferCount);
   }
 
   ResampleRefill();
