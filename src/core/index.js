@@ -12,6 +12,12 @@ import PostBootRegisterState from "./post-boot-register-state";
 function GameBoyCore(canvas, options) {
   options = options || {};
 
+  //GB BOOT ROM
+  //Add 256 byte boot rom here if you are going to use it.
+  this.GBBOOTROM = [];
+  //GBC BOOT ROM
+  //Add 2048 byte boot rom here if you are going to use it.
+  this.GBCBOOTROM = [];
   this.TickTable = TickTable;
   this.SecondaryTickTable = SecondaryTickTable;
 
@@ -235,12 +241,6 @@ function GameBoyCore(canvas, options) {
   //Initialize the white noise cache tables ahead of time:
   this.intializeWhiteNoise();
 }
-GameBoyCore.prototype.GBBOOTROM = [ //GB BOOT ROM
-  //Add 256 byte boot rom here if you are going to use it.
-];
-GameBoyCore.prototype.GBCBOOTROM = [ //GBC BOOT ROM
-  //Add 2048 byte boot rom here if you are going to use it.
-];
 GameBoyCore.prototype.saveSRAMState = function () {
   if (!this.cartridgeSlot.cartridge.cBATT || this.cartridgeSlot.cartridge.MBCRam.length === 0) {
     //No battery backup...
