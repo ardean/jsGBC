@@ -2337,61 +2337,7 @@ $__System.registerDynamic('10', [], true, function ($__require, exports, module)
 $__System.register('a', ['f', '10'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, Volume, AudioServer, WebAudioContextHandle, WebAudioAudioNode, AudioContextSampleBuffer, ResampledBuffer, MinBufferSize, MaxBufferSize, ChannelsAllocated, ResampleControl, AudioBufferSize, ResampleBufferStart, ResampleBufferEnd, ResampleBufferSize, SamplesPerCallback, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile;
-
-  //Has to be between 2048 and 4096 (If over, then samples are ignored, if under then silence is added).
-
-  function WebAudioEvent(e) {
-    for (var bufferCount = 0, buffers = []; bufferCount < ChannelsAllocated; ++bufferCount) {
-      buffers[bufferCount] = e.outputBuffer.getChannelData(bufferCount);
-    }
-
-    ResampleRefill();
-
-    for (var index = 0; index < SamplesPerCallback && ResampleBufferStart !== ResampleBufferEnd; ++index) {
-      for (bufferCount = 0; bufferCount < ChannelsAllocated; ++bufferCount) {
-        buffers[bufferCount][index] = ResampledBuffer[ResampleBufferStart++] * Volume;
-      }
-      if (ResampleBufferStart === ResampleBufferSize) {
-        ResampleBufferStart = 0;
-      }
-    }
-
-    while (index < SamplesPerCallback) {
-      for (bufferCount = 0; bufferCount < ChannelsAllocated; ++bufferCount) {
-        buffers[bufferCount][index] = 0;
-      }
-      ++index;
-    }
-  }
-
-  function ResampleRefill() {
-    if (AudioBufferSize > 0) {
-      var resampleLength = ResampleControl.resampler(GetBufferSamples());
-      var resampledResult = ResampleControl.outputBuffer;
-      for (var index2 = 0; index2 < resampleLength;) {
-        ResampledBuffer[ResampleBufferEnd++] = resampledResult[index2++];
-        if (ResampleBufferEnd === ResampleBufferSize) {
-          ResampleBufferEnd = 0;
-        }
-        if (ResampleBufferStart === ResampleBufferEnd) {
-          ResampleBufferStart += ChannelsAllocated;
-          if (ResampleBufferStart === ResampleBufferSize) {
-            ResampleBufferStart = 0;
-          }
-        }
-      }
-      AudioBufferSize = 0;
-    }
-  }
-
-  function ResampledSamplesLeft() {
-    return (ResampleBufferStart <= ResampleBufferEnd ? 0 : ResampleBufferSize) + ResampleBufferEnd - ResampleBufferStart;
-  }
-
-  function GetBufferSamples() {
-    return AudioContextSampleBuffer.subarray(0, AudioBufferSize);
-  }
+  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -3529,129 +3475,134 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         return Resampler;
       }();
 
-      Volume = 1;
-
       AudioServer = function () {
-        function AudioServer(channels, sampleRate, minBufferSize, maxBufferSize, underRunCallback, volume) {
+        function AudioServer(channels, sampleRate, minBufferSize, maxBufferSize, volume) {
           _classCallCheck(this, AudioServer);
 
-          ChannelsAllocated = Math.max(channels, 1);
-          this.SampleRate = Math.abs(sampleRate);
-          MinBufferSize = minBufferSize >= SamplesPerCallback * ChannelsAllocated && minBufferSize < maxBufferSize ? minBufferSize & -ChannelsAllocated : SamplesPerCallback * ChannelsAllocated;
-          MaxBufferSize = Math.floor(maxBufferSize) > MinBufferSize + ChannelsAllocated ? maxBufferSize & -ChannelsAllocated : MinBufferSize * ChannelsAllocated;
-          this.underRunCallback = typeof underRunCallback === "function" ? underRunCallback : function () {};
-          Volume = Math.max(0, Math.min(1, volume));
+          this.samplesPerCallback = 2048; // Has to be between 2048 and 4096 (If over, then samples are ignored, if under then silence is added).
+          this.channelsAllocated = Math.max(channels, 1);
+          this.sampleRate = Math.abs(sampleRate);
+          this.bufferSize = this.samplesPerCallback * this.channelsAllocated;
+          this.minBufferSize = minBufferSize >= this.bufferSize && minBufferSize < maxBufferSize ? minBufferSize & -this.channelsAllocated : this.bufferSize;
+          this.maxBufferSize = Math.floor(maxBufferSize) > this.minBufferSize + this.channelsAllocated ? maxBufferSize & -this.channelsAllocated : this.minBufferSize * this.channelsAllocated;
+          this.setVolume(volume);
           this.initializeAudio();
         }
 
         _createClass(AudioServer, [{
-          key: "callbackBasedWriteAudioNoCallback",
-          value: function callbackBasedWriteAudioNoCallback(buffer) {
-            var length = buffer.length;
-            for (var bufferCounter = 0; bufferCounter < length && AudioBufferSize < MaxBufferSize;) {
-              AudioContextSampleBuffer[AudioBufferSize++] = buffer[bufferCounter++];
-            }
-          }
-        }, {
           key: "writeAudio",
           value: function writeAudio(buffer) {
-            this.callbackBasedWriteAudioNoCallback(buffer);
-            this.callbackBasedExecuteCallback();
-          }
-        }, {
-          key: "writeAudioNoCallback",
-          value: function writeAudioNoCallback(buffer) {
-            this.callbackBasedWriteAudioNoCallback(buffer);
+            for (var bufferCounter = 0; bufferCounter < buffer.length && this.audioBufferSize < this.maxBufferSize;) {
+              this.audioContextSampleBuffer[this.audioBufferSize++] = buffer[bufferCounter++];
+            }
           }
         }, {
           key: "remainingBuffer",
           value: function remainingBuffer() {
-            return Math.floor(ResampledSamplesLeft() * ResampleControl.ratioWeight / ChannelsAllocated) * ChannelsAllocated + AudioBufferSize;
-          }
-        }, {
-          key: "callbackBasedExecuteCallback",
-          value: function callbackBasedExecuteCallback() {
-            var samplesRequested = MinBufferSize - this.remainingBuffer();
-            if (samplesRequested > 0) {
-              this.callbackBasedWriteAudioNoCallback(this.underRunCallback(samplesRequested));
-            }
-          }
-        }, {
-          key: "executeCallback",
-          value: function executeCallback() {
-            this.callbackBasedExecuteCallback();
+            return Math.floor(this.resampledSamplesLeft() * this.resampleControl.ratioWeight / this.channelsAllocated) * this.channelsAllocated + this.audioBufferSize;
           }
         }, {
           key: "initializeAudio",
           value: function initializeAudio() {
-            if (!WebAudioContextHandle) {
-              try {
-                WebAudioContextHandle = new AudioContext();
-              } catch (error) {
-                WebAudioContextHandle = new webkitAudioContext();
-              }
-            }
+            this.audioContext = this.audioContext || new AudioContext();
 
-            if (!WebAudioAudioNode) {
-              try {
-                WebAudioAudioNode = WebAudioContextHandle.createScriptProcessor(SamplesPerCallback, 0, ChannelsAllocated);
-              } catch (error) {
-                WebAudioAudioNode = WebAudioContextHandle.createJavaScriptNode(SamplesPerCallback, 0, ChannelsAllocated);
-              }
+            if (!this.audioNode) {
+              this.audioNode = this.audioContext.createScriptProcessor(this.samplesPerCallback, 0, this.channelsAllocated);
 
-              WebAudioAudioNode.onaudioprocess = WebAudioEvent;
-              WebAudioAudioNode.connect(WebAudioContextHandle.destination);
-              this.resetCallbackAPIAudioBuffer(WebAudioContextHandle.sampleRate);
+              this.audioNode.addEventListener("audioprocess", this.processAudio.bind(this));
+              this.audioNode.connect(this.audioContext.destination);
+              this.resetCallbackAPIAudioBuffer(this.audioContext.sampleRate);
             }
           }
         }, {
-          key: "changeVolume",
-          value: function changeVolume(newVolume) {
-            if (newVolume >= 0 && newVolume <= 1) {
-              Volume = newVolume;
+          key: "processAudio",
+          value: function processAudio(e) {
+            var buffers = [];
+            var bufferCount = 0;
+
+            for (; bufferCount < this.channelsAllocated; ++bufferCount) {
+              buffers[bufferCount] = e.outputBuffer.getChannelData(bufferCount);
             }
+
+            this.refillResampledBuffer();
+
+            var index = 0;
+            for (; index < this.samplesPerCallback && this.resampleBufferStart !== this.resampleBufferEnd; ++index) {
+              for (bufferCount = 0; bufferCount < this.channelsAllocated; ++bufferCount) {
+                buffers[bufferCount][index] = this.resampledBuffer[this.resampleBufferStart++] * this.volume;
+              }
+              if (this.resampleBufferStart === this.resampleBufferSize) {
+                this.resampleBufferStart = 0;
+              }
+            }
+
+            while (index < this.samplesPerCallback) {
+              for (bufferCount = 0; bufferCount < this.channelsAllocated; ++bufferCount) {
+                buffers[bufferCount][index] = 0;
+              }
+              ++index;
+            }
+          }
+        }, {
+          key: "setVolume",
+          value: function setVolume(volume) {
+            this.volume = Math.max(0, Math.min(1, volume));
           }
         }, {
           key: "resetCallbackAPIAudioBuffer",
-          value: function resetCallbackAPIAudioBuffer(APISampleRate) {
-            AudioBufferSize = ResampleBufferEnd = ResampleBufferStart = 0;
-            this.initializeResampler(APISampleRate);
-            ResampledBuffer = this.getFloat32(ResampleBufferSize);
+          value: function resetCallbackAPIAudioBuffer(sampleRate) {
+            this.audioBufferSize = this.resampleBufferEnd = this.resampleBufferStart = 0;
+            this.initializeResampler(sampleRate);
+            this.resampledBuffer = new Float32Array(this.resampleBufferSize);
+          }
+        }, {
+          key: "refillResampledBuffer",
+          value: function refillResampledBuffer() {
+            if (this.audioBufferSize > 0) {
+              var resampleLength = this.resampleControl.resampler(this.getBufferSamples());
+              var resampledResult = this.resampleControl.outputBuffer;
+
+              for (var i = 0; i < resampleLength;) {
+                this.resampledBuffer[this.resampleBufferEnd++] = resampledResult[i++];
+
+                if (this.resampleBufferEnd === this.resampleBufferSize) {
+                  this.resampleBufferEnd = 0;
+                }
+
+                if (this.resampleBufferStart === this.resampleBufferEnd) {
+                  this.resampleBufferStart += this.channelsAllocated;
+
+                  if (this.resampleBufferStart === this.resampleBufferSize) {
+                    this.resampleBufferStart = 0;
+                  }
+                }
+              }
+              this.audioBufferSize = 0;
+            }
           }
         }, {
           key: "initializeResampler",
           value: function initializeResampler(sampleRate) {
-            AudioContextSampleBuffer = this.getFloat32(MaxBufferSize);
-            ResampleBufferSize = Math.max(MaxBufferSize * Math.ceil(sampleRate / this.SampleRate) + ChannelsAllocated, SamplesPerCallback * ChannelsAllocated);
-            ResampleControl = new Resampler(this.SampleRate, sampleRate, ChannelsAllocated, ResampleBufferSize, true);
+            this.audioContextSampleBuffer = new Float32Array(this.maxBufferSize);
+            this.resampleBufferSize = Math.max(this.maxBufferSize * Math.ceil(sampleRate / this.sampleRate) + this.channelsAllocated, this.bufferSize);
+
+            this.resampleControl = new Resampler(this.sampleRate, sampleRate, this.channelsAllocated, this.resampleBufferSize, true);
           }
         }, {
-          key: "getFloat32",
-          value: function getFloat32(size) {
-            try {
-              return new Float32Array(size);
-            } catch (error) {
-              return [];
-            }
+          key: "resampledSamplesLeft",
+          value: function resampledSamplesLeft() {
+            return (this.resampleBufferStart <= this.resampleBufferEnd ? 0 : this.resampleBufferSize) + this.resampleBufferEnd - this.resampleBufferStart;
+          }
+        }, {
+          key: "getBufferSamples",
+          value: function getBufferSamples() {
+            return this.audioContextSampleBuffer.subarray(0, this.audioBufferSize);
           }
         }]);
 
         return AudioServer;
       }();
 
-      WebAudioContextHandle = null;
-      WebAudioAudioNode = null;
-      AudioContextSampleBuffer = [];
-      ResampledBuffer = [];
-      MinBufferSize = 15000;
-      MaxBufferSize = 25000;
-      ChannelsAllocated = 1;
-      ResampleControl = null;
-      AudioBufferSize = 0;
-      ResampleBufferStart = 0;
-      ResampleBufferEnd = 0;
-      ResampleBufferSize = 0;
-      SamplesPerCallback = 2048;
       secondInstructionSet = [
       //RLC B
       //#0x00:
@@ -8056,9 +8007,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
 
         if (settings.soundOn) {
-          this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1, null, settings.soundVolume, function () {
-            settings.soundOn = false;
-          });
+          this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1, settings.soundVolume);
           this.initAudioBuffer();
         } else if (this.audioServer) {
           this.audioServer.changeVolume(0);
@@ -8226,7 +8175,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput >>> 16) * this.downSampleInputDivider - 1;
         this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput & 0xFFFF) * this.downSampleInputDivider - 1;
         if (this.audioDestinationPosition === this.numSamplesTotal) {
-          this.audioServer.writeAudioNoCallback(this.audioBuffer);
+          this.audioServer.writeAudio(this.audioBuffer);
           this.audioDestinationPosition = 0;
         }
         this.downsampleInput = 0;

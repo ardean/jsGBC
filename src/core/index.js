@@ -991,11 +991,7 @@ GameBoyCore.prototype.initSound = function () {
       this.clocksPerSecond / this.audioResamplerFirstPassFactor,
       0,
       Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1,
-      null,
-      settings.soundVolume,
-      function () {
-        settings.soundOn = false;
-      }
+      settings.soundVolume
     );
     this.initAudioBuffer();
   } else if (this.audioServer) {
@@ -1161,55 +1157,55 @@ GameBoyCore.prototype.initializeAudioStartState = function () {
   this.noiseSampleTable = this.LSFR15Table;
 }
 GameBoyCore.prototype.outputAudio = function () {
-    this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput >>> 16) * this.downSampleInputDivider - 1;
-    this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput & 0xFFFF) * this.downSampleInputDivider - 1;
-    if (this.audioDestinationPosition === this.numSamplesTotal) {
-      this.audioServer.writeAudioNoCallback(this.audioBuffer);
-      this.audioDestinationPosition = 0;
-    }
-    this.downsampleInput = 0;
+  this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput >>> 16) * this.downSampleInputDivider - 1;
+  this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput & 0xFFFF) * this.downSampleInputDivider - 1;
+  if (this.audioDestinationPosition === this.numSamplesTotal) {
+    this.audioServer.writeAudio(this.audioBuffer);
+    this.audioDestinationPosition = 0;
   }
-  //Below are the audio generation functions timed against the CPU:
+  this.downsampleInput = 0;
+}
+//Below are the audio generation functions timed against the CPU:
 GameBoyCore.prototype.generateAudio = function (numSamples) {
-    var multiplier = 0;
-    if (this.soundMasterEnabled && !this.CPUStopped) {
-      for (var clockUpTo = 0; numSamples > 0;) {
-        clockUpTo = Math.min(this.audioClocksUntilNextEventCounter, this.sequencerClocks, numSamples);
-        this.audioClocksUntilNextEventCounter -= clockUpTo;
-        this.sequencerClocks -= clockUpTo;
-        numSamples -= clockUpTo;
-        while (clockUpTo > 0) {
-          multiplier = Math.min(clockUpTo, this.audioResamplerFirstPassFactor - this.audioIndex);
-          clockUpTo -= multiplier;
-          this.audioIndex += multiplier;
-          this.downsampleInput += this.mixerOutputCache * multiplier;
-          if (this.audioIndex === this.audioResamplerFirstPassFactor) {
-            this.audioIndex = 0;
-            this.outputAudio();
-          }
-        }
-        if (this.sequencerClocks === 0) {
-          this.audioComputeSequencer();
-          this.sequencerClocks = 0x2000;
-        }
-        if (this.audioClocksUntilNextEventCounter === 0) {
-          this.computeAudioChannels();
-        }
-      }
-    } else {
-      //SILENT OUTPUT:
-      while (numSamples > 0) {
-        multiplier = Math.min(numSamples, this.audioResamplerFirstPassFactor - this.audioIndex);
-        numSamples -= multiplier;
+  var multiplier = 0;
+  if (this.soundMasterEnabled && !this.CPUStopped) {
+    for (var clockUpTo = 0; numSamples > 0;) {
+      clockUpTo = Math.min(this.audioClocksUntilNextEventCounter, this.sequencerClocks, numSamples);
+      this.audioClocksUntilNextEventCounter -= clockUpTo;
+      this.sequencerClocks -= clockUpTo;
+      numSamples -= clockUpTo;
+      while (clockUpTo > 0) {
+        multiplier = Math.min(clockUpTo, this.audioResamplerFirstPassFactor - this.audioIndex);
+        clockUpTo -= multiplier;
         this.audioIndex += multiplier;
+        this.downsampleInput += this.mixerOutputCache * multiplier;
         if (this.audioIndex === this.audioResamplerFirstPassFactor) {
           this.audioIndex = 0;
           this.outputAudio();
         }
       }
+      if (this.sequencerClocks === 0) {
+        this.audioComputeSequencer();
+        this.sequencerClocks = 0x2000;
+      }
+      if (this.audioClocksUntilNextEventCounter === 0) {
+        this.computeAudioChannels();
+      }
+    }
+  } else {
+    //SILENT OUTPUT:
+    while (numSamples > 0) {
+      multiplier = Math.min(numSamples, this.audioResamplerFirstPassFactor - this.audioIndex);
+      numSamples -= multiplier;
+      this.audioIndex += multiplier;
+      if (this.audioIndex === this.audioResamplerFirstPassFactor) {
+        this.audioIndex = 0;
+        this.outputAudio();
+      }
     }
   }
-  //Generate audio, but don't actually output it (Used for when sound is disabled by user/browser):
+}
+//Generate audio, but don't actually output it (Used for when sound is disabled by user/browser):
 GameBoyCore.prototype.generateAudioFake = function (numSamples) {
   if (this.soundMasterEnabled && !this.CPUStopped) {
     for (var clockUpTo = 0; numSamples > 0;) {
@@ -2891,148 +2887,126 @@ GameBoyCore.prototype.findLowestSpriteDrawable = function (scanlineToRender, dra
   return spriteCount;
 }
 GameBoyCore.prototype.SpriteGBCLayerRender = function (scanlineToRender) {
-    if (this.gfxSpriteShow) { //Are sprites enabled?
-      var OAMAddress = 0xFE00;
-      var lineAdjusted = scanlineToRender + 0x10;
-      var yoffset = 0;
-      var xcoord = 0;
-      var endX = 0;
-      var xCounter = 0;
-      var attrCode = 0;
-      var palette = 0;
-      var tile = null;
-      var data = 0;
-      var currentPixel = 0;
-      var spriteCount = 0;
-      if (this.gfxSpriteNormalHeight) {
-        for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
-          yoffset = lineAdjusted - this.memory[OAMAddress];
-          if ((yoffset & 0x7) === yoffset) {
-            xcoord = this.memory[OAMAddress | 1] - 8;
-            endX = Math.min(160, xcoord + 8);
-            attrCode = this.memory[OAMAddress | 3];
-            palette = (attrCode & 7) << 2;
-            tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | this.memory[OAMAddress | 2]];
-            xCounter = (xcoord > 0) ? xcoord : 0;
-            xcoord -= yoffset << 3;
-            for (currentPixel = this.pixelStart + xCounter; xCounter < endX; ++xCounter, ++currentPixel) {
-              if (this.frameBuffer[currentPixel] >= 0x2000000) {
-                data = tile[xCounter - xcoord];
-                if (data > 0) {
-                  this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
-                }
-              } else if (this.frameBuffer[currentPixel] < 0x1000000) {
-                data = tile[xCounter - xcoord];
-                if (data > 0 && attrCode < 0x80) { //Don't optimize for attrCode, as LICM-capable JITs should optimize its checks.
-                  this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
-                }
+  if (this.gfxSpriteShow) { //Are sprites enabled?
+    var OAMAddress = 0xFE00;
+    var lineAdjusted = scanlineToRender + 0x10;
+    var yoffset = 0;
+    var xcoord = 0;
+    var endX = 0;
+    var xCounter = 0;
+    var attrCode = 0;
+    var palette = 0;
+    var tile = null;
+    var data = 0;
+    var currentPixel = 0;
+    var spriteCount = 0;
+    if (this.gfxSpriteNormalHeight) {
+      for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
+        yoffset = lineAdjusted - this.memory[OAMAddress];
+        if ((yoffset & 0x7) === yoffset) {
+          xcoord = this.memory[OAMAddress | 1] - 8;
+          endX = Math.min(160, xcoord + 8);
+          attrCode = this.memory[OAMAddress | 3];
+          palette = (attrCode & 7) << 2;
+          tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | this.memory[OAMAddress | 2]];
+          xCounter = (xcoord > 0) ? xcoord : 0;
+          xcoord -= yoffset << 3;
+          for (currentPixel = this.pixelStart + xCounter; xCounter < endX; ++xCounter, ++currentPixel) {
+            if (this.frameBuffer[currentPixel] >= 0x2000000) {
+              data = tile[xCounter - xcoord];
+              if (data > 0) {
+                this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
+              }
+            } else if (this.frameBuffer[currentPixel] < 0x1000000) {
+              data = tile[xCounter - xcoord];
+              if (data > 0 && attrCode < 0x80) { //Don't optimize for attrCode, as LICM-capable JITs should optimize its checks.
+                this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
               }
             }
-            ++spriteCount;
           }
+          ++spriteCount;
         }
-      } else {
-        for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
-          yoffset = lineAdjusted - this.memory[OAMAddress];
-          if ((yoffset & 0xF) === yoffset) {
-            xcoord = this.memory[OAMAddress | 1] - 8;
-            endX = Math.min(160, xcoord + 8);
-            attrCode = this.memory[OAMAddress | 3];
-            palette = (attrCode & 7) << 2;
-            if ((attrCode & 0x40) === (0x40 & (yoffset << 3))) {
-              tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | (this.memory[OAMAddress | 0x2] & 0xFE)];
-            } else {
-              tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | this.memory[OAMAddress | 0x2] | 1];
-            }
-            xCounter = (xcoord > 0) ? xcoord : 0;
-            xcoord -= (yoffset & 0x7) << 3;
-            for (currentPixel = this.pixelStart + xCounter; xCounter < endX; ++xCounter, ++currentPixel) {
-              if (this.frameBuffer[currentPixel] >= 0x2000000) {
-                data = tile[xCounter - xcoord];
-                if (data > 0) {
-                  this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
-                }
-              } else if (this.frameBuffer[currentPixel] < 0x1000000) {
-                data = tile[xCounter - xcoord];
-                if (data > 0 && attrCode < 0x80) { //Don't optimize for attrCode, as LICM-capable JITs should optimize its checks.
-                  this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
-                }
+      }
+    } else {
+      for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
+        yoffset = lineAdjusted - this.memory[OAMAddress];
+        if ((yoffset & 0xF) === yoffset) {
+          xcoord = this.memory[OAMAddress | 1] - 8;
+          endX = Math.min(160, xcoord + 8);
+          attrCode = this.memory[OAMAddress | 3];
+          palette = (attrCode & 7) << 2;
+          if ((attrCode & 0x40) === (0x40 & (yoffset << 3))) {
+            tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | (this.memory[OAMAddress | 0x2] & 0xFE)];
+          } else {
+            tile = this.tileCache[((attrCode & 0x08) << 8) | ((attrCode & 0x60) << 4) | this.memory[OAMAddress | 0x2] | 1];
+          }
+          xCounter = (xcoord > 0) ? xcoord : 0;
+          xcoord -= (yoffset & 0x7) << 3;
+          for (currentPixel = this.pixelStart + xCounter; xCounter < endX; ++xCounter, ++currentPixel) {
+            if (this.frameBuffer[currentPixel] >= 0x2000000) {
+              data = tile[xCounter - xcoord];
+              if (data > 0) {
+                this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
+              }
+            } else if (this.frameBuffer[currentPixel] < 0x1000000) {
+              data = tile[xCounter - xcoord];
+              if (data > 0 && attrCode < 0x80) { //Don't optimize for attrCode, as LICM-capable JITs should optimize its checks.
+                this.frameBuffer[currentPixel] = this.gbcOBJPalette[palette | data];
               }
             }
-            ++spriteCount;
           }
+          ++spriteCount;
         }
       }
     }
   }
-  //Generate only a single tile line for the GB tile cache mode:
+}
+//Generate only a single tile line for the GB tile cache mode:
 GameBoyCore.prototype.generateGBTileLine = function (address) {
-    var lineCopy = (this.memory[0x1 | address] << 8) | this.memory[0x9FFE & address];
-    var tileBlock = this.tileCache[(address & 0x1FF0) >> 4];
-    address = (address & 0xE) << 2;
-    tileBlock[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
-    tileBlock[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
-    tileBlock[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
-    tileBlock[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
-    tileBlock[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
-    tileBlock[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
-    tileBlock[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
-    tileBlock[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
-  }
-  //Generate only a single tile line for the GBC tile cache mode (Bank 1):
+  var lineCopy = (this.memory[0x1 | address] << 8) | this.memory[0x9FFE & address];
+  var tileBlock = this.tileCache[(address & 0x1FF0) >> 4];
+  address = (address & 0xE) << 2;
+  tileBlock[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
+  tileBlock[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
+  tileBlock[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
+  tileBlock[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
+  tileBlock[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
+  tileBlock[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
+  tileBlock[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
+  tileBlock[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
+}
+//Generate only a single tile line for the GBC tile cache mode (Bank 1):
 GameBoyCore.prototype.generateGBCTileLineBank1 = function (address) {
-    var lineCopy = (this.memory[0x1 | address] << 8) | this.memory[0x9FFE & address];
-    address &= 0x1FFE;
-    var tileBlock1 = this.tileCache[address >> 4];
-    var tileBlock2 = this.tileCache[0x200 | (address >> 4)];
-    var tileBlock3 = this.tileCache[0x400 | (address >> 4)];
-    var tileBlock4 = this.tileCache[0x600 | (address >> 4)];
-    address = (address & 0xE) << 2;
-    var addressFlipped = 0x38 - address;
-    tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
-    tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
-    tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
-    tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
-    tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
-    tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
-    tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
-    tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
-  }
-  //Generate all the flip combinations for a full GBC VRAM bank 1 tile:
+  var lineCopy = (this.memory[0x1 | address] << 8) | this.memory[0x9FFE & address];
+  address &= 0x1FFE;
+  var tileBlock1 = this.tileCache[address >> 4];
+  var tileBlock2 = this.tileCache[0x200 | (address >> 4)];
+  var tileBlock3 = this.tileCache[0x400 | (address >> 4)];
+  var tileBlock4 = this.tileCache[0x600 | (address >> 4)];
+  address = (address & 0xE) << 2;
+  var addressFlipped = 0x38 - address;
+  tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
+  tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
+  tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
+  tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
+  tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
+  tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
+  tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
+  tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
+}
+//Generate all the flip combinations for a full GBC VRAM bank 1 tile:
 GameBoyCore.prototype.generateGBCTileBank1 = function (vramAddress) {
-    var address = vramAddress >> 4;
-    var tileBlock1 = this.tileCache[address];
-    var tileBlock2 = this.tileCache[0x200 | address];
-    var tileBlock3 = this.tileCache[0x400 | address];
-    var tileBlock4 = this.tileCache[0x600 | address];
-    var lineCopy = 0;
-    vramAddress |= 0x8000;
-    address = 0;
-    var addressFlipped = 56;
-    do {
-      lineCopy = (this.memory[0x1 | vramAddress] << 8) | this.memory[vramAddress];
-      tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
-      tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
-      tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
-      tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
-      tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
-      tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
-      tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
-      tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
-      address += 8;
-      addressFlipped -= 8;
-      vramAddress += 2;
-    } while (addressFlipped > -1);
-  }
-  //Generate only a single tile line for the GBC tile cache mode (Bank 2):
-GameBoyCore.prototype.generateGBCTileLineBank2 = function (address) {
-    var lineCopy = (this.VRAM[0x1 | address] << 8) | this.VRAM[0x1FFE & address];
-    var tileBlock1 = this.tileCache[0x800 | (address >> 4)];
-    var tileBlock2 = this.tileCache[0xA00 | (address >> 4)];
-    var tileBlock3 = this.tileCache[0xC00 | (address >> 4)];
-    var tileBlock4 = this.tileCache[0xE00 | (address >> 4)];
-    address = (address & 0xE) << 2;
-    var addressFlipped = 0x38 - address;
+  var address = vramAddress >> 4;
+  var tileBlock1 = this.tileCache[address];
+  var tileBlock2 = this.tileCache[0x200 | address];
+  var tileBlock3 = this.tileCache[0x400 | address];
+  var tileBlock4 = this.tileCache[0x600 | address];
+  var lineCopy = 0;
+  vramAddress |= 0x8000;
+  address = 0;
+  var addressFlipped = 56;
+  do {
+    lineCopy = (this.memory[0x1 | vramAddress] << 8) | this.memory[vramAddress];
     tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
     tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
     tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
@@ -3041,33 +3015,55 @@ GameBoyCore.prototype.generateGBCTileLineBank2 = function (address) {
     tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
     tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
     tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
-  }
-  //Generate all the flip combinations for a full GBC VRAM bank 2 tile:
+    address += 8;
+    addressFlipped -= 8;
+    vramAddress += 2;
+  } while (addressFlipped > -1);
+}
+//Generate only a single tile line for the GBC tile cache mode (Bank 2):
+GameBoyCore.prototype.generateGBCTileLineBank2 = function (address) {
+  var lineCopy = (this.VRAM[0x1 | address] << 8) | this.VRAM[0x1FFE & address];
+  var tileBlock1 = this.tileCache[0x800 | (address >> 4)];
+  var tileBlock2 = this.tileCache[0xA00 | (address >> 4)];
+  var tileBlock3 = this.tileCache[0xC00 | (address >> 4)];
+  var tileBlock4 = this.tileCache[0xE00 | (address >> 4)];
+  address = (address & 0xE) << 2;
+  var addressFlipped = 0x38 - address;
+  tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
+  tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
+  tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
+  tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
+  tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
+  tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
+  tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
+  tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
+}
+//Generate all the flip combinations for a full GBC VRAM bank 2 tile:
 GameBoyCore.prototype.generateGBCTileBank2 = function (vramAddress) {
-    var address = vramAddress >> 4;
-    var tileBlock1 = this.tileCache[0x800 | address];
-    var tileBlock2 = this.tileCache[0xA00 | address];
-    var tileBlock3 = this.tileCache[0xC00 | address];
-    var tileBlock4 = this.tileCache[0xE00 | address];
-    var lineCopy = 0;
-    address = 0;
-    var addressFlipped = 56;
-    do {
-      lineCopy = (this.VRAM[0x1 | vramAddress] << 8) | this.VRAM[vramAddress];
-      tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
-      tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
-      tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
-      tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
-      tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
-      tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
-      tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
-      tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
-      address += 8;
-      addressFlipped -= 8;
-      vramAddress += 2;
-    } while (addressFlipped > -1);
-  }
-  //Generate only a single tile line for the GB tile cache mode (OAM accessible range):
+  var address = vramAddress >> 4;
+  var tileBlock1 = this.tileCache[0x800 | address];
+  var tileBlock2 = this.tileCache[0xA00 | address];
+  var tileBlock3 = this.tileCache[0xC00 | address];
+  var tileBlock4 = this.tileCache[0xE00 | address];
+  var lineCopy = 0;
+  address = 0;
+  var addressFlipped = 56;
+  do {
+    lineCopy = (this.VRAM[0x1 | vramAddress] << 8) | this.VRAM[vramAddress];
+    tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = ((lineCopy & 0x100) >> 7) | (lineCopy & 0x1);
+    tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = ((lineCopy & 0x200) >> 8) | ((lineCopy & 0x2) >> 1);
+    tileBlock4[addressFlipped | 2] = tileBlock2[address | 2] = tileBlock3[addressFlipped | 5] = tileBlock1[address | 5] = ((lineCopy & 0x400) >> 9) | ((lineCopy & 0x4) >> 2);
+    tileBlock4[addressFlipped | 3] = tileBlock2[address | 3] = tileBlock3[addressFlipped | 4] = tileBlock1[address | 4] = ((lineCopy & 0x800) >> 10) | ((lineCopy & 0x8) >> 3);
+    tileBlock4[addressFlipped | 4] = tileBlock2[address | 4] = tileBlock3[addressFlipped | 3] = tileBlock1[address | 3] = ((lineCopy & 0x1000) >> 11) | ((lineCopy & 0x10) >> 4);
+    tileBlock4[addressFlipped | 5] = tileBlock2[address | 5] = tileBlock3[addressFlipped | 2] = tileBlock1[address | 2] = ((lineCopy & 0x2000) >> 12) | ((lineCopy & 0x20) >> 5);
+    tileBlock4[addressFlipped | 6] = tileBlock2[address | 6] = tileBlock3[addressFlipped | 1] = tileBlock1[address | 1] = ((lineCopy & 0x4000) >> 13) | ((lineCopy & 0x40) >> 6);
+    tileBlock4[addressFlipped | 7] = tileBlock2[address | 7] = tileBlock3[addressFlipped] = tileBlock1[address] = ((lineCopy & 0x8000) >> 14) | ((lineCopy & 0x80) >> 7);
+    address += 8;
+    addressFlipped -= 8;
+    vramAddress += 2;
+  } while (addressFlipped > -1);
+}
+//Generate only a single tile line for the GB tile cache mode (OAM accessible range):
 GameBoyCore.prototype.generateGBOAMTileLine = function (address) {
   var lineCopy = (this.memory[0x1 | address] << 8) | this.memory[0x9FFE & address];
   address &= 0x1FFE;
@@ -3123,125 +3119,125 @@ GameBoyCore.prototype.incrementScanLineQueue = function () {
   }
 }
 GameBoyCore.prototype.midScanLineJIT = function () {
-    this.graphicsJIT();
-    this.renderMidScanLine();
-  }
-  //Check for the highest priority IRQ to fire:
+  this.graphicsJIT();
+  this.renderMidScanLine();
+}
+//Check for the highest priority IRQ to fire:
 GameBoyCore.prototype.launchIRQ = function () {
-    var bitShift = 0;
-    var testbit = 1;
-    do {
-      //Check to see if an interrupt is enabled AND requested.
-      if ((testbit & this.IRQLineMatched) === testbit) {
-        this.IME = false; //Reset the interrupt enabling.
-        this.interruptsRequested -= testbit; //Reset the interrupt request.
-        this.IRQLineMatched = 0; //Reset the IRQ assertion.
-        //Interrupts have a certain clock cycle length:
-        this.CPUTicks = 20;
-        //Set the stack pointer to the current program counter value:
-        this.stackPointer = (this.stackPointer - 1) & 0xFFFF;
-        this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter >> 8);
-        this.stackPointer = (this.stackPointer - 1) & 0xFFFF;
-        this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter & 0xFF);
-        //Set the program counter to the interrupt's address:
-        this.programCounter = 0x40 | (bitShift << 3);
-        //Clock the core for mid-instruction updates:
-        this.updateCore();
-        return; //We only want the highest priority interrupt.
-      }
-      testbit = 1 << ++bitShift;
-    } while (bitShift < 5);
-  }
-  /*
-  	Check for IRQs to be fired while not in HALT:
-  */
+  var bitShift = 0;
+  var testbit = 1;
+  do {
+    //Check to see if an interrupt is enabled AND requested.
+    if ((testbit & this.IRQLineMatched) === testbit) {
+      this.IME = false; //Reset the interrupt enabling.
+      this.interruptsRequested -= testbit; //Reset the interrupt request.
+      this.IRQLineMatched = 0; //Reset the IRQ assertion.
+      //Interrupts have a certain clock cycle length:
+      this.CPUTicks = 20;
+      //Set the stack pointer to the current program counter value:
+      this.stackPointer = (this.stackPointer - 1) & 0xFFFF;
+      this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter >> 8);
+      this.stackPointer = (this.stackPointer - 1) & 0xFFFF;
+      this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter & 0xFF);
+      //Set the program counter to the interrupt's address:
+      this.programCounter = 0x40 | (bitShift << 3);
+      //Clock the core for mid-instruction updates:
+      this.updateCore();
+      return; //We only want the highest priority interrupt.
+    }
+    testbit = 1 << ++bitShift;
+  } while (bitShift < 5);
+}
+/*
+	Check for IRQs to be fired while not in HALT:
+*/
 GameBoyCore.prototype.checkIRQMatching = function () {
-    if (this.IME) {
-      this.IRQLineMatched = this.interruptsEnabled & this.interruptsRequested & 0x1F;
-    }
+  if (this.IME) {
+    this.IRQLineMatched = this.interruptsEnabled & this.interruptsRequested & 0x1F;
   }
-  /*
-  	Handle the HALT opcode by predicting all IRQ cases correctly,
-  	then selecting the next closest IRQ firing from the prediction to
-  	clock up to. This prevents hacky looping that doesn't predict, but
-  	instead just clocks through the core update procedure by one which
-  	is very slow. Not many emulators do this because they have to cover
-  	all the IRQ prediction cases and they usually get them wrong.
-  */
+}
+/*
+	Handle the HALT opcode by predicting all IRQ cases correctly,
+	then selecting the next closest IRQ firing from the prediction to
+	clock up to. This prevents hacky looping that doesn't predict, but
+	instead just clocks through the core update procedure by one which
+	is very slow. Not many emulators do this because they have to cover
+	all the IRQ prediction cases and they usually get them wrong.
+*/
 GameBoyCore.prototype.calculateHALTPeriod = function () {
-    //Initialize our variables and start our prediction:
-    if (!this.halt) {
-      this.halt = true;
-      var currentClocks = -1;
-      var temp_var = 0;
-      if (this.LCDisOn) {
-        //If the LCD is enabled, then predict the LCD IRQs enabled:
-        if ((this.interruptsEnabled & 0x1) === 0x1) {
-          currentClocks = ((456 * (((this.modeSTAT === 1) ? 298 : 144) - this.actualScanLine)) - this.LCDTicks) << this.doubleSpeedShifter;
+  //Initialize our variables and start our prediction:
+  if (!this.halt) {
+    this.halt = true;
+    var currentClocks = -1;
+    var temp_var = 0;
+    if (this.LCDisOn) {
+      //If the LCD is enabled, then predict the LCD IRQs enabled:
+      if ((this.interruptsEnabled & 0x1) === 0x1) {
+        currentClocks = ((456 * (((this.modeSTAT === 1) ? 298 : 144) - this.actualScanLine)) - this.LCDTicks) << this.doubleSpeedShifter;
+      }
+      if ((this.interruptsEnabled & 0x2) === 0x2) {
+        if (this.mode0TriggerSTAT) {
+          temp_var = (this.clocksUntilMode0() - this.LCDTicks) << this.doubleSpeedShifter;
+          if (temp_var <= currentClocks || currentClocks === -1) {
+            currentClocks = temp_var;
+          }
         }
-        if ((this.interruptsEnabled & 0x2) === 0x2) {
-          if (this.mode0TriggerSTAT) {
-            temp_var = (this.clocksUntilMode0() - this.LCDTicks) << this.doubleSpeedShifter;
-            if (temp_var <= currentClocks || currentClocks === -1) {
-              currentClocks = temp_var;
-            }
+        if (this.mode1TriggerSTAT && (this.interruptsEnabled & 0x1) === 0) {
+          temp_var = ((456 * (((this.modeSTAT === 1) ? 298 : 144) - this.actualScanLine)) - this.LCDTicks) << this.doubleSpeedShifter;
+          if (temp_var <= currentClocks || currentClocks === -1) {
+            currentClocks = temp_var;
           }
-          if (this.mode1TriggerSTAT && (this.interruptsEnabled & 0x1) === 0) {
-            temp_var = ((456 * (((this.modeSTAT === 1) ? 298 : 144) - this.actualScanLine)) - this.LCDTicks) << this.doubleSpeedShifter;
-            if (temp_var <= currentClocks || currentClocks === -1) {
-              currentClocks = temp_var;
-            }
+        }
+        if (this.mode2TriggerSTAT) {
+          temp_var = (((this.actualScanLine >= 143) ? (456 * (154 - this.actualScanLine)) : 456) - this.LCDTicks) << this.doubleSpeedShifter;
+          if (temp_var <= currentClocks || currentClocks === -1) {
+            currentClocks = temp_var;
           }
-          if (this.mode2TriggerSTAT) {
-            temp_var = (((this.actualScanLine >= 143) ? (456 * (154 - this.actualScanLine)) : 456) - this.LCDTicks) << this.doubleSpeedShifter;
-            if (temp_var <= currentClocks || currentClocks === -1) {
-              currentClocks = temp_var;
-            }
-          }
-          if (this.LYCMatchTriggerSTAT && this.memory[0xFF45] <= 153) {
-            temp_var = (this.clocksUntilLYCMatch() - this.LCDTicks) << this.doubleSpeedShifter;
-            if (temp_var <= currentClocks || currentClocks === -1) {
-              currentClocks = temp_var;
-            }
+        }
+        if (this.LYCMatchTriggerSTAT && this.memory[0xFF45] <= 153) {
+          temp_var = (this.clocksUntilLYCMatch() - this.LCDTicks) << this.doubleSpeedShifter;
+          if (temp_var <= currentClocks || currentClocks === -1) {
+            currentClocks = temp_var;
           }
         }
       }
-      if (this.TIMAEnabled && (this.interruptsEnabled & 0x4) === 0x4) {
-        //CPU timer IRQ prediction:
-        temp_var = ((0x100 - this.memory[0xFF05]) * this.TACClocker) - this.timerTicks;
-        if (temp_var <= currentClocks || currentClocks === -1) {
-          currentClocks = temp_var;
-        }
-      }
-      if (this.serialTimer > 0 && (this.interruptsEnabled & 0x8) === 0x8) {
-        //Serial IRQ prediction:
-        if (this.serialTimer <= currentClocks || currentClocks === -1) {
-          currentClocks = this.serialTimer;
-        }
-      }
-    } else {
-      var currentClocks = this.remainingClocks;
     }
-    var maxClocks = (this.CPUCyclesTotal - this.emulatorTicks) << this.doubleSpeedShifter;
-    if (currentClocks >= 0) {
-      if (currentClocks <= maxClocks) {
-        //Exit out of HALT normally:
-        this.CPUTicks = Math.max(currentClocks, this.CPUTicks);
-        this.updateCoreFull();
-        this.halt = false;
-        this.CPUTicks = 0;
-      } else {
-        //Still in HALT, clock only up to the clocks specified per iteration:
-        this.CPUTicks = Math.max(maxClocks, this.CPUTicks);
-        this.remainingClocks = currentClocks - this.CPUTicks;
+    if (this.TIMAEnabled && (this.interruptsEnabled & 0x4) === 0x4) {
+      //CPU timer IRQ prediction:
+      temp_var = ((0x100 - this.memory[0xFF05]) * this.TACClocker) - this.timerTicks;
+      if (temp_var <= currentClocks || currentClocks === -1) {
+        currentClocks = temp_var;
       }
+    }
+    if (this.serialTimer > 0 && (this.interruptsEnabled & 0x8) === 0x8) {
+      //Serial IRQ prediction:
+      if (this.serialTimer <= currentClocks || currentClocks === -1) {
+        currentClocks = this.serialTimer;
+      }
+    }
+  } else {
+    var currentClocks = this.remainingClocks;
+  }
+  var maxClocks = (this.CPUCyclesTotal - this.emulatorTicks) << this.doubleSpeedShifter;
+  if (currentClocks >= 0) {
+    if (currentClocks <= maxClocks) {
+      //Exit out of HALT normally:
+      this.CPUTicks = Math.max(currentClocks, this.CPUTicks);
+      this.updateCoreFull();
+      this.halt = false;
+      this.CPUTicks = 0;
     } else {
       //Still in HALT, clock only up to the clocks specified per iteration:
-      //Will stay in HALT forever (Stuck in HALT forever), but the APU and LCD are still clocked, so don't pause:
-      this.CPUTicks += maxClocks;
+      this.CPUTicks = Math.max(maxClocks, this.CPUTicks);
+      this.remainingClocks = currentClocks - this.CPUTicks;
     }
+  } else {
+    //Still in HALT, clock only up to the clocks specified per iteration:
+    //Will stay in HALT forever (Stuck in HALT forever), but the APU and LCD are still clocked, so don't pause:
+    this.CPUTicks += maxClocks;
   }
-  //Memory Reading:
+}
+//Memory Reading:
 GameBoyCore.prototype.memoryRead = function (address) {
   //Act as a wrapper for reading the returns from the compiled jumps to memory.
   return this.memoryReader[address](this, address); //This seems to be faster than the usual if/else.
@@ -3806,15 +3802,15 @@ GameBoyCore.prototype.setCurrentMBC2AND3ROMBank = function () {
   this.currentROMBank = Math.max((this.ROMBank1offs % this.cartridgeSlot.cartridge.ROMBankEdge) - 1, 0) << 14;
 }
 GameBoyCore.prototype.setCurrentMBC5ROMBank = function () {
-    //Read the cartridge ROM data from RAM memory:
-    this.currentROMBank = ((this.ROMBank1offs % this.cartridgeSlot.cartridge.ROMBankEdge) - 1) << 14;
-  }
-  //Memory Writing:
+  //Read the cartridge ROM data from RAM memory:
+  this.currentROMBank = ((this.ROMBank1offs % this.cartridgeSlot.cartridge.ROMBankEdge) - 1) << 14;
+}
+//Memory Writing:
 GameBoyCore.prototype.memoryWrite = function (address, data) {
-    //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
-    this.memoryWriter[address](this, address, data);
-  }
-  //0xFFXX fast path:
+  //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
+  this.memoryWriter[address](this, address, data);
+}
+//0xFFXX fast path:
 GameBoyCore.prototype.memoryHighWrite = function (address, data) {
   //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
   this.memoryHighWriter[address](this, address, data);
@@ -4268,39 +4264,39 @@ GameBoyCore.prototype.registerWriteJumpCompile = function () {
   //I/O Registers (GB + GBC):
   //JoyPad
   this.memoryHighWriter[0] = this.memoryWriter[0xFF00] = function (parentObj, address, data) {
-      parentObj.memory[0xFF00] = (data & 0x30) | ((((data & 0x20) === 0) ? (parentObj.JoyPad >> 4) : 0xF) & (((data & 0x10) === 0) ? (parentObj.JoyPad & 0xF) : 0xF));
-    }
-    //SB (Serial Transfer Data)
+    parentObj.memory[0xFF00] = (data & 0x30) | ((((data & 0x20) === 0) ? (parentObj.JoyPad >> 4) : 0xF) & (((data & 0x10) === 0) ? (parentObj.JoyPad & 0xF) : 0xF));
+  }
+  //SB (Serial Transfer Data)
   this.memoryHighWriter[0x1] = this.memoryWriter[0xFF01] = function (parentObj, address, data) {
-      if (parentObj.memory[0xFF02] < 0x80) { //Cannot write while a serial transfer is active.
-        parentObj.memory[0xFF01] = data;
-      }
+    if (parentObj.memory[0xFF02] < 0x80) { //Cannot write while a serial transfer is active.
+      parentObj.memory[0xFF01] = data;
     }
-    //SC (Serial Transfer Control):
+  }
+  //SC (Serial Transfer Control):
   this.memoryHighWriter[0x2] = this.memoryHighWriteNormal;
   this.memoryWriter[0xFF02] = this.memoryWriteNormal;
   //Unmapped I/O:
   this.memoryHighWriter[0x3] = this.memoryWriter[0xFF03] = this.cartIgnoreWrite;
   //DIV
   this.memoryHighWriter[0x4] = this.memoryWriter[0xFF04] = function (parentObj, address, data) {
-      parentObj.DIVTicks &= 0xFF; //Update DIV for realignment.
-      parentObj.memory[0xFF04] = 0;
-    }
-    //TIMA
+    parentObj.DIVTicks &= 0xFF; //Update DIV for realignment.
+    parentObj.memory[0xFF04] = 0;
+  }
+  //TIMA
   this.memoryHighWriter[0x5] = this.memoryWriter[0xFF05] = function (parentObj, address, data) {
-      parentObj.memory[0xFF05] = data;
-    }
-    //TMA
+    parentObj.memory[0xFF05] = data;
+  }
+  //TMA
   this.memoryHighWriter[0x6] = this.memoryWriter[0xFF06] = function (parentObj, address, data) {
-      parentObj.memory[0xFF06] = data;
-    }
-    //TAC
+    parentObj.memory[0xFF06] = data;
+  }
+  //TAC
   this.memoryHighWriter[0x7] = this.memoryWriter[0xFF07] = function (parentObj, address, data) {
-      parentObj.memory[0xFF07] = data & 0x07;
-      parentObj.TIMAEnabled = (data & 0x04) === 0x04;
-      parentObj.TACClocker = Math.pow(4, ((data & 0x3) != 0) ? (data & 0x3) : 4) << 2; //TODO: Find a way to not make a conditional in here...
-    }
-    //Unmapped I/O:
+    parentObj.memory[0xFF07] = data & 0x07;
+    parentObj.TIMAEnabled = (data & 0x04) === 0x04;
+    parentObj.TACClocker = Math.pow(4, ((data & 0x3) != 0) ? (data & 0x3) : 4) << 2; //TODO: Find a way to not make a conditional in here...
+  }
+  //Unmapped I/O:
   this.memoryHighWriter[0x8] = this.memoryWriter[0xFF08] = this.cartIgnoreWrite;
   this.memoryHighWriter[0x9] = this.memoryWriter[0xFF09] = this.cartIgnoreWrite;
   this.memoryHighWriter[0xA] = this.memoryWriter[0xFF0A] = this.cartIgnoreWrite;
@@ -4310,367 +4306,367 @@ GameBoyCore.prototype.registerWriteJumpCompile = function () {
   this.memoryHighWriter[0xE] = this.memoryWriter[0xFF0E] = this.cartIgnoreWrite;
   //IF (Interrupt Request)
   this.memoryHighWriter[0xF] = this.memoryWriter[0xFF0F] = function (parentObj, address, data) {
-      parentObj.interruptsRequested = data;
-      parentObj.checkIRQMatching();
-    }
-    //NR10:
+    parentObj.interruptsRequested = data;
+    parentObj.checkIRQMatching();
+  }
+  //NR10:
   this.memoryHighWriter[0x10] = this.memoryWriter[0xFF10] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (parentObj.channel1decreaseSweep && (data & 0x08) === 0) {
-          if (parentObj.channel1Swept) {
-            parentObj.channel1SweepFault = true;
-          }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (parentObj.channel1decreaseSweep && (data & 0x08) === 0) {
+        if (parentObj.channel1Swept) {
+          parentObj.channel1SweepFault = true;
         }
-        parentObj.channel1lastTimeSweep = (data & 0x70) >> 4;
-        parentObj.channel1frequencySweepDivider = data & 0x07;
-        parentObj.channel1decreaseSweep = ((data & 0x08) === 0x08);
-        parentObj.memory[0xFF10] = data;
-        parentObj.channel1EnableCheck();
       }
+      parentObj.channel1lastTimeSweep = (data & 0x70) >> 4;
+      parentObj.channel1frequencySweepDivider = data & 0x07;
+      parentObj.channel1decreaseSweep = ((data & 0x08) === 0x08);
+      parentObj.memory[0xFF10] = data;
+      parentObj.channel1EnableCheck();
     }
-    //NR11:
+  }
+  //NR11:
   this.memoryHighWriter[0x11] = this.memoryWriter[0xFF11] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-        if (parentObj.soundMasterEnabled) {
-          parentObj.audioJIT();
-        } else {
-          data &= 0x3F;
-        }
-        parentObj.channel1CachedDuty = parentObj.dutyLookup[data >> 6];
-        parentObj.channel1totalLength = 0x40 - (data & 0x3F);
-        parentObj.memory[0xFF11] = data;
-        parentObj.channel1EnableCheck();
+    if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
+      if (parentObj.soundMasterEnabled) {
+        parentObj.audioJIT();
+      } else {
+        data &= 0x3F;
       }
+      parentObj.channel1CachedDuty = parentObj.dutyLookup[data >> 6];
+      parentObj.channel1totalLength = 0x40 - (data & 0x3F);
+      parentObj.memory[0xFF11] = data;
+      parentObj.channel1EnableCheck();
     }
-    //NR12:
+  }
+  //NR12:
   this.memoryHighWriter[0x12] = this.memoryWriter[0xFF12] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (parentObj.channel1Enabled && parentObj.channel1envelopeSweeps === 0) {
-          //Zombie Volume PAPU Bug:
-          if (((parentObj.memory[0xFF12] ^ data) & 0x8) === 0x8) {
-            if ((parentObj.memory[0xFF12] & 0x8) === 0) {
-              if ((parentObj.memory[0xFF12] & 0x7) === 0x7) {
-                parentObj.channel1envelopeVolume += 2;
-              } else {
-                ++parentObj.channel1envelopeVolume;
-              }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (parentObj.channel1Enabled && parentObj.channel1envelopeSweeps === 0) {
+        //Zombie Volume PAPU Bug:
+        if (((parentObj.memory[0xFF12] ^ data) & 0x8) === 0x8) {
+          if ((parentObj.memory[0xFF12] & 0x8) === 0) {
+            if ((parentObj.memory[0xFF12] & 0x7) === 0x7) {
+              parentObj.channel1envelopeVolume += 2;
+            } else {
+              ++parentObj.channel1envelopeVolume;
             }
-            parentObj.channel1envelopeVolume = (16 - parentObj.channel1envelopeVolume) & 0xF;
-          } else if ((parentObj.memory[0xFF12] & 0xF) === 0x8) {
-            parentObj.channel1envelopeVolume = (1 + parentObj.channel1envelopeVolume) & 0xF;
           }
-          parentObj.channel1OutputLevelCache();
+          parentObj.channel1envelopeVolume = (16 - parentObj.channel1envelopeVolume) & 0xF;
+        } else if ((parentObj.memory[0xFF12] & 0xF) === 0x8) {
+          parentObj.channel1envelopeVolume = (1 + parentObj.channel1envelopeVolume) & 0xF;
         }
-        parentObj.channel1envelopeType = ((data & 0x08) === 0x08);
-        parentObj.memory[0xFF12] = data;
-        parentObj.channel1VolumeEnableCheck();
+        parentObj.channel1OutputLevelCache();
       }
+      parentObj.channel1envelopeType = ((data & 0x08) === 0x08);
+      parentObj.memory[0xFF12] = data;
+      parentObj.channel1VolumeEnableCheck();
     }
-    //NR13:
+  }
+  //NR13:
   this.memoryHighWriter[0x13] = this.memoryWriter[0xFF13] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.channel1frequency = (parentObj.channel1frequency & 0x700) | data;
-        parentObj.channel1FrequencyTracker = (0x800 - parentObj.channel1frequency) << 2;
-      }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.channel1frequency = (parentObj.channel1frequency & 0x700) | data;
+      parentObj.channel1FrequencyTracker = (0x800 - parentObj.channel1frequency) << 2;
     }
-    //NR14:
+  }
+  //NR14:
   this.memoryHighWriter[0x14] = this.memoryWriter[0xFF14] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.channel1consecutive = ((data & 0x40) === 0x0);
-        parentObj.channel1frequency = ((data & 0x7) << 8) | (parentObj.channel1frequency & 0xFF);
-        parentObj.channel1FrequencyTracker = (0x800 - parentObj.channel1frequency) << 2;
-        if (data > 0x7F) {
-          //Reload 0xFF10:
-          parentObj.channel1timeSweep = parentObj.channel1lastTimeSweep;
-          parentObj.channel1Swept = false;
-          //Reload 0xFF12:
-          var nr12 = parentObj.memory[0xFF12];
-          parentObj.channel1envelopeVolume = nr12 >> 4;
-          parentObj.channel1OutputLevelCache();
-          parentObj.channel1envelopeSweepsLast = (nr12 & 0x7) - 1;
-          if (parentObj.channel1totalLength === 0) {
-            parentObj.channel1totalLength = 0x40;
-          }
-          if (parentObj.channel1lastTimeSweep > 0 || parentObj.channel1frequencySweepDivider > 0) {
-            parentObj.memory[0xFF26] |= 0x1;
-          } else {
-            parentObj.memory[0xFF26] &= 0xFE;
-          }
-          if ((data & 0x40) === 0x40) {
-            parentObj.memory[0xFF26] |= 0x1;
-          }
-          parentObj.channel1ShadowFrequency = parentObj.channel1frequency;
-          //Reset frequency overflow check + frequency sweep type check:
-          parentObj.channel1SweepFault = false;
-          //Supposed to run immediately:
-          parentObj.channel1AudioSweepPerformDummy();
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.channel1consecutive = ((data & 0x40) === 0x0);
+      parentObj.channel1frequency = ((data & 0x7) << 8) | (parentObj.channel1frequency & 0xFF);
+      parentObj.channel1FrequencyTracker = (0x800 - parentObj.channel1frequency) << 2;
+      if (data > 0x7F) {
+        //Reload 0xFF10:
+        parentObj.channel1timeSweep = parentObj.channel1lastTimeSweep;
+        parentObj.channel1Swept = false;
+        //Reload 0xFF12:
+        var nr12 = parentObj.memory[0xFF12];
+        parentObj.channel1envelopeVolume = nr12 >> 4;
+        parentObj.channel1OutputLevelCache();
+        parentObj.channel1envelopeSweepsLast = (nr12 & 0x7) - 1;
+        if (parentObj.channel1totalLength === 0) {
+          parentObj.channel1totalLength = 0x40;
         }
-        parentObj.channel1EnableCheck();
-        parentObj.memory[0xFF14] = data;
+        if (parentObj.channel1lastTimeSweep > 0 || parentObj.channel1frequencySweepDivider > 0) {
+          parentObj.memory[0xFF26] |= 0x1;
+        } else {
+          parentObj.memory[0xFF26] &= 0xFE;
+        }
+        if ((data & 0x40) === 0x40) {
+          parentObj.memory[0xFF26] |= 0x1;
+        }
+        parentObj.channel1ShadowFrequency = parentObj.channel1frequency;
+        //Reset frequency overflow check + frequency sweep type check:
+        parentObj.channel1SweepFault = false;
+        //Supposed to run immediately:
+        parentObj.channel1AudioSweepPerformDummy();
       }
+      parentObj.channel1EnableCheck();
+      parentObj.memory[0xFF14] = data;
     }
-    //NR20 (Unused I/O):
+  }
+  //NR20 (Unused I/O):
   this.memoryHighWriter[0x15] = this.memoryWriter[0xFF15] = this.cartIgnoreWrite;
   //NR21:
   this.memoryHighWriter[0x16] = this.memoryWriter[0xFF16] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-        if (parentObj.soundMasterEnabled) {
-          parentObj.audioJIT();
-        } else {
-          data &= 0x3F;
-        }
-        parentObj.channel2CachedDuty = parentObj.dutyLookup[data >> 6];
-        parentObj.channel2totalLength = 0x40 - (data & 0x3F);
-        parentObj.memory[0xFF16] = data;
-        parentObj.channel2EnableCheck();
+    if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
+      if (parentObj.soundMasterEnabled) {
+        parentObj.audioJIT();
+      } else {
+        data &= 0x3F;
       }
+      parentObj.channel2CachedDuty = parentObj.dutyLookup[data >> 6];
+      parentObj.channel2totalLength = 0x40 - (data & 0x3F);
+      parentObj.memory[0xFF16] = data;
+      parentObj.channel2EnableCheck();
     }
-    //NR22:
+  }
+  //NR22:
   this.memoryHighWriter[0x17] = this.memoryWriter[0xFF17] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (parentObj.channel2Enabled && parentObj.channel2envelopeSweeps === 0) {
-          //Zombie Volume PAPU Bug:
-          if (((parentObj.memory[0xFF17] ^ data) & 0x8) === 0x8) {
-            if ((parentObj.memory[0xFF17] & 0x8) === 0) {
-              if ((parentObj.memory[0xFF17] & 0x7) === 0x7) {
-                parentObj.channel2envelopeVolume += 2;
-              } else {
-                ++parentObj.channel2envelopeVolume;
-              }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (parentObj.channel2Enabled && parentObj.channel2envelopeSweeps === 0) {
+        //Zombie Volume PAPU Bug:
+        if (((parentObj.memory[0xFF17] ^ data) & 0x8) === 0x8) {
+          if ((parentObj.memory[0xFF17] & 0x8) === 0) {
+            if ((parentObj.memory[0xFF17] & 0x7) === 0x7) {
+              parentObj.channel2envelopeVolume += 2;
+            } else {
+              ++parentObj.channel2envelopeVolume;
             }
-            parentObj.channel2envelopeVolume = (16 - parentObj.channel2envelopeVolume) & 0xF;
-          } else if ((parentObj.memory[0xFF17] & 0xF) === 0x8) {
-            parentObj.channel2envelopeVolume = (1 + parentObj.channel2envelopeVolume) & 0xF;
           }
-          parentObj.channel2OutputLevelCache();
+          parentObj.channel2envelopeVolume = (16 - parentObj.channel2envelopeVolume) & 0xF;
+        } else if ((parentObj.memory[0xFF17] & 0xF) === 0x8) {
+          parentObj.channel2envelopeVolume = (1 + parentObj.channel2envelopeVolume) & 0xF;
         }
-        parentObj.channel2envelopeType = ((data & 0x08) === 0x08);
-        parentObj.memory[0xFF17] = data;
-        parentObj.channel2VolumeEnableCheck();
+        parentObj.channel2OutputLevelCache();
       }
+      parentObj.channel2envelopeType = ((data & 0x08) === 0x08);
+      parentObj.memory[0xFF17] = data;
+      parentObj.channel2VolumeEnableCheck();
     }
-    //NR23:
+  }
+  //NR23:
   this.memoryHighWriter[0x18] = this.memoryWriter[0xFF18] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.channel2frequency = (parentObj.channel2frequency & 0x700) | data;
-        parentObj.channel2FrequencyTracker = (0x800 - parentObj.channel2frequency) << 2;
-      }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.channel2frequency = (parentObj.channel2frequency & 0x700) | data;
+      parentObj.channel2FrequencyTracker = (0x800 - parentObj.channel2frequency) << 2;
     }
-    //NR24:
+  }
+  //NR24:
   this.memoryHighWriter[0x19] = this.memoryWriter[0xFF19] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (data > 0x7F) {
-          //Reload 0xFF17:
-          var nr22 = parentObj.memory[0xFF17];
-          parentObj.channel2envelopeVolume = nr22 >> 4;
-          parentObj.channel2OutputLevelCache();
-          parentObj.channel2envelopeSweepsLast = (nr22 & 0x7) - 1;
-          if (parentObj.channel2totalLength === 0) {
-            parentObj.channel2totalLength = 0x40;
-          }
-          if ((data & 0x40) === 0x40) {
-            parentObj.memory[0xFF26] |= 0x2;
-          }
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (data > 0x7F) {
+        //Reload 0xFF17:
+        var nr22 = parentObj.memory[0xFF17];
+        parentObj.channel2envelopeVolume = nr22 >> 4;
+        parentObj.channel2OutputLevelCache();
+        parentObj.channel2envelopeSweepsLast = (nr22 & 0x7) - 1;
+        if (parentObj.channel2totalLength === 0) {
+          parentObj.channel2totalLength = 0x40;
         }
-        parentObj.channel2consecutive = ((data & 0x40) === 0x0);
-        parentObj.channel2frequency = ((data & 0x7) << 8) | (parentObj.channel2frequency & 0xFF);
-        parentObj.channel2FrequencyTracker = (0x800 - parentObj.channel2frequency) << 2;
-        parentObj.memory[0xFF19] = data;
-        parentObj.channel2EnableCheck();
+        if ((data & 0x40) === 0x40) {
+          parentObj.memory[0xFF26] |= 0x2;
+        }
       }
+      parentObj.channel2consecutive = ((data & 0x40) === 0x0);
+      parentObj.channel2frequency = ((data & 0x7) << 8) | (parentObj.channel2frequency & 0xFF);
+      parentObj.channel2FrequencyTracker = (0x800 - parentObj.channel2frequency) << 2;
+      parentObj.memory[0xFF19] = data;
+      parentObj.channel2EnableCheck();
     }
-    //NR30:
+  }
+  //NR30:
   this.memoryHighWriter[0x1A] = this.memoryWriter[0xFF1A] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (!parentObj.channel3canPlay && data >= 0x80) {
+        parentObj.channel3lastSampleLookup = 0;
+        parentObj.channel3UpdateCache();
+      }
+      parentObj.channel3canPlay = (data > 0x7F);
+      if (parentObj.channel3canPlay && parentObj.memory[0xFF1A] > 0x7F && !parentObj.channel3consecutive) {
+        parentObj.memory[0xFF26] |= 0x4;
+      }
+      parentObj.memory[0xFF1A] = data;
+      //parentObj.channel3EnableCheck();
+    }
+  }
+  //NR31:
+  this.memoryHighWriter[0x1B] = this.memoryWriter[0xFF1B] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
       if (parentObj.soundMasterEnabled) {
         parentObj.audioJIT();
-        if (!parentObj.channel3canPlay && data >= 0x80) {
-          parentObj.channel3lastSampleLookup = 0;
-          parentObj.channel3UpdateCache();
+      }
+      parentObj.channel3totalLength = 0x100 - data;
+      parentObj.channel3EnableCheck();
+    }
+  }
+  //NR32:
+  this.memoryHighWriter[0x1C] = this.memoryWriter[0xFF1C] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      data &= 0x60;
+      parentObj.memory[0xFF1C] = data;
+      parentObj.channel3patternType = (data === 0) ? 4 : ((data >> 5) - 1);
+    }
+  }
+  //NR33:
+  this.memoryHighWriter[0x1D] = this.memoryWriter[0xFF1D] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.channel3frequency = (parentObj.channel3frequency & 0x700) | data;
+      parentObj.channel3FrequencyPeriod = (0x800 - parentObj.channel3frequency) << 1;
+    }
+  }
+  //NR34:
+  this.memoryHighWriter[0x1E] = this.memoryWriter[0xFF1E] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      if (data > 0x7F) {
+        if (parentObj.channel3totalLength === 0) {
+          parentObj.channel3totalLength = 0x100;
         }
-        parentObj.channel3canPlay = (data > 0x7F);
-        if (parentObj.channel3canPlay && parentObj.memory[0xFF1A] > 0x7F && !parentObj.channel3consecutive) {
+        parentObj.channel3lastSampleLookup = 0;
+        if ((data & 0x40) === 0x40) {
           parentObj.memory[0xFF26] |= 0x4;
         }
-        parentObj.memory[0xFF1A] = data;
-        //parentObj.channel3EnableCheck();
       }
+      parentObj.channel3consecutive = ((data & 0x40) === 0x0);
+      parentObj.channel3frequency = ((data & 0x7) << 8) | (parentObj.channel3frequency & 0xFF);
+      parentObj.channel3FrequencyPeriod = (0x800 - parentObj.channel3frequency) << 1;
+      parentObj.memory[0xFF1E] = data;
+      parentObj.channel3EnableCheck();
     }
-    //NR31:
-  this.memoryHighWriter[0x1B] = this.memoryWriter[0xFF1B] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-        if (parentObj.soundMasterEnabled) {
-          parentObj.audioJIT();
-        }
-        parentObj.channel3totalLength = 0x100 - data;
-        parentObj.channel3EnableCheck();
-      }
-    }
-    //NR32:
-  this.memoryHighWriter[0x1C] = this.memoryWriter[0xFF1C] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        data &= 0x60;
-        parentObj.memory[0xFF1C] = data;
-        parentObj.channel3patternType = (data === 0) ? 4 : ((data >> 5) - 1);
-      }
-    }
-    //NR33:
-  this.memoryHighWriter[0x1D] = this.memoryWriter[0xFF1D] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.channel3frequency = (parentObj.channel3frequency & 0x700) | data;
-        parentObj.channel3FrequencyPeriod = (0x800 - parentObj.channel3frequency) << 1;
-      }
-    }
-    //NR34:
-  this.memoryHighWriter[0x1E] = this.memoryWriter[0xFF1E] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (data > 0x7F) {
-          if (parentObj.channel3totalLength === 0) {
-            parentObj.channel3totalLength = 0x100;
-          }
-          parentObj.channel3lastSampleLookup = 0;
-          if ((data & 0x40) === 0x40) {
-            parentObj.memory[0xFF26] |= 0x4;
-          }
-        }
-        parentObj.channel3consecutive = ((data & 0x40) === 0x0);
-        parentObj.channel3frequency = ((data & 0x7) << 8) | (parentObj.channel3frequency & 0xFF);
-        parentObj.channel3FrequencyPeriod = (0x800 - parentObj.channel3frequency) << 1;
-        parentObj.memory[0xFF1E] = data;
-        parentObj.channel3EnableCheck();
-      }
-    }
-    //NR40 (Unused I/O):
+  }
+  //NR40 (Unused I/O):
   this.memoryHighWriter[0x1F] = this.memoryWriter[0xFF1F] = this.cartIgnoreWrite;
   //NR41:
   this.memoryHighWriter[0x20] = this.memoryWriter[0xFF20] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-        if (parentObj.soundMasterEnabled) {
-          parentObj.audioJIT();
-        }
-        parentObj.channel4totalLength = 0x40 - (data & 0x3F);
-        parentObj.channel4EnableCheck();
+    if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
+      if (parentObj.soundMasterEnabled) {
+        parentObj.audioJIT();
       }
+      parentObj.channel4totalLength = 0x40 - (data & 0x3F);
+      parentObj.channel4EnableCheck();
     }
-    //NR42:
+  }
+  //NR42:
   this.memoryHighWriter[0x21] = this.memoryWriter[0xFF21] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        if (parentObj.channel4Enabled && parentObj.channel4envelopeSweeps === 0) {
-          //Zombie Volume PAPU Bug:
-          if (((parentObj.memory[0xFF21] ^ data) & 0x8) === 0x8) {
-            if ((parentObj.memory[0xFF21] & 0x8) === 0) {
-              if ((parentObj.memory[0xFF21] & 0x7) === 0x7) {
-                parentObj.channel4envelopeVolume += 2;
-              } else {
-                ++parentObj.channel4envelopeVolume;
-              }
-            }
-            parentObj.channel4envelopeVolume = (16 - parentObj.channel4envelopeVolume) & 0xF;
-          } else if ((parentObj.memory[0xFF21] & 0xF) === 0x8) {
-            parentObj.channel4envelopeVolume = (1 + parentObj.channel4envelopeVolume) & 0xF;
-          }
-          parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
-        }
-        parentObj.channel4envelopeType = ((data & 0x08) === 0x08);
-        parentObj.memory[0xFF21] = data;
-        parentObj.channel4UpdateCache();
-        parentObj.channel4VolumeEnableCheck();
-      }
-    }
-    //NR43:
-  this.memoryHighWriter[0x22] = this.memoryWriter[0xFF22] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.channel4FrequencyPeriod = Math.max((data & 0x7) << 4, 8) << (data >> 4);
-        var bitWidth = (data & 0x8);
-        if ((bitWidth === 0x8 && parentObj.channel4BitRange === 0x7FFF) || (bitWidth === 0 && parentObj.channel4BitRange === 0x7F)) {
-          parentObj.channel4lastSampleLookup = 0;
-          parentObj.channel4BitRange = (bitWidth === 0x8) ? 0x7F : 0x7FFF;
-          parentObj.channel4VolumeShifter = (bitWidth === 0x8) ? 7 : 15;
-          parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
-          parentObj.noiseSampleTable = (bitWidth === 0x8) ? parentObj.LSFR7Table : parentObj.LSFR15Table;
-        }
-        parentObj.memory[0xFF22] = data;
-        parentObj.channel4UpdateCache();
-      }
-    }
-    //NR44:
-  this.memoryHighWriter[0x23] = this.memoryWriter[0xFF23] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled) {
-        parentObj.audioJIT();
-        parentObj.memory[0xFF23] = data;
-        parentObj.channel4consecutive = ((data & 0x40) === 0x0);
-        if (data > 0x7F) {
-          var nr42 = parentObj.memory[0xFF21];
-          parentObj.channel4envelopeVolume = nr42 >> 4;
-          parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
-          parentObj.channel4envelopeSweepsLast = (nr42 & 0x7) - 1;
-          if (parentObj.channel4totalLength === 0) {
-            parentObj.channel4totalLength = 0x40;
-          }
-          if ((data & 0x40) === 0x40) {
-            parentObj.memory[0xFF26] |= 0x8;
-          }
-        }
-        parentObj.channel4EnableCheck();
-      }
-    }
-    //NR50:
-  this.memoryHighWriter[0x24] = this.memoryWriter[0xFF24] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled && parentObj.memory[0xFF24] != data) {
-        parentObj.audioJIT();
-        parentObj.memory[0xFF24] = data;
-        parentObj.VinLeftChannelMasterVolume = ((data >> 4) & 0x07) + 1;
-        parentObj.VinRightChannelMasterVolume = (data & 0x07) + 1;
-        parentObj.mixerOutputLevelCache();
-      }
-    }
-    //NR51:
-  this.memoryHighWriter[0x25] = this.memoryWriter[0xFF25] = function (parentObj, address, data) {
-      if (parentObj.soundMasterEnabled && parentObj.memory[0xFF25] != data) {
-        parentObj.audioJIT();
-        parentObj.memory[0xFF25] = data;
-        parentObj.rightChannel1 = ((data & 0x01) === 0x01);
-        parentObj.rightChannel2 = ((data & 0x02) === 0x02);
-        parentObj.rightChannel3 = ((data & 0x04) === 0x04);
-        parentObj.rightChannel4 = ((data & 0x08) === 0x08);
-        parentObj.leftChannel1 = ((data & 0x10) === 0x10);
-        parentObj.leftChannel2 = ((data & 0x20) === 0x20);
-        parentObj.leftChannel3 = ((data & 0x40) === 0x40);
-        parentObj.leftChannel4 = (data > 0x7F);
-        parentObj.channel1OutputLevelCache();
-        parentObj.channel2OutputLevelCache();
-        parentObj.channel3OutputLevelCache();
-        parentObj.channel4OutputLevelCache();
-      }
-    }
-    //NR52:
-  this.memoryHighWriter[0x26] = this.memoryWriter[0xFF26] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
       parentObj.audioJIT();
-      if (!parentObj.soundMasterEnabled && data > 0x7F) {
-        parentObj.memory[0xFF26] = 0x80;
-        parentObj.soundMasterEnabled = true;
-        parentObj.initializeAudioStartState();
-      } else if (parentObj.soundMasterEnabled && data < 0x80) {
-        parentObj.memory[0xFF26] = 0;
-        parentObj.soundMasterEnabled = false;
-        //GBDev wiki says the registers are written with zeros on power off:
-        for (var index = 0xFF10; index < 0xFF26; index++) {
-          parentObj.memoryWriter[index](parentObj, index, 0);
+      if (parentObj.channel4Enabled && parentObj.channel4envelopeSweeps === 0) {
+        //Zombie Volume PAPU Bug:
+        if (((parentObj.memory[0xFF21] ^ data) & 0x8) === 0x8) {
+          if ((parentObj.memory[0xFF21] & 0x8) === 0) {
+            if ((parentObj.memory[0xFF21] & 0x7) === 0x7) {
+              parentObj.channel4envelopeVolume += 2;
+            } else {
+              ++parentObj.channel4envelopeVolume;
+            }
+          }
+          parentObj.channel4envelopeVolume = (16 - parentObj.channel4envelopeVolume) & 0xF;
+        } else if ((parentObj.memory[0xFF21] & 0xF) === 0x8) {
+          parentObj.channel4envelopeVolume = (1 + parentObj.channel4envelopeVolume) & 0xF;
+        }
+        parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
+      }
+      parentObj.channel4envelopeType = ((data & 0x08) === 0x08);
+      parentObj.memory[0xFF21] = data;
+      parentObj.channel4UpdateCache();
+      parentObj.channel4VolumeEnableCheck();
+    }
+  }
+  //NR43:
+  this.memoryHighWriter[0x22] = this.memoryWriter[0xFF22] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.channel4FrequencyPeriod = Math.max((data & 0x7) << 4, 8) << (data >> 4);
+      var bitWidth = (data & 0x8);
+      if ((bitWidth === 0x8 && parentObj.channel4BitRange === 0x7FFF) || (bitWidth === 0 && parentObj.channel4BitRange === 0x7F)) {
+        parentObj.channel4lastSampleLookup = 0;
+        parentObj.channel4BitRange = (bitWidth === 0x8) ? 0x7F : 0x7FFF;
+        parentObj.channel4VolumeShifter = (bitWidth === 0x8) ? 7 : 15;
+        parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
+        parentObj.noiseSampleTable = (bitWidth === 0x8) ? parentObj.LSFR7Table : parentObj.LSFR15Table;
+      }
+      parentObj.memory[0xFF22] = data;
+      parentObj.channel4UpdateCache();
+    }
+  }
+  //NR44:
+  this.memoryHighWriter[0x23] = this.memoryWriter[0xFF23] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled) {
+      parentObj.audioJIT();
+      parentObj.memory[0xFF23] = data;
+      parentObj.channel4consecutive = ((data & 0x40) === 0x0);
+      if (data > 0x7F) {
+        var nr42 = parentObj.memory[0xFF21];
+        parentObj.channel4envelopeVolume = nr42 >> 4;
+        parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
+        parentObj.channel4envelopeSweepsLast = (nr42 & 0x7) - 1;
+        if (parentObj.channel4totalLength === 0) {
+          parentObj.channel4totalLength = 0x40;
+        }
+        if ((data & 0x40) === 0x40) {
+          parentObj.memory[0xFF26] |= 0x8;
         }
       }
+      parentObj.channel4EnableCheck();
     }
-    //0xFF27 to 0xFF2F don't do anything...
+  }
+  //NR50:
+  this.memoryHighWriter[0x24] = this.memoryWriter[0xFF24] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled && parentObj.memory[0xFF24] != data) {
+      parentObj.audioJIT();
+      parentObj.memory[0xFF24] = data;
+      parentObj.VinLeftChannelMasterVolume = ((data >> 4) & 0x07) + 1;
+      parentObj.VinRightChannelMasterVolume = (data & 0x07) + 1;
+      parentObj.mixerOutputLevelCache();
+    }
+  }
+  //NR51:
+  this.memoryHighWriter[0x25] = this.memoryWriter[0xFF25] = function (parentObj, address, data) {
+    if (parentObj.soundMasterEnabled && parentObj.memory[0xFF25] != data) {
+      parentObj.audioJIT();
+      parentObj.memory[0xFF25] = data;
+      parentObj.rightChannel1 = ((data & 0x01) === 0x01);
+      parentObj.rightChannel2 = ((data & 0x02) === 0x02);
+      parentObj.rightChannel3 = ((data & 0x04) === 0x04);
+      parentObj.rightChannel4 = ((data & 0x08) === 0x08);
+      parentObj.leftChannel1 = ((data & 0x10) === 0x10);
+      parentObj.leftChannel2 = ((data & 0x20) === 0x20);
+      parentObj.leftChannel3 = ((data & 0x40) === 0x40);
+      parentObj.leftChannel4 = (data > 0x7F);
+      parentObj.channel1OutputLevelCache();
+      parentObj.channel2OutputLevelCache();
+      parentObj.channel3OutputLevelCache();
+      parentObj.channel4OutputLevelCache();
+    }
+  }
+  //NR52:
+  this.memoryHighWriter[0x26] = this.memoryWriter[0xFF26] = function (parentObj, address, data) {
+    parentObj.audioJIT();
+    if (!parentObj.soundMasterEnabled && data > 0x7F) {
+      parentObj.memory[0xFF26] = 0x80;
+      parentObj.soundMasterEnabled = true;
+      parentObj.initializeAudioStartState();
+    } else if (parentObj.soundMasterEnabled && data < 0x80) {
+      parentObj.memory[0xFF26] = 0;
+      parentObj.soundMasterEnabled = false;
+      //GBDev wiki says the registers are written with zeros on power off:
+      for (var index = 0xFF10; index < 0xFF26; index++) {
+        parentObj.memoryWriter[index](parentObj, index, 0);
+      }
+    }
+  }
+  //0xFF27 to 0xFF2F don't do anything...
   this.memoryHighWriter[0x27] = this.memoryWriter[0xFF27] = this.cartIgnoreWrite;
   this.memoryHighWriter[0x28] = this.memoryWriter[0xFF28] = this.cartIgnoreWrite;
   this.memoryHighWriter[0x29] = this.memoryWriter[0xFF29] = this.cartIgnoreWrite;
@@ -4727,49 +4723,49 @@ GameBoyCore.prototype.registerWriteJumpCompile = function () {
     parentObj.channel3WriteRAM(0xE, data);
   }
   this.memoryHighWriter[0x3F] = this.memoryWriter[0xFF3F] = function (parentObj, address, data) {
-      parentObj.channel3WriteRAM(0xF, data);
-    }
-    //SCY
+    parentObj.channel3WriteRAM(0xF, data);
+  }
+  //SCY
   this.memoryHighWriter[0x42] = this.memoryWriter[0xFF42] = function (parentObj, address, data) {
-      if (parentObj.backgroundY != data) {
-        parentObj.midScanLineJIT();
-        parentObj.backgroundY = data;
-      }
+    if (parentObj.backgroundY != data) {
+      parentObj.midScanLineJIT();
+      parentObj.backgroundY = data;
     }
-    //SCX
+  }
+  //SCX
   this.memoryHighWriter[0x43] = this.memoryWriter[0xFF43] = function (parentObj, address, data) {
-      if (parentObj.backgroundX != data) {
-        parentObj.midScanLineJIT();
-        parentObj.backgroundX = data;
-      }
+    if (parentObj.backgroundX != data) {
+      parentObj.midScanLineJIT();
+      parentObj.backgroundX = data;
     }
-    //LY
+  }
+  //LY
   this.memoryHighWriter[0x44] = this.memoryWriter[0xFF44] = function (parentObj, address, data) {
-      //Read Only:
-      if (parentObj.LCDisOn) {
-        //Gambatte says to do this:
-        parentObj.modeSTAT = 2;
-        parentObj.midScanlineOffset = -1;
-        parentObj.totalLinesPassed = parentObj.currentX = parentObj.queuedScanLines = parentObj.lastUnrenderedLine = parentObj.LCDTicks = parentObj.STATTracker = parentObj.actualScanLine = parentObj.memory[0xFF44] = 0;
-      }
+    //Read Only:
+    if (parentObj.LCDisOn) {
+      //Gambatte says to do this:
+      parentObj.modeSTAT = 2;
+      parentObj.midScanlineOffset = -1;
+      parentObj.totalLinesPassed = parentObj.currentX = parentObj.queuedScanLines = parentObj.lastUnrenderedLine = parentObj.LCDTicks = parentObj.STATTracker = parentObj.actualScanLine = parentObj.memory[0xFF44] = 0;
     }
-    //LYC
+  }
+  //LYC
   this.memoryHighWriter[0x45] = this.memoryWriter[0xFF45] = function (parentObj, address, data) {
-      if (parentObj.memory[0xFF45] != data) {
-        parentObj.memory[0xFF45] = data;
-        if (parentObj.LCDisOn) {
-          parentObj.matchLYC(); //Get the compare of the first scan line.
-        }
+    if (parentObj.memory[0xFF45] != data) {
+      parentObj.memory[0xFF45] = data;
+      if (parentObj.LCDisOn) {
+        parentObj.matchLYC(); //Get the compare of the first scan line.
       }
     }
-    //WY
+  }
+  //WY
   this.memoryHighWriter[0x4A] = this.memoryWriter[0xFF4A] = function (parentObj, address, data) {
-      if (parentObj.windowY != data) {
-        parentObj.midScanLineJIT();
-        parentObj.windowY = data;
-      }
+    if (parentObj.windowY != data) {
+      parentObj.midScanLineJIT();
+      parentObj.windowY = data;
     }
-    //WX
+  }
+  //WX
   this.memoryHighWriter[0x4B] = this.memoryWriter[0xFF4B] = function (parentObj, address, data) {
     if (parentObj.memory[0xFF4B] != data) {
       parentObj.midScanLineJIT();
@@ -4852,36 +4848,36 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
       parentObj.memory[0xFF41] = data & 0x78;
     }
     this.memoryHighWriter[0x46] = this.memoryWriter[0xFF46] = function (parentObj, address, data) {
-        parentObj.memory[0xFF46] = data;
-        if (data < 0xE0) {
-          data <<= 8;
-          address = 0xFE00;
-          var stat = parentObj.modeSTAT;
-          parentObj.modeSTAT = 0;
-          var newData = 0;
-          do {
-            newData = parentObj.memoryReader[data](parentObj, data++);
-            if (newData != parentObj.memory[address]) {
-              //JIT the graphics render queue:
-              parentObj.modeSTAT = stat;
-              parentObj.graphicsJIT();
-              parentObj.modeSTAT = 0;
-              parentObj.memory[address++] = newData;
-              break;
-            }
-          } while (++address < 0xFEA0);
-          if (address < 0xFEA0) {
-            do {
-              parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-              parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-              parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-              parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-            } while (address < 0xFEA0);
+      parentObj.memory[0xFF46] = data;
+      if (data < 0xE0) {
+        data <<= 8;
+        address = 0xFE00;
+        var stat = parentObj.modeSTAT;
+        parentObj.modeSTAT = 0;
+        var newData = 0;
+        do {
+          newData = parentObj.memoryReader[data](parentObj, data++);
+          if (newData != parentObj.memory[address]) {
+            //JIT the graphics render queue:
+            parentObj.modeSTAT = stat;
+            parentObj.graphicsJIT();
+            parentObj.modeSTAT = 0;
+            parentObj.memory[address++] = newData;
+            break;
           }
-          parentObj.modeSTAT = stat;
+        } while (++address < 0xFEA0);
+        if (address < 0xFEA0) {
+          do {
+            parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
+            parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
+            parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
+            parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
+          } while (address < 0xFEA0);
         }
+        parentObj.modeSTAT = stat;
       }
-      //KEY1
+    }
+    //KEY1
     this.memoryHighWriter[0x4D] = this.memoryWriter[0xFF4D] = function (parentObj, address, data) {
       parentObj.memory[0xFF4D] = (data & 0x7F) | (parentObj.memory[0xFF4D] & 0x80);
     }
@@ -4952,16 +4948,16 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
       parentObj.memory[0xFF6A] = data;
     }
     this.memoryHighWriter[0x6B] = this.memoryWriter[0xFF6B] = function (parentObj, address, data) {
-        parentObj.updateGBCOBJPalette(parentObj.memory[0xFF6A] & 0x3F, data);
-        if (parentObj.memory[0xFF6A] > 0x7F) { // high bit = autoincrement
-          var next = ((parentObj.memory[0xFF6A] + 1) & 0x3F);
-          parentObj.memory[0xFF6A] = (next | 0x80);
-          parentObj.memory[0xFF6B] = parentObj.gbcOBJRawPalette[next];
-        } else {
-          parentObj.memory[0xFF6B] = data;
-        }
+      parentObj.updateGBCOBJPalette(parentObj.memory[0xFF6A] & 0x3F, data);
+      if (parentObj.memory[0xFF6A] > 0x7F) { // high bit = autoincrement
+        var next = ((parentObj.memory[0xFF6A] + 1) & 0x3F);
+        parentObj.memory[0xFF6A] = (next | 0x80);
+        parentObj.memory[0xFF6B] = parentObj.gbcOBJRawPalette[next];
+      } else {
+        parentObj.memory[0xFF6B] = data;
       }
-      //SVBK
+    }
+    //SVBK
     this.memoryHighWriter[0x70] = this.memoryWriter[0xFF70] = function (parentObj, address, data) {
       var addressCheck = (parentObj.memory[0xFF51] << 8) | parentObj.memory[0xFF52]; //Cannot change the RAM bank while WRAM is the source of a running HDMA.
       if (!parentObj.hdmaRunning || addressCheck < 0xD000 || addressCheck >= 0xE000) {
