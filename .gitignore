@@ -1,3 +1,5 @@
 .DS_Store
 node_modules
 jspm_packages
+jsgbc-darwin-x64
+*.log

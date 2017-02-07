@@ -1,8 +1,9 @@
 {
   "name": "jsgbc",
-  "version": "0.2.7",
+  "productName": "jsGBC",
+  "version": "0.3.0",
   "description": "A GameBoy Color Emulator written in JavaScript",
-  "main": "./dist/jsgbc.min.js",
+  "main": "main.js",
   "repository": "https://github.com/ardean/jsGBC",
   "bugs": "https://github.com/ardean/jsGBC/issues",
   "author": "ardean",
@@ -20,7 +21,9 @@
     "jsgbc"
   ],
   "scripts": {
-    "start": "http-server ./",
+    "start": "electron ./",
+    "build:win": "electron-packager ./ --platform win32 --overwrite",
+    "build:darwin": "electron-packager ./ --platform darwin --overwrite",
     "build": "npm run cleanup && npm run build-src && npm run build-src-min && npm run build-docs",
     "build-src": "jspm build src/index.js dist/jsgbc.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\"",
     "build-src-min": "jspm build src/index.js dist/jsgbc.min.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\" --minify --skip-source-maps",
@@ -31,7 +34,8 @@
   "devDependencies": {
     "cpy-cli": "^1.0.1",
     "del-cli": "^0.2.1",
-    "http-server": "^0.9.0",
+    "electron": "^1.4.15",
+    "electron-packager": "^8.5.1",
     "jspm": "^0.17.0-beta.38"
   },
   "jspm": {

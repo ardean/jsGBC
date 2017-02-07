@@ -68,6 +68,7 @@ fullscreen.on("change", () => {
   if (fullscreen.isActive) {
     $canvas.addClass("fullscreen");
   } else {
+    PointerLock.exitPointerLock();
     $canvas.removeClass("fullscreen");
   }
 });

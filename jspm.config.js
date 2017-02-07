@@ -4,9 +4,6 @@ SystemJS.config({
     "github:": "jspm_packages/github/",
     "jsgbc/": "src/"
   },
-  browserConfig: {
-    "baseURL": "/"
-  },
   devConfig: {
     "map": {
       "plugin-babel": "npm:systemjs-plugin-babel@0.0.20",
