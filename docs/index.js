@@ -12129,7 +12129,7 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile, Notifier, notifier, Fullscreen, controllerProfileMap, currentControllerProfile, $canvas, canvas, gameboy, fullscreen, $loading, controllerProfiles, $controllerProfileSelector, controllerProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, ControllerProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, controllerProfileMap, currentControllerProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $loading, controllerProfiles, $controllerProfileSelector, controllerProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -12361,6 +12361,24 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   }
 
 
+  function getRequestAnimationFrame() {
+    if (window.requestAnimationFrame) {
+      return window.requestAnimationFrame;
+    } else if (window.webkitRequestAnimationFrame) {
+      return window.webkitRequestAnimationFrame;
+    } else if (window.mozRequestAnimationFrame) {
+      return window.mozRequestAnimationFrame;
+    } else if (window.msRequestAnimationFrame) {
+      return window.msRequestAnimationFrame;
+    } else if (window.oRequestAnimationFrame) {
+      return window.oRequestAnimationFrame;
+    } else {
+      return function (callback) {
+        setTimeout(callback, 0);
+      };
+    }
+  }
+
   function controllerChange(e) {
     var selectedOption = e.target.options[e.target.selectedIndex];
     setControllerProfile(selectedOption);
@@ -12381,8 +12399,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   function toggleFullscreen() {
     if (fullscreen.isActive) {
       Fullscreen.exitFullscreen();
+      PointerLock.exitPointerLock();
     } else {
       fullscreen.requestFullscreen();
+      pointerLock.requestPointerLock();
     }
   }
 
@@ -22187,119 +22207,6 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
       };
 
-      Controller = function (_EventEmitter) {
-        _inherits(Controller, _EventEmitter);
-
-        function Controller() {
-          _classCallCheck(this, Controller);
-
-          var _this = _possibleConstructorReturn(this, (Controller.__proto__ || Object.getPrototypeOf(Controller)).call(this));
-
-          _this.isListening = false;
-          _this.controllers = [];
-          _this.pressedButtons = {};
-
-          window.addEventListener("gamepadconnected", function (e) {
-            console.log("gamepad connected");
-            _this.addGamepad(e.gamepad);
-          });
-          window.addEventListener("gamepaddisconnected", function (e) {
-            console.log("gamepad disconnected");
-            _this.removeGamepad(e.gamepad);
-          });
-
-          _this.gamepadTick = _this.gamepadTick.bind(_this);
-          return _this;
-        }
-
-        _createClass(Controller, [{
-          key: "addGamepad",
-          value: function addGamepad(gamepad) {
-            this.controllers.push(gamepad);
-          }
-        }, {
-          key: "removeGamepad",
-          value: function removeGamepad(gamepad) {
-            var index = this.controllers.indexOf(gamepad);
-            if (index > -1) {
-              this.controllers.splice(index, 1);
-            }
-          }
-        }, {
-          key: "gamepadTick",
-          value: function gamepadTick() {
-            if (!navigator.getGamepads) return console.warn("Your Browser does not support gamepad api!");
-            if (!this.isListening) return;
-
-            var gamepad = navigator.getGamepads()[0];
-            if (gamepad) {
-              var buttons = gamepad.buttons;
-              for (var j = 0; j < buttons.length; j++) {
-                var button = this.getButtonValue(buttons[j]);
-                if (!this.wasButtonPressed(j) && this.isButtonPressed(button)) {
-                  this.pressedButtons[j] = button.value;
-                  this.emit("press", j, button);
-                }
-
-                if (this.wasButtonPressed(j) && this.isButtonPressed(button) && this.changedButtonValue(button, j)) {
-                  this.pressedButtons[j] = button.value;
-                  this.emit("changed", j, button);
-                }
-
-                if (this.wasButtonPressed(j) && !this.isButtonPressed(button)) {
-                  this.pressedButtons[j] = false;
-                  this.emit("release", j, button);
-                }
-              }
-            }
-
-            window.requestAnimationFrame(this.gamepadTick);
-          }
-        }, {
-          key: "startListener",
-          value: function startListener() {
-            this.isListening = true;
-            this.gamepadTick();
-          }
-        }, {
-          key: "stopListener",
-          value: function stopListener() {
-            this.isListening = false;
-          }
-        }, {
-          key: "getButtonValue",
-          value: function getButtonValue(button) {
-            if (typeof button === "object") {
-              return button;
-            }
-
-            return {
-              pressed: button === 1.0,
-              value: button
-            };
-          }
-        }, {
-          key: "isButtonPressed",
-          value: function isButtonPressed(button) {
-            return button.pressed;
-          }
-        }, {
-          key: "wasButtonPressed",
-          value: function wasButtonPressed(index) {
-            return !!this.pressedButtons[index];
-          }
-        }, {
-          key: "changedButtonValue",
-          value: function changedButtonValue(button, index) {
-            return button.value !== this.pressedButtons[index];
-          }
-        }]);
-
-        return Controller;
-      }(EventEmitter);
-
-      controller = new Controller();
-
       ControllerProfile = function (_EventEmitter) {
         _inherits(ControllerProfile, _EventEmitter);
 
@@ -22458,6 +22365,258 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         return Fullscreen;
       }(EventEmitter);
 
+      PointerLock = function (_EventEmitter) {
+        _inherits(PointerLock, _EventEmitter);
+
+        function PointerLock(element) {
+          _classCallCheck(this, PointerLock);
+
+          var _this = _possibleConstructorReturn(this, (PointerLock.__proto__ || Object.getPrototypeOf(PointerLock)).call(this));
+
+          _this.$element = $(element);
+          _this.element = _this.$element.get(0);
+
+          $(document).on("pointerlockchange mozpointerlockchange webkitpointerlockchange", _this.pointerLockChange.bind(_this)).on("pointerlockerror mozpointerlockerror webkitpointerlockerror", _this.pointerLockError.bind(_this));
+
+          setTimeout(function () {
+            if (!PointerLock.isSupported) {
+              _this.emit("unsupported");
+            }
+          }, 0);
+          return _this;
+        }
+
+        _createClass(PointerLock, [{
+          key: "requestPointerLock",
+          value: function requestPointerLock() {
+            var element = this.element;
+
+            if (element.requestPointerLock) {
+              return element.requestPointerLock();
+            } else if (element.mozRequestPointerLock) {
+              return element.mozRequestPointerLock();
+            } else if (element.webkitRequestPointerLock) {
+              return element.webkitRequestPointerLock();
+            }
+          }
+        }, {
+          key: "pointerLockChange",
+          value: function pointerLockChange(e) {
+            this.emit("change", this.isLocked, e);
+          }
+        }, {
+          key: "pointerLockError",
+          value: function pointerLockError(e) {
+            this.emit("error", new Error("pointer lock failed"), e);
+          }
+        }, {
+          key: "isLocked",
+          get: function get() {
+            return PointerLock.pointerLockElement === this.element;
+          }
+        }], [{
+          key: "exitPointerLock",
+          value: function exitPointerLock() {
+            if (document.exitPointerLock) {
+              return document.exitPointerLock();
+            } else if (document.mozExitPointerLock) {
+              return document.mozExitPointerLock();
+            } else if (document.webkitExitPointerLock) {
+              return document.webkitExitPointerLock();
+            }
+          }
+        }, {
+          key: "pointerLockElement",
+          get: function get() {
+            return document.pointerLockElement || document.mozPointerLockElement || document.webkitPointerLockElement || null;
+          }
+        }, {
+          key: "isSupported",
+          get: function get() {
+            return "pointerLockElement" in document || "mozPointerLockElement" in document || "webkitPointerLockElement" in document;
+          }
+        }]);
+
+        return PointerLock;
+      }(EventEmitter);
+
+      requestAnimationFrame = getRequestAnimationFrame();
+
+      Gamepad = function (_EventEmitter) {
+        _inherits(Gamepad, _EventEmitter);
+
+        function Gamepad() {
+          _classCallCheck(this, Gamepad);
+
+          var _this = _possibleConstructorReturn(this, (Gamepad.__proto__ || Object.getPrototypeOf(Gamepad)).call(this));
+
+          _this.gamepads = _this.emptyGamepadList;
+          _this.activeButtons = {};
+          _this.activeAxes = {};
+
+          $(window).on("gamepadconnected webkitgamepadconnected mozgamepadconnected", function () {
+            _this.scanGamepads();
+          }).on("gamepaddisconnected webkitgamepaddisconnected mozgamepaddisconnected", function () {
+            _this.scanGamepads();
+          });
+          return _this;
+        }
+
+        _createClass(Gamepad, [{
+          key: "watch",
+          value: function watch() {
+            if (this.isWatching) return;
+            this.isWatching = true;
+
+            this.watchLoop();
+          }
+        }, {
+          key: "watchLoop",
+          value: function watchLoop() {
+            var _this2 = this;
+
+            this.scanGamepads();
+
+            if (this.isWatching) {
+              requestAnimationFrame(function () {
+                return _this2.watchLoop();
+              });
+            }
+          }
+        }, {
+          key: "unwatch",
+          value: function unwatch() {
+            if (!this.isWatching) return;
+            this.isWatching = false;
+          }
+        }, {
+          key: "scanGamepads",
+          value: function scanGamepads() {
+            var _this3 = this;
+
+            var gamepads = this.getGamepads();
+            Object.keys(gamepads).forEach(function (gamepadIndex) {
+              var gamepad = gamepads[gamepadIndex];
+              if (gamepad) {
+                if (!_this3.gamepads[gamepadIndex]) {
+                  _this3.gamepads = _this3.snapshotGamepadList(gamepads);
+                  _this3.emit("connected", gamepad);
+                } else {
+                  _this3.scanButtons(gamepad);
+                  _this3.scanAxes(gamepad);
+                }
+              } else {
+                if (_this3.gamepads[gamepadIndex]) {
+                  var disconnectedGamepad = _this3.gamepads[gamepadIndex];
+                  _this3.gamepads = _this3.snapshotGamepadList(gamepads);
+                  _this3.emit("disconnected", disconnectedGamepad);
+                }
+              }
+            });
+          }
+        }, {
+          key: "scanButtons",
+          value: function scanButtons(gamepad) {
+            var _this4 = this;
+
+            var activeButtons = this.activeButtons[gamepad.index] = this.activeButtons[gamepad.index] || {};
+            gamepad.buttons.forEach(function (button, buttonIndex) {
+              button = _this4.snapshotButton(_this4.mapButton(button));
+
+              var buttonBefore = activeButtons[buttonIndex];
+              var e = { button: button, buttonIndex: buttonIndex, gamepad: gamepad };
+              if (button.pressed && (!buttonBefore || !buttonBefore.pressed)) {
+                _this4.emit("buttonPressed", e);
+              }
+
+              if (buttonBefore && button.value !== buttonBefore.value) {
+                _this4.emit("buttonChanged", e);
+              }
+
+              if (!button.pressed && buttonBefore && buttonBefore.pressed) {
+                _this4.emit("buttonReleased", e);
+              }
+
+              activeButtons[buttonIndex] = button;
+            });
+          }
+        }, {
+          key: "scanAxes",
+          value: function scanAxes(gamepad) {
+            var _this5 = this;
+
+            var activeAxes = this.activeAxes[gamepad.index] = this.activeAxes[gamepad.index] || {};
+            gamepad.axes.forEach(function (axis, axisIndex) {
+              var axisBefore = activeAxes[axisIndex];
+              var e = { axis: axis, axisIndex: axisIndex, gamepad: gamepad };
+
+              if (axisBefore && axis !== axisBefore) {
+                _this5.emit("axisChanged", e);
+              }
+
+              activeAxes[axisIndex] = axis;
+            });
+          }
+        }, {
+          key: "getGamepads",
+          value: function getGamepads() {
+            if (navigator.getGamepads) {
+              return navigator.getGamepads();
+            } else if (navigator.webkitGetGamepads) {
+              return navigator.webkitGetGamepads();
+            } else {
+              return this.emptyGamepadList;
+            }
+          }
+        }, {
+          key: "snapshotGamepadList",
+          value: function snapshotGamepadList(data) {
+            var gamepadList = {};
+            Object.keys(data).forEach(function (gamepadIndex) {
+              gamepadList[gamepadIndex] = data[gamepadIndex];
+            });
+
+            gamepadList.length = data.length;
+
+            return gamepadList;
+          }
+        }, {
+          key: "snapshotButton",
+          value: function snapshotButton(button) {
+            return {
+              pressed: !!button.pressed,
+              touched: !!button.touched,
+              value: button.value
+            };
+          }
+        }, {
+          key: "mapButton",
+          value: function mapButton(button) {
+            if (typeof button === "object") return button;
+
+            return {
+              pressed: button === 1.0,
+              touched: button !== 0.0,
+              value: button
+            };
+          }
+        }, {
+          key: "emptyGamepadList",
+          get: function get() {
+            return {
+              0: null,
+              1: null,
+              2: null,
+              3: null,
+              length: 4
+            };
+          }
+        }]);
+
+        return Gamepad;
+      }(EventEmitter);
+
+      gamepad = new Gamepad();
       controllerProfileMap = {
         "Xbox One Controller": {
           0: "b",
@@ -22493,6 +22652,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       canvas = $canvas.get(0);
       gameboy = new GameBoy$1(canvas);
       fullscreen = new Fullscreen(canvas);
+      pointerLock = new PointerLock(canvas);
       $loading = $(".loading");
 
       $loading.hide();
@@ -22553,24 +22713,36 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       });
 
-      controller.on("press", function (index, button) {
-        var action = currentControllerProfile.getAction(index);
+      gamepad.on("buttonPressed", function (_ref) {
+        var buttonIndex = _ref.buttonIndex,
+            button = _ref.button,
+            gamepad$$1 = _ref.gamepad;
+
+        var action = currentControllerProfile.getAction(buttonIndex);
         gameboyHandlePressAction(action);
       });
 
-      controller.on("changed", function (index, button) {
-        var action = currentControllerProfile.getAction(index);
+      gamepad.on("buttonChanged", function (_ref2) {
+        var buttonIndex = _ref2.buttonIndex,
+            button = _ref2.button,
+            gamepad$$1 = _ref2.gamepad;
+
+        var action = currentControllerProfile.getAction(buttonIndex);
         if (action === "speed") {
           gameboy.setSpeed(getSpeedValue(button));
         }
       });
 
-      controller.on("release", function (index) {
-        var action = currentControllerProfile.getAction(index);
+      gamepad.on("buttonReleased", function (_ref3) {
+        var buttonIndex = _ref3.buttonIndex,
+            button = _ref3.button,
+            gamepad$$1 = _ref3.gamepad;
+
+        var action = currentControllerProfile.getAction(buttonIndex);
         gameboyHandleReleaseAction(action);
       });
 
-      controller.startListener();$(".upload-state").on("change", function () {
+      gamepad.watch();$(".upload-state").on("change", function () {
         var _this = this;
 
         if (this.files.length > 0) {

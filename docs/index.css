@@ -2,6 +2,9 @@ body {
   margin: 0;
   padding: 0;
   font-family: monospace;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
 }
 
 .loading {

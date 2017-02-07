@@ -2337,7 +2337,7 @@ $__System.registerDynamic('10', [], true, function ($__require, exports, module)
 $__System.register('a', ['f', '10'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, Controller, controller, ControllerProfile;
+  var Buffer, EventEmitter, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, ControllerProfile;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -12327,119 +12327,6 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
       };
 
-      Controller = function (_EventEmitter) {
-        _inherits(Controller, _EventEmitter);
-
-        function Controller() {
-          _classCallCheck(this, Controller);
-
-          var _this = _possibleConstructorReturn(this, (Controller.__proto__ || Object.getPrototypeOf(Controller)).call(this));
-
-          _this.isListening = false;
-          _this.controllers = [];
-          _this.pressedButtons = {};
-
-          window.addEventListener("gamepadconnected", function (e) {
-            console.log("gamepad connected");
-            _this.addGamepad(e.gamepad);
-          });
-          window.addEventListener("gamepaddisconnected", function (e) {
-            console.log("gamepad disconnected");
-            _this.removeGamepad(e.gamepad);
-          });
-
-          _this.gamepadTick = _this.gamepadTick.bind(_this);
-          return _this;
-        }
-
-        _createClass(Controller, [{
-          key: "addGamepad",
-          value: function addGamepad(gamepad) {
-            this.controllers.push(gamepad);
-          }
-        }, {
-          key: "removeGamepad",
-          value: function removeGamepad(gamepad) {
-            var index = this.controllers.indexOf(gamepad);
-            if (index > -1) {
-              this.controllers.splice(index, 1);
-            }
-          }
-        }, {
-          key: "gamepadTick",
-          value: function gamepadTick() {
-            if (!navigator.getGamepads) return console.warn("Your Browser does not support gamepad api!");
-            if (!this.isListening) return;
-
-            var gamepad = navigator.getGamepads()[0];
-            if (gamepad) {
-              var buttons = gamepad.buttons;
-              for (var j = 0; j < buttons.length; j++) {
-                var button = this.getButtonValue(buttons[j]);
-                if (!this.wasButtonPressed(j) && this.isButtonPressed(button)) {
-                  this.pressedButtons[j] = button.value;
-                  this.emit("press", j, button);
-                }
-
-                if (this.wasButtonPressed(j) && this.isButtonPressed(button) && this.changedButtonValue(button, j)) {
-                  this.pressedButtons[j] = button.value;
-                  this.emit("changed", j, button);
-                }
-
-                if (this.wasButtonPressed(j) && !this.isButtonPressed(button)) {
-                  this.pressedButtons[j] = false;
-                  this.emit("release", j, button);
-                }
-              }
-            }
-
-            window.requestAnimationFrame(this.gamepadTick);
-          }
-        }, {
-          key: "startListener",
-          value: function startListener() {
-            this.isListening = true;
-            this.gamepadTick();
-          }
-        }, {
-          key: "stopListener",
-          value: function stopListener() {
-            this.isListening = false;
-          }
-        }, {
-          key: "getButtonValue",
-          value: function getButtonValue(button) {
-            if (typeof button === "object") {
-              return button;
-            }
-
-            return {
-              pressed: button === 1.0,
-              value: button
-            };
-          }
-        }, {
-          key: "isButtonPressed",
-          value: function isButtonPressed(button) {
-            return button.pressed;
-          }
-        }, {
-          key: "wasButtonPressed",
-          value: function wasButtonPressed(index) {
-            return !!this.pressedButtons[index];
-          }
-        }, {
-          key: "changedButtonValue",
-          value: function changedButtonValue(button, index) {
-            return button.value !== this.pressedButtons[index];
-          }
-        }]);
-
-        return Controller;
-      }(EventEmitter);
-
-      _export('controller', controller = new Controller());
-
       _export('ControllerProfile', ControllerProfile = function (_EventEmitter) {
         _inherits(ControllerProfile, _EventEmitter);
 
@@ -12465,8 +12352,6 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
       }(EventEmitter));
 
       _export('GameBoy', GameBoy$1);
-
-      _export('controller', controller);
 
       _export('ControllerProfile', ControllerProfile);
 

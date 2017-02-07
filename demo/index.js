@@ -1,7 +1,9 @@
-import { GameBoy, controller, ControllerProfile } from "../src/index.js";
+import { GameBoy, ControllerProfile } from "../src/index.js";
 import $ from "jquery";
 import notifier from "./notifier.js";
 import Fullscreen from "jsfullscreen";
+import PointerLock from "jspointerlock";
+import gamepad from "jsgamepad";
 import controllerProfileMap from "./controller-profiles.js";
 
 let currentControllerProfile;
@@ -9,6 +11,7 @@ const $canvas = $(".screen");
 const canvas = $canvas.get(0);
 const gameboy = new GameBoy(canvas);
 const fullscreen = new Fullscreen(canvas);
+const pointerLock = new PointerLock(canvas);
 const $loading = $(".loading");
 $loading.hide();
 notifier.appendTo(document.body);
@@ -69,24 +72,24 @@ fullscreen.on("change", () => {
   }
 });
 
-controller.on("press", function (index, button) {
-  const action = currentControllerProfile.getAction(index);
+gamepad.on("buttonPressed", function ({ buttonIndex, button, gamepad }) {
+  const action = currentControllerProfile.getAction(buttonIndex);
   gameboyHandlePressAction(action);
 });
 
-controller.on("changed", function (index, button) {
-  const action = currentControllerProfile.getAction(index);
+gamepad.on("buttonChanged", function ({ buttonIndex, button, gamepad }) {
+  const action = currentControllerProfile.getAction(buttonIndex);
   if (action === "speed") {
     gameboy.setSpeed(getSpeedValue(button));
   }
 });
 
-controller.on("release", function (index) {
-  const action = currentControllerProfile.getAction(index);
+gamepad.on("buttonReleased", function ({ buttonIndex, button, gamepad }) {
+  const action = currentControllerProfile.getAction(buttonIndex);
   gameboyHandleReleaseAction(action);
 });
 
-controller.startListener();
+gamepad.watch();
 
 function controllerChange(e) {
   const selectedOption = e.target.options[e.target.selectedIndex];
@@ -162,8 +165,10 @@ var saveData = (function () {
 function toggleFullscreen() {
   if (fullscreen.isActive) {
     Fullscreen.exitFullscreen();
+    PointerLock.exitPointerLock();
   } else {
     fullscreen.requestFullscreen();
+    pointerLock.requestPointerLock();
   }
 }
 
