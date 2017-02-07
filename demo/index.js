@@ -74,7 +74,7 @@ fullscreen.on("change", () => {
 
 gamepad.on("buttonPressed", function ({ buttonIndex, button, gamepad }) {
   const action = currentControllerProfile.getAction(buttonIndex);
-  gameboyHandlePressAction(action);
+  gameboyHandlePressAction(action, button);
 });
 
 gamepad.on("buttonChanged", function ({ buttonIndex, button, gamepad }) {
@@ -176,13 +176,15 @@ function getSpeedValue(button) {
   return (button.value * 2) + 1;
 }
 
-function gameboyHandlePressAction(action) {
+function gameboyHandlePressAction(action, button) {
   if (action === "save") {
     saveAndNotifyState();
   } else if (action === "load") {
     openAndNotifyState();
   } else if (action === "speed") {
-    gameboy.setSpeed(getSpeedValue(button));
+    if (button) {
+      gameboy.setSpeed(getSpeedValue(button));
+    }
   } else if (action === "fullscreen") {
     toggleFullscreen();
   } else {

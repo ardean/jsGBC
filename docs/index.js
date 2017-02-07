@@ -12410,13 +12410,15 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     return button.value * 2 + 1;
   }
 
-  function gameboyHandlePressAction(action) {
+  function gameboyHandlePressAction(action, button) {
     if (action === "save") {
       saveAndNotifyState();
     } else if (action === "load") {
       openAndNotifyState();
     } else if (action === "speed") {
-      gameboy.setSpeed(getSpeedValue(button));
+      if (button) {
+        gameboy.setSpeed(getSpeedValue(button));
+      }
     } else if (action === "fullscreen") {
       toggleFullscreen();
     } else {
@@ -22719,7 +22721,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             gamepad$$1 = _ref.gamepad;
 
         var action = currentControllerProfile.getAction(buttonIndex);
-        gameboyHandlePressAction(action);
+        gameboyHandlePressAction(action, button);
       });
 
       gamepad.on("buttonChanged", function (_ref2) {
