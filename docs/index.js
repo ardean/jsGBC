@@ -17888,11 +17888,15 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xFFFF / 0x1E0)), 1);
         this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
 
-        if (settings.soundOn) {
-          this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1, settings.soundVolume);
-          this.initAudioBuffer();
-        } else if (this.audioServer) {
-          this.audioServer.changeVolume(0);
+        // TODO: create sound controller
+        // TODO: separate turn sound off / on
+        if (!settings.soundOn) {
+          if (this.audioServer) this.audioServer.changeVolume(0);
+        } else {
+          if (!this.audioServer) {
+            this.audioServer = new AudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.baseCPUCyclesPerIteration * settings.maxAudioBufferSpanAmountOverXInterpreterIterations / this.audioResamplerFirstPassFactor, 8192) << 1, settings.soundVolume);
+            this.initAudioBuffer();
+          }
         }
       };
       GameBoyCore.prototype.changeVolume = function () {

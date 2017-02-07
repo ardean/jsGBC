@@ -29,7 +29,7 @@ export default class AudioServer {
   }
 
   initializeAudio() {
-    this.audioContext = this.audioContext ||  new AudioContext();
+    this.audioContext = this.audioContext || new AudioContext();
 
     if (!this.audioNode) {
       this.audioNode = this.audioContext.createScriptProcessor(this.samplesPerCallback, 0, this.channelsAllocated);
