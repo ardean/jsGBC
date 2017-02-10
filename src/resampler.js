@@ -1,5 +1,11 @@
 export default class Resampler {
-  constructor(fromSampleRate, toSampleRate, channels, outputBufferSize, noReturn) {
+  constructor(
+    fromSampleRate,
+    toSampleRate,
+    channels,
+    outputBufferSize,
+    noReturn
+  ) {
     this.fromSampleRate = fromSampleRate;
     this.toSampleRate = toSampleRate;
     this.channels = channels | 0;
@@ -27,14 +33,16 @@ export default class Resampler {
         this.initializeBuffers();
       }
     } else {
-      throw (new Error("Invalid settings specified for the resampler."));
+      throw new Error("Invalid settings specified for the resampler.");
     }
   }
 
   compileLinearInterpolationFunction() {
     var toCompile = "var bufferLength = buffer.length;\
   	var outLength = this.outputBufferSize;\
-  	if ((bufferLength % " + this.channels + ") === 0) {\
+  	if ((bufferLength % " +
+      this.channels +
+      ") === 0) {\
   		if (bufferLength > 0) {\
   			var weight = this.lastWeight;\
   			var firstWeight = 0;\
@@ -42,27 +50,45 @@ export default class Resampler {
   			var sourceOffset = 0;\
   			var outputOffset = 0;\
   			var outputBuffer = this.outputBuffer;\
-  			for (; weight < 1; weight += " + this.ratioWeight + ") {\
+  			for (; weight < 1; weight += " +
+      this.ratioWeight +
+      ") {\
   				secondWeight = weight % 1;\
   				firstWeight = 1 - secondWeight;";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "outputBuffer[outputOffset++] = (this.lastOutput[" + channel + "] * firstWeight) + (buffer[" + channel + "] * secondWeight);";
+      toCompile += "outputBuffer[outputOffset++] = (this.lastOutput[" +
+        channel +
+        "] * firstWeight) + (buffer[" +
+        channel +
+        "] * secondWeight);";
     }
     toCompile += "}\
   			weight -= 1;\
-  			for (bufferLength -= " + this.channels + ", sourceOffset = Math.floor(weight) * " + this.channels + "; outputOffset < outLength && sourceOffset < bufferLength;) {\
+  			for (bufferLength -= " +
+      this.channels +
+      ", sourceOffset = Math.floor(weight) * " +
+      this.channels +
+      "; outputOffset < outLength && sourceOffset < bufferLength;) {\
   				secondWeight = weight % 1;\
   				firstWeight = 1 - secondWeight;";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" + ((channel > 0) ? (" + " + channel) : "") + "] * firstWeight) + (buffer[sourceOffset + " + (this.channels + channel) + "] * secondWeight);";
+      toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" +
+        (channel > 0 ? " + " + channel : "") +
+        "] * firstWeight) + (buffer[sourceOffset + " +
+        (this.channels + channel) +
+        "] * secondWeight);";
     }
-    toCompile += "weight += " + this.ratioWeight + ";\
-  				sourceOffset = Math.floor(weight) * " + this.channels + ";\
+    toCompile += "weight += " +
+      this.ratioWeight +
+      ";\
+  				sourceOffset = Math.floor(weight) * " +
+      this.channels +
+      ";\
   			}";
     for (let channel = 0; channel < this.channels; ++channel) {
       toCompile += "this.lastOutput[" + channel + "] = buffer[sourceOffset++];";
     }
-    toCompile += "this.lastWeight = weight % 1;\
+    toCompile += 'this.lastWeight = weight % 1;\
   			return this.bufferSlice(outputOffset);\
   		}\
   		else {\
@@ -70,19 +96,21 @@ export default class Resampler {
   		}\
   	}\
   	else {\
-  		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-  	}";
+  		throw(new Error("Buffer was of incorrect sample length."));\
+  	}';
     this.resampler = Function("buffer", toCompile);
   }
 
   compileMultiTapFunction() {
     var toCompile = "var bufferLength = buffer.length;\
   	var outLength = this.outputBufferSize;\
-  	if ((bufferLength % " + this.channels + ") === 0) {\
+  	if ((bufferLength % " +
+      this.channels +
+      ") === 0) {\
   		if (bufferLength > 0) {\
   			var weight = 0;";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "var output" + channel + " = 0;"
+      toCompile += "var output" + channel + " = 0;";
     }
     toCompile += "var actualPosition = 0;\
   			var amountToNext = 0;\
@@ -93,15 +121,17 @@ export default class Resampler {
   			var currentPosition = 0;\
   			do {\
   				if (alreadyProcessedTail) {\
-  					weight = " + this.ratioWeight + ";";
+  					weight = " +
+      this.ratioWeight +
+      ";";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "output" + channel + " = 0;"
+      toCompile += "output" + channel + " = 0;";
     }
     toCompile += "}\
   				else {\
   					weight = this.lastWeight;";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "output" + channel + " = this.lastOutput[" + channel + "];"
+      toCompile += "output" + channel + " = this.lastOutput[" + channel + "];";
     }
     toCompile += "alreadyProcessedTail = true;\
   				}\
@@ -109,14 +139,20 @@ export default class Resampler {
   					amountToNext = 1 + actualPosition - currentPosition;\
   					if (weight >= amountToNext) {";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "output" + channel + " += buffer[actualPosition++] * amountToNext;"
+      toCompile += "output" +
+        channel +
+        " += buffer[actualPosition++] * amountToNext;";
     }
     toCompile += "currentPosition = actualPosition;\
   						weight -= amountToNext;\
   					}\
   					else {";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "output" + channel + " += buffer[actualPosition" + ((channel > 0) ? (" + " + channel) : "") + "] * weight;"
+      toCompile += "output" +
+        channel +
+        " += buffer[actualPosition" +
+        (channel > 0 ? " + " + channel : "") +
+        "] * weight;";
     }
     toCompile += "currentPosition += weight;\
   						weight = 0;\
@@ -125,15 +161,19 @@ export default class Resampler {
   				}\
   				if (weight <= 0) {";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "outputBuffer[outputOffset++] = output" + channel + " / " + this.ratioWeight + ";"
+      toCompile += "outputBuffer[outputOffset++] = output" +
+        channel +
+        " / " +
+        this.ratioWeight +
+        ";";
     }
     toCompile += "}\
   				else {\
   					this.lastWeight = weight;";
     for (let channel = 0; channel < this.channels; ++channel) {
-      toCompile += "this.lastOutput[" + channel + "] = output" + channel + ";"
+      toCompile += "this.lastOutput[" + channel + "] = output" + channel + ";";
     }
-    toCompile += "this.tailExists = true;\
+    toCompile += 'this.tailExists = true;\
   					break;\
   				}\
   			} while (actualPosition < bufferLength && outputOffset < outLength);\
@@ -144,8 +184,8 @@ export default class Resampler {
   		}\
   	}\
   	else {\
-  		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-  	}";
+  		throw(new Error("Buffer was of incorrect sample length."));\
+  	}';
     this.resampler = Function("buffer", toCompile);
   }
 

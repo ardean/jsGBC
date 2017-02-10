@@ -12129,7 +12129,7 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, secondInstructionSet, instructionSet, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, ControllerProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, controllerProfileMap, currentControllerProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $loading, controllerProfiles, $controllerProfileSelector, controllerProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, ControllerProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, controllerProfileMap, currentControllerProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $loading, controllerProfiles, $controllerProfileSelector, controllerProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -12143,6 +12143,26 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.TickTable = TickTable;
     this.SecondaryTickTable = SecondaryTickTable;
 
+    this.memoryReadNormal = this.memoryReadNormal.bind(this);
+    this.memoryWriteNormal = this.memoryWriteNormal.bind(this);
+    this.memoryWriteGBCRAM = this.memoryWriteGBCRAM.bind(this);
+    this.memoryWriteMBCRAM = this.memoryWriteMBCRAM.bind(this);
+    this.memoryWriteMBC3RAM = this.memoryWriteMBC3RAM.bind(this);
+    this.memoryReadGBCMemory = this.memoryReadGBCMemory.bind(this);
+    this.memoryReadROM = this.memoryReadROM.bind(this);
+    this.memoryHighWriteNormal = this.memoryHighWriteNormal.bind(this);
+    this.memoryHighReadNormal = this.memoryHighReadNormal.bind(this);
+    this.MBC5WriteRAMBank = this.MBC5WriteRAMBank.bind(this);
+    this.MBCWriteEnable = this.MBCWriteEnable.bind(this);
+    this.memoryReadMBC = this.memoryReadMBC.bind(this);
+    this.memoryReadMBC3 = this.memoryReadMBC3.bind(this);
+    this.memoryReadMBC7 = this.memoryReadMBC7.bind(this);
+
+    this.BGGBLayerRender = this.BGGBLayerRender.bind(this);
+    this.WindowGBLayerRender = this.WindowGBLayerRender.bind(this);
+    this.SpriteGBLayerRender = this.SpriteGBLayerRender.bind(this);
+    this.SpriteGBCLayerRender = this.SpriteGBCLayerRender.bind(this);
+
     //CPU Registers and Flags:
     this.registerA = 0x01; //Register A (Accumulator)
     this.FZero = true; //Register F  - Result was zero
@@ -12152,9 +12172,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.registerB = 0x00; //Register B
     this.registerC = 0x13; //Register C
     this.registerD = 0x00; //Register D
-    this.registerE = 0xD8; //Register E
-    this.registersHL = 0x014D; //Registers H and L combined
-    this.stackPointer = 0xFFFE; //Stack Pointer
+    this.registerE = 0xd8; //Register E
+    this.registersHL = 0x014d; //Registers H and L combined
+    this.stackPointer = 0xfffe; //Stack Pointer
     this.programCounter = 0x0100; //Program Counter
     //Some CPU Emulation State Variables:
     this.CPUCyclesTotal = 0; //Relative CPU clocking to speed set, rounded appropriately.
@@ -12176,7 +12196,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.hdmaRunning = false; //HDMA Transfer Flag - GBC only
     this.CPUTicks = 0; //The number of clock cycles emulated.
     this.doubleSpeedShifter = 0; //GBC double speed clocking shifter.
-    this.JoyPad = 0xFF; //Joypad State (two four-bit states actually)
+    this.JoyPad = 0xff; //Joypad State (two four-bit states actually)
     this.CPUStopped = false; //CPU STOP status.
     //Main RAM, MBC RAM, GBC Main RAM, VRAM, etc.
     this.memoryReader = []; //Array of functions mapped to read back memory
@@ -12188,8 +12208,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.GBCMemory = []; //GBC main RAM Banks
     this.cGBC = false; //GameBoy Color detection.
     this.gbcRamBank = 1; //Currently Switched GameBoy Color ram bank
-    this.gbcRamBankPosition = -0xD000; //GBC RAM offset from address start.
-    this.gbcRamBankPositionECHO = -0xF000; //GBC RAM (ECHO mirroring) offset from address start.
+    this.gbcRamBankPosition = -0xd000; //GBC RAM offset from address start.
+    this.gbcRamBankPositionECHO = -0xf000; //GBC RAM (ECHO mirroring) offset from address start.
     this.ROMBank1offs = 0; //Offset of the ROM bank switching.
     this.currentROMBank = 0; //The parsed current ROM bank selection.
     this.fromSaveState = false; //A boolean to see if this was loaded in as a save state.
@@ -12203,7 +12223,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.mode0TriggerSTAT = false; //Should we trigger an interrupt if in mode 0?
     this.LCDisOn = false; //Is the emulated LCD controller on?
     this.LINECONTROL = []; //Array of functions to handle each scan line we do (onscreen + offscreen)
-    this.DISPLAYOFFCONTROL = [function (parentObj) {
+    this.DISPLAYOFFCONTROL = [function () {
       //Array of line 0 function to handle the LCD controller when it's off (Do nothing!).
     }];
     this.LCDCONTROL = null; //Pointer to either LINECONTROL or DISPLAYOFFCONTROL.
@@ -12229,7 +12249,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     //Sound variables:
     this.audioServer = null; //XAudioJS handle
     this.numSamplesTotal = 0; //Length of the sound buffers.
-    this.dutyLookup = [//Map the duty values given to ones we can work with.
+    this.dutyLookup = [
+    //Map the duty values given to ones we can work with.
     [false, false, false, false, false, false, false, true], [true, false, false, false, false, false, false, true], [true, false, false, false, false, true, true, true], [false, true, true, true, true, true, true, false]];
     this.bufferContainAmount = 0; //Buffer maintenance metric.
     this.LSFR15Table = null;
@@ -12330,7 +12351,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     //Tile Data Cache:
     this.tileCache = null;
     //Palettes:
-    this.colors = [0xEFFFDE, 0xADD794, 0x529273, 0x183442]; //"Classic" GameBoy palette colors.
+    this.colors = [0xefffde, 0xadd794, 0x529273, 0x183442]; //"Classic" GameBoy palette colors.
     this.OBJPalette = null;
     this.BGPalette = null;
     this.gbcOBJRawPalette = null;
@@ -12493,8 +12514,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         enableMBC1Override: false, // Override to allow for MBC1 instead of ROM only (compatibility for broken 3rd-party cartridges).
         alwaysAllowRWtoBanks: false, // Override MBC RAM disabling and always allow reading and writing to the banks.
         forceGBBootRom: false, // Use the GameBoy boot ROM instead of the GameBoy Color boot ROM.
-        enabledChannels: [// User controlled channel enables.
-        true, true, true, true]
+        // User controlled channel enables.
+        enabledChannels: [true, true, true, true]
       };
       util = {
         toTypedArray: function toTypedArray(baseArray, memtype) {
@@ -13232,7 +13253,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             for (var _channel2 = 0; _channel2 < this.channels; ++_channel2) {
               toCompile += "this.lastOutput[" + _channel2 + "] = buffer[sourceOffset++];";
             }
-            toCompile += "this.lastWeight = weight % 1;\
+            toCompile += 'this.lastWeight = weight % 1;\
   			return this.bufferSlice(outputOffset);\
   		}\
   		else {\
@@ -13240,8 +13261,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   		}\
   	}\
   	else {\
-  		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-  	}";
+  		throw(new Error("Buffer was of incorrect sample length."));\
+  	}';
             this.resampler = Function("buffer", toCompile);
           }
         }, {
@@ -13304,7 +13325,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             for (var _channel8 = 0; _channel8 < this.channels; ++_channel8) {
               toCompile += "this.lastOutput[" + _channel8 + "] = output" + _channel8 + ";";
             }
-            toCompile += "this.tailExists = true;\
+            toCompile += 'this.tailExists = true;\
   					break;\
   				}\
   			} while (actualPosition < bufferLength && outputOffset < outLength);\
@@ -13315,8 +13336,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   		}\
   	}\
   	else {\
-  		throw(new Error(\"Buffer was of incorrect sample length.\"));\
-  	}";
+  		throw(new Error("Buffer was of incorrect sample length."));\
+  	}';
             this.resampler = Function("buffer", toCompile);
           }
         }, {
@@ -13491,3821 +13512,3566 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         return AudioServer;
       }();
 
-      secondInstructionSet = [
+      bitInstructions = [
       //RLC B
       //#0x00:
-      function (parentObj) {
-        parentObj.FCarry = parentObj.registerB > 0x7F;
-        parentObj.registerB = parentObj.registerB << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        this.FCarry = this.registerB > 0x7f;
+        this.registerB = this.registerB << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //RLC C
       //#0x01:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerC > 0x7F;
-        parentObj.registerC = parentObj.registerC << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        this.FCarry = this.registerC > 0x7f;
+        this.registerC = this.registerC << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //RLC D
       //#0x02:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerD > 0x7F;
-        parentObj.registerD = parentObj.registerD << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        this.FCarry = this.registerD > 0x7f;
+        this.registerD = this.registerD << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //RLC E
       //#0x03:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerE > 0x7F;
-        parentObj.registerE = parentObj.registerE << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        this.FCarry = this.registerE > 0x7f;
+        this.registerE = this.registerE << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //RLC H
       //#0x04:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registersHL > 0x7FFF;
-        parentObj.registersHL = parentObj.registersHL << 1 & 0xFE00 | (parentObj.FCarry ? 0x100 : 0) | parentObj.registersHL & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        this.FCarry = this.registersHL > 0x7fff;
+        this.registersHL = this.registersHL << 1 & 0xfe00 | (this.FCarry ? 0x100 : 0) | this.registersHL & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //RLC L
       //#0x05:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x80) === 0x80;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registersHL << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x80) === 0x80;
+        this.registersHL = this.registersHL & 0xff00 | this.registersHL << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //RLC (HL)
       //#0x06:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FCarry = temp_var > 0x7F;
-        temp_var = temp_var << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        this.FCarry = temp_var > 0x7f;
+        temp_var = temp_var << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //RLC A
       //#0x07:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        this.FCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //RRC B
       //#0x08:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerB & 0x01) === 0x01;
-        parentObj.registerB = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerB >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        this.FCarry = (this.registerB & 0x01) === 0x01;
+        this.registerB = (this.FCarry ? 0x80 : 0) | this.registerB >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //RRC C
       //#0x09:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerC & 0x01) === 0x01;
-        parentObj.registerC = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerC >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        this.FCarry = (this.registerC & 0x01) === 0x01;
+        this.registerC = (this.FCarry ? 0x80 : 0) | this.registerC >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //RRC D
       //#0x0A:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerD & 0x01) === 0x01;
-        parentObj.registerD = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerD >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        this.FCarry = (this.registerD & 0x01) === 0x01;
+        this.registerD = (this.FCarry ? 0x80 : 0) | this.registerD >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //RRC E
       //#0x0B:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerE & 0x01) === 0x01;
-        parentObj.registerE = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerE >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        this.FCarry = (this.registerE & 0x01) === 0x01;
+        this.registerE = (this.FCarry ? 0x80 : 0) | this.registerE >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //RRC H
       //#0x0C:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0100) === 0x0100;
-        parentObj.registersHL = (parentObj.FCarry ? 0x8000 : 0) | parentObj.registersHL >> 1 & 0xFF00 | parentObj.registersHL & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0100) === 0x0100;
+        this.registersHL = (this.FCarry ? 0x8000 : 0) | this.registersHL >> 1 & 0xff00 | this.registersHL & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //RRC L
       //#0x0D:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x01) === 0x01;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | (parentObj.FCarry ? 0x80 : 0) | (parentObj.registersHL & 0xFF) >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x01) === 0x01;
+        this.registersHL = this.registersHL & 0xff00 | (this.FCarry ? 0x80 : 0) | (this.registersHL & 0xff) >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //RRC (HL)
       //#0x0E:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FCarry = (temp_var & 0x01) === 0x01;
-        temp_var = (parentObj.FCarry ? 0x80 : 0) | temp_var >> 1;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        this.FCarry = (temp_var & 0x01) === 0x01;
+        temp_var = (this.FCarry ? 0x80 : 0) | temp_var >> 1;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //RRC A
       //#0x0F:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerA & 0x01) === 0x01;
-        parentObj.registerA = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerA >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        this.FCarry = (this.registerA & 0x01) === 0x01;
+        this.registerA = (this.FCarry ? 0x80 : 0) | this.registerA >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //RL B
       //#0x10:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registerB > 0x7F;
-        parentObj.registerB = parentObj.registerB << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        var newFCarry = this.registerB > 0x7f;
+        this.registerB = this.registerB << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //RL C
       //#0x11:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registerC > 0x7F;
-        parentObj.registerC = parentObj.registerC << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        var newFCarry = this.registerC > 0x7f;
+        this.registerC = this.registerC << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //RL D
       //#0x12:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registerD > 0x7F;
-        parentObj.registerD = parentObj.registerD << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        var newFCarry = this.registerD > 0x7f;
+        this.registerD = this.registerD << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //RL E
       //#0x13:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registerE > 0x7F;
-        parentObj.registerE = parentObj.registerE << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        var newFCarry = this.registerE > 0x7f;
+        this.registerE = this.registerE << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //RL H
       //#0x14:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registersHL > 0x7FFF;
-        parentObj.registersHL = parentObj.registersHL << 1 & 0xFE00 | (parentObj.FCarry ? 0x100 : 0) | parentObj.registersHL & 0xFF;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        var newFCarry = this.registersHL > 0x7fff;
+        this.registersHL = this.registersHL << 1 & 0xfe00 | (this.FCarry ? 0x100 : 0) | this.registersHL & 0xff;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //RL L
       //#0x15:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registersHL & 0x80) === 0x80;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registersHL << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        var newFCarry = (this.registersHL & 0x80) === 0x80;
+        this.registersHL = this.registersHL & 0xff00 | this.registersHL << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //RL (HL)
       //#0x16:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        var newFCarry = temp_var > 0x7F;
-        temp_var = temp_var << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        var newFCarry = temp_var > 0x7f;
+        temp_var = temp_var << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //RL A
       //#0x17:
-
-      , function (parentObj) {
-        var newFCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF | (parentObj.FCarry ? 1 : 0);
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        var newFCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff | (this.FCarry ? 1 : 0);
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //RR B
       //#0x18:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registerB & 0x01) === 0x01;
-        parentObj.registerB = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerB >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        var newFCarry = (this.registerB & 0x01) === 0x01;
+        this.registerB = (this.FCarry ? 0x80 : 0) | this.registerB >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //RR C
       //#0x19:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registerC & 0x01) === 0x01;
-        parentObj.registerC = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerC >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        var newFCarry = (this.registerC & 0x01) === 0x01;
+        this.registerC = (this.FCarry ? 0x80 : 0) | this.registerC >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //RR D
       //#0x1A:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registerD & 0x01) === 0x01;
-        parentObj.registerD = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerD >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        var newFCarry = (this.registerD & 0x01) === 0x01;
+        this.registerD = (this.FCarry ? 0x80 : 0) | this.registerD >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //RR E
       //#0x1B:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registerE & 0x01) === 0x01;
-        parentObj.registerE = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerE >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        var newFCarry = (this.registerE & 0x01) === 0x01;
+        this.registerE = (this.FCarry ? 0x80 : 0) | this.registerE >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //RR H
       //#0x1C:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registersHL & 0x0100) === 0x0100;
-        parentObj.registersHL = (parentObj.FCarry ? 0x8000 : 0) | parentObj.registersHL >> 1 & 0xFF00 | parentObj.registersHL & 0xFF;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        var newFCarry = (this.registersHL & 0x0100) === 0x0100;
+        this.registersHL = (this.FCarry ? 0x8000 : 0) | this.registersHL >> 1 & 0xff00 | this.registersHL & 0xff;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //RR L
       //#0x1D:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registersHL & 0x01) === 0x01;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | (parentObj.FCarry ? 0x80 : 0) | (parentObj.registersHL & 0xFF) >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        var newFCarry = (this.registersHL & 0x01) === 0x01;
+        this.registersHL = this.registersHL & 0xff00 | (this.FCarry ? 0x80 : 0) | (this.registersHL & 0xff) >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //RR (HL)
       //#0x1E:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
         var newFCarry = (temp_var & 0x01) === 0x01;
-        temp_var = (parentObj.FCarry ? 0x80 : 0) | temp_var >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+        temp_var = (this.FCarry ? 0x80 : 0) | temp_var >> 1;
+        this.FCarry = newFCarry;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //RR A
       //#0x1F:
-
-      , function (parentObj) {
-        var newFCarry = (parentObj.registerA & 0x01) === 0x01;
-        parentObj.registerA = (parentObj.FCarry ? 0x80 : 0) | parentObj.registerA >> 1;
-        parentObj.FCarry = newFCarry;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        var newFCarry = (this.registerA & 0x01) === 0x01;
+        this.registerA = (this.FCarry ? 0x80 : 0) | this.registerA >> 1;
+        this.FCarry = newFCarry;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //SLA B
       //#0x20:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerB > 0x7F;
-        parentObj.registerB = parentObj.registerB << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        this.FCarry = this.registerB > 0x7f;
+        this.registerB = this.registerB << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //SLA C
       //#0x21:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerC > 0x7F;
-        parentObj.registerC = parentObj.registerC << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        this.FCarry = this.registerC > 0x7f;
+        this.registerC = this.registerC << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //SLA D
       //#0x22:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerD > 0x7F;
-        parentObj.registerD = parentObj.registerD << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        this.FCarry = this.registerD > 0x7f;
+        this.registerD = this.registerD << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //SLA E
       //#0x23:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerE > 0x7F;
-        parentObj.registerE = parentObj.registerE << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        this.FCarry = this.registerE > 0x7f;
+        this.registerE = this.registerE << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //SLA H
       //#0x24:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registersHL > 0x7FFF;
-        parentObj.registersHL = parentObj.registersHL << 1 & 0xFE00 | parentObj.registersHL & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        this.FCarry = this.registersHL > 0x7fff;
+        this.registersHL = this.registersHL << 1 & 0xfe00 | this.registersHL & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //SLA L
       //#0x25:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0080) === 0x0080;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registersHL << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0080) === 0x0080;
+        this.registersHL = this.registersHL & 0xff00 | this.registersHL << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //SLA (HL)
       //#0x26:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FCarry = temp_var > 0x7F;
-        temp_var = temp_var << 1 & 0xFF;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        this.FCarry = temp_var > 0x7f;
+        temp_var = temp_var << 1 & 0xff;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //SLA A
       //#0x27:
-
-      , function (parentObj) {
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        this.FCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //SRA B
       //#0x28:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerB & 0x01) === 0x01;
-        parentObj.registerB = parentObj.registerB & 0x80 | parentObj.registerB >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        this.FCarry = (this.registerB & 0x01) === 0x01;
+        this.registerB = this.registerB & 0x80 | this.registerB >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //SRA C
       //#0x29:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerC & 0x01) === 0x01;
-        parentObj.registerC = parentObj.registerC & 0x80 | parentObj.registerC >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        this.FCarry = (this.registerC & 0x01) === 0x01;
+        this.registerC = this.registerC & 0x80 | this.registerC >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //SRA D
       //#0x2A:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerD & 0x01) === 0x01;
-        parentObj.registerD = parentObj.registerD & 0x80 | parentObj.registerD >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        this.FCarry = (this.registerD & 0x01) === 0x01;
+        this.registerD = this.registerD & 0x80 | this.registerD >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //SRA E
       //#0x2B:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerE & 0x01) === 0x01;
-        parentObj.registerE = parentObj.registerE & 0x80 | parentObj.registerE >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        this.FCarry = (this.registerE & 0x01) === 0x01;
+        this.registerE = this.registerE & 0x80 | this.registerE >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //SRA H
       //#0x2C:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0100) === 0x0100;
-        parentObj.registersHL = parentObj.registersHL >> 1 & 0xFF00 | parentObj.registersHL & 0x80FF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0100) === 0x0100;
+        this.registersHL = this.registersHL >> 1 & 0xff00 | this.registersHL & 0x80ff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //SRA L
       //#0x2D:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0001) === 0x0001;
-        parentObj.registersHL = parentObj.registersHL & 0xFF80 | (parentObj.registersHL & 0xFF) >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0001) === 0x0001;
+        this.registersHL = this.registersHL & 0xff80 | (this.registersHL & 0xff) >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //SRA (HL)
       //#0x2E:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FCarry = (temp_var & 0x01) === 0x01;
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        this.FCarry = (temp_var & 0x01) === 0x01;
         temp_var = temp_var & 0x80 | temp_var >> 1;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var === 0;
-      }
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var === 0;
+      },
       //SRA A
       //#0x2F:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerA & 0x01) === 0x01;
-        parentObj.registerA = parentObj.registerA & 0x80 | parentObj.registerA >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        this.FCarry = (this.registerA & 0x01) === 0x01;
+        this.registerA = this.registerA & 0x80 | this.registerA >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //SWAP B
       //#0x30:
-
-      , function (parentObj) {
-        parentObj.registerB = (parentObj.registerB & 0xF) << 4 | parentObj.registerB >> 4;
-        parentObj.FZero = parentObj.registerB === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registerB = (this.registerB & 0xf) << 4 | this.registerB >> 4;
+        this.FZero = this.registerB === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP C
       //#0x31:
-
-      , function (parentObj) {
-        parentObj.registerC = (parentObj.registerC & 0xF) << 4 | parentObj.registerC >> 4;
-        parentObj.FZero = parentObj.registerC === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registerC = (this.registerC & 0xf) << 4 | this.registerC >> 4;
+        this.FZero = this.registerC === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP D
       //#0x32:
-
-      , function (parentObj) {
-        parentObj.registerD = (parentObj.registerD & 0xF) << 4 | parentObj.registerD >> 4;
-        parentObj.FZero = parentObj.registerD === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registerD = (this.registerD & 0xf) << 4 | this.registerD >> 4;
+        this.FZero = this.registerD === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP E
       //#0x33:
-
-      , function (parentObj) {
-        parentObj.registerE = (parentObj.registerE & 0xF) << 4 | parentObj.registerE >> 4;
-        parentObj.FZero = parentObj.registerE === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registerE = (this.registerE & 0xf) << 4 | this.registerE >> 4;
+        this.FZero = this.registerE === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP H
       //#0x34:
-
-      , function (parentObj) {
-        parentObj.registersHL = (parentObj.registersHL & 0xF00) << 4 | (parentObj.registersHL & 0xF000) >> 4 | parentObj.registersHL & 0xFF;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registersHL = (this.registersHL & 0xf00) << 4 | (this.registersHL & 0xf000) >> 4 | this.registersHL & 0xff;
+        this.FZero = this.registersHL < 0x100;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP L
       //#0x35:
-
-      , function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | (parentObj.registersHL & 0xF) << 4 | (parentObj.registersHL & 0xF0) >> 4;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | (this.registersHL & 0xf) << 4 | (this.registersHL & 0xf0) >> 4;
+        this.FZero = (this.registersHL & 0xff) === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP (HL)
       //#0x36:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        temp_var = (temp_var & 0xF) << 4 | temp_var >> 4;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
-        parentObj.FZero = temp_var === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        temp_var = (temp_var & 0xf) << 4 | temp_var >> 4;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var);
+        this.FZero = temp_var === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SWAP A
       //#0x37:
-
-      , function (parentObj) {
-        parentObj.registerA = (parentObj.registerA & 0xF) << 4 | parentObj.registerA >> 4;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FCarry = parentObj.FHalfCarry = parentObj.FSubtract = false;
-      }
+      function () {
+        this.registerA = (this.registerA & 0xf) << 4 | this.registerA >> 4;
+        this.FZero = this.registerA === 0;
+        this.FCarry = this.FHalfCarry = this.FSubtract = false;
+      },
       //SRL B
       //#0x38:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerB & 0x01) === 0x01;
-        parentObj.registerB >>= 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerB === 0;
-      }
+      function () {
+        this.FCarry = (this.registerB & 0x01) === 0x01;
+        this.registerB >>= 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerB === 0;
+      },
       //SRL C
       //#0x39:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerC & 0x01) === 0x01;
-        parentObj.registerC >>= 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerC === 0;
-      }
+      function () {
+        this.FCarry = (this.registerC & 0x01) === 0x01;
+        this.registerC >>= 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerC === 0;
+      },
       //SRL D
       //#0x3A:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerD & 0x01) === 0x01;
-        parentObj.registerD >>= 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerD === 0;
-      }
+      function () {
+        this.FCarry = (this.registerD & 0x01) === 0x01;
+        this.registerD >>= 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerD === 0;
+      },
       //SRL E
       //#0x3B:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerE & 0x01) === 0x01;
-        parentObj.registerE >>= 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerE === 0;
-      }
+      function () {
+        this.FCarry = (this.registerE & 0x01) === 0x01;
+        this.registerE >>= 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerE === 0;
+      },
       //SRL H
       //#0x3C:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0100) === 0x0100;
-        parentObj.registersHL = parentObj.registersHL >> 1 & 0xFF00 | parentObj.registersHL & 0xFF;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registersHL < 0x100;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0100) === 0x0100;
+        this.registersHL = this.registersHL >> 1 & 0xff00 | this.registersHL & 0xff;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registersHL < 0x100;
+      },
       //SRL L
       //#0x3D:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registersHL & 0x0001) === 0x0001;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | (parentObj.registersHL & 0xFF) >> 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0xFF) === 0;
-      }
+      function () {
+        this.FCarry = (this.registersHL & 0x0001) === 0x0001;
+        this.registersHL = this.registersHL & 0xff00 | (this.registersHL & 0xff) >> 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = (this.registersHL & 0xff) === 0;
+      },
       //SRL (HL)
       //#0x3E:
-
-      , function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FCarry = (temp_var & 0x01) === 0x01;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var >> 1);
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = temp_var < 2;
-      }
+      function () {
+        var temp_var = this.memoryReader[this.registersHL](this.registersHL);
+        this.FCarry = (temp_var & 0x01) === 0x01;
+        this.memoryWriter[this.registersHL](this.registersHL, temp_var >> 1);
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = temp_var < 2;
+      },
       //SRL A
       //#0x3F:
-
-      , function (parentObj) {
-        parentObj.FCarry = (parentObj.registerA & 0x01) === 0x01;
-        parentObj.registerA >>= 1;
-        parentObj.FHalfCarry = parentObj.FSubtract = false;
-        parentObj.FZero = parentObj.registerA === 0;
-      }
+      function () {
+        this.FCarry = (this.registerA & 0x01) === 0x01;
+        this.registerA >>= 1;
+        this.FHalfCarry = this.FSubtract = false;
+        this.FZero = this.registerA === 0;
+      },
       //BIT 0, B
       //#0x40:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x01) === 0;
+      },
       //BIT 0, C
       //#0x41:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x01) === 0;
+      },
       //BIT 0, D
       //#0x42:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x01) === 0;
+      },
       //BIT 0, E
       //#0x43:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x01) === 0;
+      },
       //BIT 0, H
       //#0x44:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0100) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0100) === 0;
+      },
       //BIT 0, L
       //#0x45:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0001) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0001) === 0;
+      },
       //BIT 0, (HL)
       //#0x46:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x01) === 0;
+      },
       //BIT 0, A
       //#0x47:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x01) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x01) === 0;
+      },
       //BIT 1, B
       //#0x48:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x02) === 0;
+      },
       //BIT 1, C
       //#0x49:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x02) === 0;
+      },
       //BIT 1, D
       //#0x4A:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x02) === 0;
+      },
       //BIT 1, E
       //#0x4B:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x02) === 0;
+      },
       //BIT 1, H
       //#0x4C:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0200) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0200) === 0;
+      },
       //BIT 1, L
       //#0x4D:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0002) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0002) === 0;
+      },
       //BIT 1, (HL)
       //#0x4E:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x02) === 0;
+      },
       //BIT 1, A
       //#0x4F:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x02) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x02) === 0;
+      },
       //BIT 2, B
       //#0x50:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x04) === 0;
+      },
       //BIT 2, C
       //#0x51:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x04) === 0;
+      },
       //BIT 2, D
       //#0x52:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x04) === 0;
+      },
       //BIT 2, E
       //#0x53:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x04) === 0;
+      },
       //BIT 2, H
       //#0x54:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0400) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0400) === 0;
+      },
       //BIT 2, L
       //#0x55:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0004) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0004) === 0;
+      },
       //BIT 2, (HL)
       //#0x56:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x04) === 0;
+      },
       //BIT 2, A
       //#0x57:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x04) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x04) === 0;
+      },
       //BIT 3, B
       //#0x58:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x08) === 0;
+      },
       //BIT 3, C
       //#0x59:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x08) === 0;
+      },
       //BIT 3, D
       //#0x5A:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x08) === 0;
+      },
       //BIT 3, E
       //#0x5B:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x08) === 0;
+      },
       //BIT 3, H
       //#0x5C:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0800) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0800) === 0;
+      },
       //BIT 3, L
       //#0x5D:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0008) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0008) === 0;
+      },
       //BIT 3, (HL)
       //#0x5E:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x08) === 0;
+      },
       //BIT 3, A
       //#0x5F:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x08) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x08) === 0;
+      },
       //BIT 4, B
       //#0x60:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x10) === 0;
+      },
       //BIT 4, C
       //#0x61:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x10) === 0;
+      },
       //BIT 4, D
       //#0x62:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x10) === 0;
+      },
       //BIT 4, E
       //#0x63:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x10) === 0;
+      },
       //BIT 4, H
       //#0x64:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x1000) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x1000) === 0;
+      },
       //BIT 4, L
       //#0x65:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0010) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0010) === 0;
+      },
       //BIT 4, (HL)
       //#0x66:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x10) === 0;
+      },
       //BIT 4, A
       //#0x67:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x10) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x10) === 0;
+      },
       //BIT 5, B
       //#0x68:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x20) === 0;
+      },
       //BIT 5, C
       //#0x69:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x20) === 0;
+      },
       //BIT 5, D
       //#0x6A:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x20) === 0;
+      },
       //BIT 5, E
       //#0x6B:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x20) === 0;
+      },
       //BIT 5, H
       //#0x6C:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x2000) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x2000) === 0;
+      },
       //BIT 5, L
       //#0x6D:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0020) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0020) === 0;
+      },
       //BIT 5, (HL)
       //#0x6E:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x20) === 0;
+      },
       //BIT 5, A
       //#0x6F:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x20) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x20) === 0;
+      },
       //BIT 6, B
       //#0x70:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x40) === 0;
+      },
       //BIT 6, C
       //#0x71:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x40) === 0;
+      },
       //BIT 6, D
       //#0x72:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x40) === 0;
+      },
       //BIT 6, E
       //#0x73:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x40) === 0;
+      },
       //BIT 6, H
       //#0x74:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x4000) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x4000) === 0;
+      },
       //BIT 6, L
       //#0x75:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0040) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0040) === 0;
+      },
       //BIT 6, (HL)
       //#0x76:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x40) === 0;
+      },
       //BIT 6, A
       //#0x77:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x40) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x40) === 0;
+      },
       //BIT 7, B
       //#0x78:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerB & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerB & 0x80) === 0;
+      },
       //BIT 7, C
       //#0x79:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerC & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerC & 0x80) === 0;
+      },
       //BIT 7, D
       //#0x7A:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerD & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerD & 0x80) === 0;
+      },
       //BIT 7, E
       //#0x7B:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerE & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerE & 0x80) === 0;
+      },
       //BIT 7, H
       //#0x7C:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x8000) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x8000) === 0;
+      },
       //BIT 7, L
       //#0x7D:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registersHL & 0x0080) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registersHL & 0x0080) === 0;
+      },
       //BIT 7, (HL)
       //#0x7E:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.memoryReader[this.registersHL](this.registersHL) & 0x80) === 0;
+      },
       //BIT 7, A
       //#0x7F:
-
-      , function (parentObj) {
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = false;
-        parentObj.FZero = (parentObj.registerA & 0x80) === 0;
-      }
+      function () {
+        this.FHalfCarry = true;
+        this.FSubtract = false;
+        this.FZero = (this.registerA & 0x80) === 0;
+      },
       //RES 0, B
       //#0x80:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xFE;
-      }
+      function () {
+        this.registerB &= 0xfe;
+      },
       //RES 0, C
       //#0x81:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xFE;
-      }
+      function () {
+        this.registerC &= 0xfe;
+      },
       //RES 0, D
       //#0x82:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xFE;
-      }
+      function () {
+        this.registerD &= 0xfe;
+      },
       //RES 0, E
       //#0x83:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xFE;
-      }
+      function () {
+        this.registerE &= 0xfe;
+      },
       //RES 0, H
       //#0x84:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFEFF;
-      }
+      function () {
+        this.registersHL &= 0xfeff;
+      },
       //RES 0, L
       //#0x85:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFFE;
-      }
+      function () {
+        this.registersHL &= 0xfffe;
+      },
       //RES 0, (HL)
       //#0x86:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xFE);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xfe);
+      },
       //RES 0, A
       //#0x87:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xFE;
-      }
+      function () {
+        this.registerA &= 0xfe;
+      },
       //RES 1, B
       //#0x88:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xFD;
-      }
+      function () {
+        this.registerB &= 0xfd;
+      },
       //RES 1, C
       //#0x89:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xFD;
-      }
+      function () {
+        this.registerC &= 0xfd;
+      },
       //RES 1, D
       //#0x8A:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xFD;
-      }
+      function () {
+        this.registerD &= 0xfd;
+      },
       //RES 1, E
       //#0x8B:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xFD;
-      }
+      function () {
+        this.registerE &= 0xfd;
+      },
       //RES 1, H
       //#0x8C:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFDFF;
-      }
+      function () {
+        this.registersHL &= 0xfdff;
+      },
       //RES 1, L
       //#0x8D:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFFD;
-      }
+      function () {
+        this.registersHL &= 0xfffd;
+      },
       //RES 1, (HL)
       //#0x8E:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xFD);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xfd);
+      },
       //RES 1, A
       //#0x8F:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xFD;
-      }
+      function () {
+        this.registerA &= 0xfd;
+      },
       //RES 2, B
       //#0x90:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xFB;
-      }
+      function () {
+        this.registerB &= 0xfb;
+      },
       //RES 2, C
       //#0x91:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xFB;
-      }
+      function () {
+        this.registerC &= 0xfb;
+      },
       //RES 2, D
       //#0x92:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xFB;
-      }
+      function () {
+        this.registerD &= 0xfb;
+      },
       //RES 2, E
       //#0x93:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xFB;
-      }
+      function () {
+        this.registerE &= 0xfb;
+      },
       //RES 2, H
       //#0x94:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFBFF;
-      }
+      function () {
+        this.registersHL &= 0xfbff;
+      },
       //RES 2, L
       //#0x95:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFFB;
-      }
+      function () {
+        this.registersHL &= 0xfffb;
+      },
       //RES 2, (HL)
       //#0x96:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xFB);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xfb);
+      },
       //RES 2, A
       //#0x97:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xFB;
-      }
+      function () {
+        this.registerA &= 0xfb;
+      },
       //RES 3, B
       //#0x98:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xF7;
-      }
+      function () {
+        this.registerB &= 0xf7;
+      },
       //RES 3, C
       //#0x99:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xF7;
-      }
+      function () {
+        this.registerC &= 0xf7;
+      },
       //RES 3, D
       //#0x9A:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xF7;
-      }
+      function () {
+        this.registerD &= 0xf7;
+      },
       //RES 3, E
       //#0x9B:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xF7;
-      }
+      function () {
+        this.registerE &= 0xf7;
+      },
       //RES 3, H
       //#0x9C:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xF7FF;
-      }
+      function () {
+        this.registersHL &= 0xf7ff;
+      },
       //RES 3, L
       //#0x9D:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFF7;
-      }
+      function () {
+        this.registersHL &= 0xfff7;
+      },
       //RES 3, (HL)
       //#0x9E:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xF7);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xf7);
+      },
       //RES 3, A
       //#0x9F:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xF7;
-      }
+      function () {
+        this.registerA &= 0xf7;
+      },
       //RES 3, B
       //#0xA0:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xEF;
-      }
+      function () {
+        this.registerB &= 0xef;
+      },
       //RES 4, C
       //#0xA1:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xEF;
-      }
+      function () {
+        this.registerC &= 0xef;
+      },
       //RES 4, D
       //#0xA2:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xEF;
-      }
+      function () {
+        this.registerD &= 0xef;
+      },
       //RES 4, E
       //#0xA3:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xEF;
-      }
+      function () {
+        this.registerE &= 0xef;
+      },
       //RES 4, H
       //#0xA4:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xEFFF;
-      }
+      function () {
+        this.registersHL &= 0xefff;
+      },
       //RES 4, L
       //#0xA5:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFEF;
-      }
+      function () {
+        this.registersHL &= 0xffef;
+      },
       //RES 4, (HL)
       //#0xA6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xEF);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xef);
+      },
       //RES 4, A
       //#0xA7:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xEF;
-      }
+      function () {
+        this.registerA &= 0xef;
+      },
       //RES 5, B
       //#0xA8:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xDF;
-      }
+      function () {
+        this.registerB &= 0xdf;
+      },
       //RES 5, C
       //#0xA9:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xDF;
-      }
+      function () {
+        this.registerC &= 0xdf;
+      },
       //RES 5, D
       //#0xAA:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xDF;
-      }
+      function () {
+        this.registerD &= 0xdf;
+      },
       //RES 5, E
       //#0xAB:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xDF;
-      }
+      function () {
+        this.registerE &= 0xdf;
+      },
       //RES 5, H
       //#0xAC:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xDFFF;
-      }
+      function () {
+        this.registersHL &= 0xdfff;
+      },
       //RES 5, L
       //#0xAD:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFDF;
-      }
+      function () {
+        this.registersHL &= 0xffdf;
+      },
       //RES 5, (HL)
       //#0xAE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xDF);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xdf);
+      },
       //RES 5, A
       //#0xAF:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xDF;
-      }
+      function () {
+        this.registerA &= 0xdf;
+      },
       //RES 6, B
       //#0xB0:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0xBF;
-      }
+      function () {
+        this.registerB &= 0xbf;
+      },
       //RES 6, C
       //#0xB1:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0xBF;
-      }
+      function () {
+        this.registerC &= 0xbf;
+      },
       //RES 6, D
       //#0xB2:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0xBF;
-      }
+      function () {
+        this.registerD &= 0xbf;
+      },
       //RES 6, E
       //#0xB3:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0xBF;
-      }
+      function () {
+        this.registerE &= 0xbf;
+      },
       //RES 6, H
       //#0xB4:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xBFFF;
-      }
+      function () {
+        this.registersHL &= 0xbfff;
+      },
       //RES 6, L
       //#0xB5:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFFBF;
-      }
+      function () {
+        this.registersHL &= 0xffbf;
+      },
       //RES 6, (HL)
       //#0xB6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0xBF);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0xbf);
+      },
       //RES 6, A
       //#0xB7:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0xBF;
-      }
+      function () {
+        this.registerA &= 0xbf;
+      },
       //RES 7, B
       //#0xB8:
-
-      , function (parentObj) {
-        parentObj.registerB &= 0x7F;
-      }
+      function () {
+        this.registerB &= 0x7f;
+      },
       //RES 7, C
       //#0xB9:
-
-      , function (parentObj) {
-        parentObj.registerC &= 0x7F;
-      }
+      function () {
+        this.registerC &= 0x7f;
+      },
       //RES 7, D
       //#0xBA:
-
-      , function (parentObj) {
-        parentObj.registerD &= 0x7F;
-      }
+      function () {
+        this.registerD &= 0x7f;
+      },
       //RES 7, E
       //#0xBB:
-
-      , function (parentObj) {
-        parentObj.registerE &= 0x7F;
-      }
+      function () {
+        this.registerE &= 0x7f;
+      },
       //RES 7, H
       //#0xBC:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0x7FFF;
-      }
+      function () {
+        this.registersHL &= 0x7fff;
+      },
       //RES 7, L
       //#0xBD:
-
-      , function (parentObj) {
-        parentObj.registersHL &= 0xFF7F;
-      }
+      function () {
+        this.registersHL &= 0xff7f;
+      },
       //RES 7, (HL)
       //#0xBE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) & 0x7F);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) & 0x7f);
+      },
       //RES 7, A
       //#0xBF:
-
-      , function (parentObj) {
-        parentObj.registerA &= 0x7F;
-      }
+      function () {
+        this.registerA &= 0x7f;
+      },
       //SET 0, B
       //#0xC0:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x01;
-      }
+      function () {
+        this.registerB |= 0x01;
+      },
       //SET 0, C
       //#0xC1:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x01;
-      }
+      function () {
+        this.registerC |= 0x01;
+      },
       //SET 0, D
       //#0xC2:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x01;
-      }
+      function () {
+        this.registerD |= 0x01;
+      },
       //SET 0, E
       //#0xC3:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x01;
-      }
+      function () {
+        this.registerE |= 0x01;
+      },
       //SET 0, H
       //#0xC4:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x0100;
-      }
+      function () {
+        this.registersHL |= 0x0100;
+      },
       //SET 0, L
       //#0xC5:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x01;
-      }
+      function () {
+        this.registersHL |= 0x01;
+      },
       //SET 0, (HL)
       //#0xC6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x01);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x01);
+      },
       //SET 0, A
       //#0xC7:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x01;
-      }
+      function () {
+        this.registerA |= 0x01;
+      },
       //SET 1, B
       //#0xC8:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x02;
-      }
+      function () {
+        this.registerB |= 0x02;
+      },
       //SET 1, C
       //#0xC9:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x02;
-      }
+      function () {
+        this.registerC |= 0x02;
+      },
       //SET 1, D
       //#0xCA:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x02;
-      }
+      function () {
+        this.registerD |= 0x02;
+      },
       //SET 1, E
       //#0xCB:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x02;
-      }
+      function () {
+        this.registerE |= 0x02;
+      },
       //SET 1, H
       //#0xCC:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x0200;
-      }
+      function () {
+        this.registersHL |= 0x0200;
+      },
       //SET 1, L
       //#0xCD:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x02;
-      }
+      function () {
+        this.registersHL |= 0x02;
+      },
       //SET 1, (HL)
       //#0xCE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x02);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x02);
+      },
       //SET 1, A
       //#0xCF:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x02;
-      }
+      function () {
+        this.registerA |= 0x02;
+      },
       //SET 2, B
       //#0xD0:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x04;
-      }
+      function () {
+        this.registerB |= 0x04;
+      },
       //SET 2, C
       //#0xD1:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x04;
-      }
+      function () {
+        this.registerC |= 0x04;
+      },
       //SET 2, D
       //#0xD2:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x04;
-      }
+      function () {
+        this.registerD |= 0x04;
+      },
       //SET 2, E
       //#0xD3:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x04;
-      }
+      function () {
+        this.registerE |= 0x04;
+      },
       //SET 2, H
       //#0xD4:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x0400;
-      }
+      function () {
+        this.registersHL |= 0x0400;
+      },
       //SET 2, L
       //#0xD5:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x04;
-      }
+      function () {
+        this.registersHL |= 0x04;
+      },
       //SET 2, (HL)
       //#0xD6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x04);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x04);
+      },
       //SET 2, A
       //#0xD7:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x04;
-      }
+      function () {
+        this.registerA |= 0x04;
+      },
       //SET 3, B
       //#0xD8:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x08;
-      }
+      function () {
+        this.registerB |= 0x08;
+      },
       //SET 3, C
       //#0xD9:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x08;
-      }
+      function () {
+        this.registerC |= 0x08;
+      },
       //SET 3, D
       //#0xDA:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x08;
-      }
+      function () {
+        this.registerD |= 0x08;
+      },
       //SET 3, E
       //#0xDB:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x08;
-      }
+      function () {
+        this.registerE |= 0x08;
+      },
       //SET 3, H
       //#0xDC:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x0800;
-      }
+      function () {
+        this.registersHL |= 0x0800;
+      },
       //SET 3, L
       //#0xDD:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x08;
-      }
+      function () {
+        this.registersHL |= 0x08;
+      },
       //SET 3, (HL)
       //#0xDE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x08);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x08);
+      },
       //SET 3, A
       //#0xDF:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x08;
-      }
+      function () {
+        this.registerA |= 0x08;
+      },
       //SET 4, B
       //#0xE0:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x10;
-      }
+      function () {
+        this.registerB |= 0x10;
+      },
       //SET 4, C
       //#0xE1:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x10;
-      }
+      function () {
+        this.registerC |= 0x10;
+      },
       //SET 4, D
       //#0xE2:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x10;
-      }
+      function () {
+        this.registerD |= 0x10;
+      },
       //SET 4, E
       //#0xE3:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x10;
-      }
+      function () {
+        this.registerE |= 0x10;
+      },
       //SET 4, H
       //#0xE4:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x1000;
-      }
+      function () {
+        this.registersHL |= 0x1000;
+      },
       //SET 4, L
       //#0xE5:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x10;
-      }
+      function () {
+        this.registersHL |= 0x10;
+      },
       //SET 4, (HL)
       //#0xE6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x10);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x10);
+      },
       //SET 4, A
       //#0xE7:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x10;
-      }
+      function () {
+        this.registerA |= 0x10;
+      },
       //SET 5, B
       //#0xE8:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x20;
-      }
+      function () {
+        this.registerB |= 0x20;
+      },
       //SET 5, C
       //#0xE9:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x20;
-      }
+      function () {
+        this.registerC |= 0x20;
+      },
       //SET 5, D
       //#0xEA:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x20;
-      }
+      function () {
+        this.registerD |= 0x20;
+      },
       //SET 5, E
       //#0xEB:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x20;
-      }
+      function () {
+        this.registerE |= 0x20;
+      },
       //SET 5, H
       //#0xEC:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x2000;
-      }
+      function () {
+        this.registersHL |= 0x2000;
+      },
       //SET 5, L
       //#0xED:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x20;
-      }
+      function () {
+        this.registersHL |= 0x20;
+      },
       //SET 5, (HL)
       //#0xEE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x20);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x20);
+      },
       //SET 5, A
       //#0xEF:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x20;
-      }
+      function () {
+        this.registerA |= 0x20;
+      },
       //SET 6, B
       //#0xF0:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x40;
-      }
+      function () {
+        this.registerB |= 0x40;
+      },
       //SET 6, C
       //#0xF1:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x40;
-      }
+      function () {
+        this.registerC |= 0x40;
+      },
       //SET 6, D
       //#0xF2:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x40;
-      }
+      function () {
+        this.registerD |= 0x40;
+      },
       //SET 6, E
       //#0xF3:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x40;
-      }
+      function () {
+        this.registerE |= 0x40;
+      },
       //SET 6, H
       //#0xF4:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x4000;
-      }
+      function () {
+        this.registersHL |= 0x4000;
+      },
       //SET 6, L
       //#0xF5:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x40;
-      }
+      function () {
+        this.registersHL |= 0x40;
+      },
       //SET 6, (HL)
       //#0xF6:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x40);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x40);
+      },
       //SET 6, A
       //#0xF7:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x40;
-      }
+      function () {
+        this.registerA |= 0x40;
+      },
       //SET 7, B
       //#0xF8:
-
-      , function (parentObj) {
-        parentObj.registerB |= 0x80;
-      }
+      function () {
+        this.registerB |= 0x80;
+      },
       //SET 7, C
       //#0xF9:
-
-      , function (parentObj) {
-        parentObj.registerC |= 0x80;
-      }
+      function () {
+        this.registerC |= 0x80;
+      },
       //SET 7, D
       //#0xFA:
-
-      , function (parentObj) {
-        parentObj.registerD |= 0x80;
-      }
+      function () {
+        this.registerD |= 0x80;
+      },
       //SET 7, E
       //#0xFB:
-
-      , function (parentObj) {
-        parentObj.registerE |= 0x80;
-      }
+      function () {
+        this.registerE |= 0x80;
+      },
       //SET 7, H
       //#0xFC:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x8000;
-      }
+      function () {
+        this.registersHL |= 0x8000;
+      },
       //SET 7, L
       //#0xFD:
-
-      , function (parentObj) {
-        parentObj.registersHL |= 0x80;
-      }
+      function () {
+        this.registersHL |= 0x80;
+      },
       //SET 7, (HL)
       //#0xFE:
-
-      , function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) | 0x80);
-      }
+      function () {
+        this.memoryWriter[this.registersHL](this.registersHL, this.memoryReader[this.registersHL](this.registersHL) | 0x80);
+      },
       //SET 7, A
       //#0xFF:
-
-      , function (parentObj) {
-        parentObj.registerA |= 0x80;
+      function () {
+        this.registerA |= 0x80;
       }];
-      instructionSet = [
+      mainInstructions = [
       //NOP
       //#0x00:
-      function (parentObj) {
+      function () {
         //Do Nothing...
       },
       //LD BC, nn
       //#0x01:
-      function (parentObj) {
-        parentObj.registerC = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.registerB = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.registerC = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.registerB = this.memoryRead(this.programCounter + 1 & 0xffff);
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //LD (BC), A
       //#0x02:
-      function (parentObj) {
-        parentObj.memoryWrite(parentObj.registerB << 8 | parentObj.registerC, parentObj.registerA);
+      function () {
+        this.memoryWrite(this.registerB << 8 | this.registerC, this.registerA);
       },
       //INC BC
       //#0x03:
-      function (parentObj) {
-        var temp_var = (parentObj.registerB << 8 | parentObj.registerC) + 1;
-        parentObj.registerB = temp_var >> 8 & 0xFF;
-        parentObj.registerC = temp_var & 0xFF;
+      function () {
+        var temp_var = (this.registerB << 8 | this.registerC) + 1;
+        this.registerB = temp_var >> 8 & 0xff;
+        this.registerC = temp_var & 0xff;
       },
       //INC B
       //#0x04:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerB + 1 & 0xFF;
-        parentObj.FZero = parentObj.registerB === 0;
-        parentObj.FHalfCarry = (parentObj.registerB & 0xF) === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.registerB = this.registerB + 1 & 0xff;
+        this.FZero = this.registerB === 0;
+        this.FHalfCarry = (this.registerB & 0xf) === 0;
+        this.FSubtract = false;
       },
       //DEC B
       //#0x05:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerB - 1 & 0xFF;
-        parentObj.FZero = parentObj.registerB === 0;
-        parentObj.FHalfCarry = (parentObj.registerB & 0xF) === 0xF;
-        parentObj.FSubtract = true;
+      function () {
+        this.registerB = this.registerB - 1 & 0xff;
+        this.FZero = this.registerB === 0;
+        this.FHalfCarry = (this.registerB & 0xf) === 0xf;
+        this.FSubtract = true;
       },
       //LD B, n
       //#0x06:
-      function (parentObj) {
-        parentObj.registerB = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerB = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //RLCA
       //#0x07:
-      function (parentObj) {
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF | parentObj.registerA >> 7;
-        parentObj.FZero = parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        this.FCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff | this.registerA >> 7;
+        this.FZero = this.FSubtract = this.FHalfCarry = false;
       },
       //LD (nn), SP
       //#0x08:
-      function (parentObj) {
-        var temp_var = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-        parentObj.memoryWrite(temp_var, parentObj.stackPointer & 0xFF);
-        parentObj.memoryWrite(temp_var + 1 & 0xFFFF, parentObj.stackPointer >> 8);
+      function () {
+        var temp_var = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 2 & 0xffff;
+        this.memoryWrite(temp_var, this.stackPointer & 0xff);
+        this.memoryWrite(temp_var + 1 & 0xffff, this.stackPointer >> 8);
       },
       //ADD HL, BC
       //#0x09:
-      function (parentObj) {
-        var dirtySum = parentObj.registersHL + (parentObj.registerB << 8 | parentObj.registerC);
-        parentObj.FHalfCarry = (parentObj.registersHL & 0xFFF) > (dirtySum & 0xFFF);
-        parentObj.FCarry = dirtySum > 0xFFFF;
-        parentObj.registersHL = dirtySum & 0xFFFF;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registersHL + (this.registerB << 8 | this.registerC);
+        this.FHalfCarry = (this.registersHL & 0xfff) > (dirtySum & 0xfff);
+        this.FCarry = dirtySum > 0xffff;
+        this.registersHL = dirtySum & 0xffff;
+        this.FSubtract = false;
       },
       //LD A, (BC)
       //#0x0A:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryRead(parentObj.registerB << 8 | parentObj.registerC);
+      function () {
+        this.registerA = this.memoryRead(this.registerB << 8 | this.registerC);
       },
       //DEC BC
       //#0x0B:
-      function (parentObj) {
-        var temp_var = (parentObj.registerB << 8 | parentObj.registerC) - 1 & 0xFFFF;
-        parentObj.registerB = temp_var >> 8;
-        parentObj.registerC = temp_var & 0xFF;
+      function () {
+        var temp_var = (this.registerB << 8 | this.registerC) - 1 & 0xffff;
+        this.registerB = temp_var >> 8;
+        this.registerC = temp_var & 0xff;
       },
       //INC C
       //#0x0C:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerC + 1 & 0xFF;
-        parentObj.FZero = parentObj.registerC === 0;
-        parentObj.FHalfCarry = (parentObj.registerC & 0xF) === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.registerC = this.registerC + 1 & 0xff;
+        this.FZero = this.registerC === 0;
+        this.FHalfCarry = (this.registerC & 0xf) === 0;
+        this.FSubtract = false;
       },
       //DEC C
       //#0x0D:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerC - 1 & 0xFF;
-        parentObj.FZero = parentObj.registerC === 0;
-        parentObj.FHalfCarry = (parentObj.registerC & 0xF) === 0xF;
-        parentObj.FSubtract = true;
+      function () {
+        this.registerC = this.registerC - 1 & 0xff;
+        this.FZero = this.registerC === 0;
+        this.FHalfCarry = (this.registerC & 0xf) === 0xf;
+        this.FSubtract = true;
       },
       //LD C, n
       //#0x0E:
-      function (parentObj) {
-        parentObj.registerC = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerC = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //RRCA
       //#0x0F:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerA >> 1 | (parentObj.registerA & 1) << 7;
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.FZero = parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA = this.registerA >> 1 | (this.registerA & 1) << 7;
+        this.FCarry = this.registerA > 0x7f;
+        this.FZero = this.FSubtract = this.FHalfCarry = false;
       },
       //STOP
       //#0x10:
-      function (parentObj) {
-        if (parentObj.cartridgeSlot.cartridge.cGBC) {
-          if ((parentObj.memory[0xFF4D] & 0x01) === 0x01) {
+      function () {
+        if (this.cartridgeSlot.cartridge.cGBC) {
+          if ((this.memory[0xff4d] & 0x01) === 0x01) {
             //Speed change requested.
-            if (parentObj.memory[0xFF4D] > 0x7F) {
+            if (this.memory[0xff4d] > 0x7f) {
               //Go back to single speed mode.
               console.log("Going into single clock speed mode.", 0);
-              parentObj.doubleSpeedShifter = 0;
-              parentObj.memory[0xFF4D] &= 0x7F; //Clear the double speed mode flag.
+              this.doubleSpeedShifter = 0;
+              this.memory[0xff4d] &= 0x7f; //Clear the double speed mode flag.
             } else {
               //Go to double speed mode.
               console.log("Going into double clock speed mode.", 0);
-              parentObj.doubleSpeedShifter = 1;
-              parentObj.memory[0xFF4D] |= 0x80; //Set the double speed mode flag.
+              this.doubleSpeedShifter = 1;
+              this.memory[0xff4d] |= 0x80; //Set the double speed mode flag.
             }
-            parentObj.memory[0xFF4D] &= 0xFE; //Reset the request bit.
+            this.memory[0xff4d] &= 0xfe; //Reset the request bit.
           } else {
-            parentObj.handleSTOP();
+            this.handleSTOP();
           }
         } else {
-          parentObj.handleSTOP();
+          this.handleSTOP();
         }
       },
       //LD DE, nn
       //#0x11:
-      function (parentObj) {
-        parentObj.registerE = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.registerD = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.registerE = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.registerD = this.memoryRead(this.programCounter + 1 & 0xffff);
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //LD (DE), A
       //#0x12:
-      function (parentObj) {
-        parentObj.memoryWrite(parentObj.registerD << 8 | parentObj.registerE, parentObj.registerA);
+      function () {
+        this.memoryWrite(this.registerD << 8 | this.registerE, this.registerA);
       },
       //INC DE
       //#0x13:
-      function (parentObj) {
-        var temp_var = (parentObj.registerD << 8 | parentObj.registerE) + 1;
-        parentObj.registerD = temp_var >> 8 & 0xFF;
-        parentObj.registerE = temp_var & 0xFF;
+      function () {
+        var temp_var = (this.registerD << 8 | this.registerE) + 1;
+        this.registerD = temp_var >> 8 & 0xff;
+        this.registerE = temp_var & 0xff;
       },
       //INC D
       //#0x14:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerD + 1 & 0xFF;
-        parentObj.FZero = parentObj.registerD === 0;
-        parentObj.FHalfCarry = (parentObj.registerD & 0xF) === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.registerD = this.registerD + 1 & 0xff;
+        this.FZero = this.registerD === 0;
+        this.FHalfCarry = (this.registerD & 0xf) === 0;
+        this.FSubtract = false;
       },
       //DEC D
       //#0x15:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerD - 1 & 0xFF;
-        parentObj.FZero = parentObj.registerD === 0;
-        parentObj.FHalfCarry = (parentObj.registerD & 0xF) === 0xF;
-        parentObj.FSubtract = true;
+      function () {
+        this.registerD = this.registerD - 1 & 0xff;
+        this.FZero = this.registerD === 0;
+        this.FHalfCarry = (this.registerD & 0xf) === 0xf;
+        this.FSubtract = true;
       },
       //LD D, n
       //#0x16:
-      function (parentObj) {
-        parentObj.registerD = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerD = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //RLA
       //#0x17:
-      function (parentObj) {
-        var carry_flag = parentObj.FCarry ? 1 : 0;
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF | carry_flag;
-        parentObj.FZero = parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        var carry_flag = this.FCarry ? 1 : 0;
+        this.FCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff | carry_flag;
+        this.FZero = this.FSubtract = this.FHalfCarry = false;
       },
       //JR n
       //#0x18:
-      function (parentObj) {
-        parentObj.programCounter = parentObj.programCounter + (parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24) + 1 & 0xFFFF;
+      function () {
+        this.programCounter = this.programCounter + (this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24) + 1 & 0xffff;
       },
       //ADD HL, DE
       //#0x19:
-      function (parentObj) {
-        var dirtySum = parentObj.registersHL + (parentObj.registerD << 8 | parentObj.registerE);
-        parentObj.FHalfCarry = (parentObj.registersHL & 0xFFF) > (dirtySum & 0xFFF);
-        parentObj.FCarry = dirtySum > 0xFFFF;
-        parentObj.registersHL = dirtySum & 0xFFFF;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registersHL + (this.registerD << 8 | this.registerE);
+        this.FHalfCarry = (this.registersHL & 0xfff) > (dirtySum & 0xfff);
+        this.FCarry = dirtySum > 0xffff;
+        this.registersHL = dirtySum & 0xffff;
+        this.FSubtract = false;
       },
       //LD A, (DE)
       //#0x1A:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryRead(parentObj.registerD << 8 | parentObj.registerE);
+      function () {
+        this.registerA = this.memoryRead(this.registerD << 8 | this.registerE);
       },
       //DEC DE
       //#0x1B:
-      function (parentObj) {
-        var temp_var = (parentObj.registerD << 8 | parentObj.registerE) - 1 & 0xFFFF;
-        parentObj.registerD = temp_var >> 8;
-        parentObj.registerE = temp_var & 0xFF;
+      function () {
+        var temp_var = (this.registerD << 8 | this.registerE) - 1 & 0xffff;
+        this.registerD = temp_var >> 8;
+        this.registerE = temp_var & 0xff;
       },
       //INC E
       //#0x1C:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerE + 1 & 0xFF;
-        parentObj.FZero = parentObj.registerE === 0;
-        parentObj.FHalfCarry = (parentObj.registerE & 0xF) === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.registerE = this.registerE + 1 & 0xff;
+        this.FZero = this.registerE === 0;
+        this.FHalfCarry = (this.registerE & 0xf) === 0;
+        this.FSubtract = false;
       },
       //DEC E
       //#0x1D:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerE - 1 & 0xFF;
-        parentObj.FZero = parentObj.registerE === 0;
-        parentObj.FHalfCarry = (parentObj.registerE & 0xF) === 0xF;
-        parentObj.FSubtract = true;
+      function () {
+        this.registerE = this.registerE - 1 & 0xff;
+        this.FZero = this.registerE === 0;
+        this.FHalfCarry = (this.registerE & 0xf) === 0xf;
+        this.FSubtract = true;
       },
       //LD E, n
       //#0x1E:
-      function (parentObj) {
-        parentObj.registerE = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerE = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //RRA
       //#0x1F:
-      function (parentObj) {
-        var carry_flag = parentObj.FCarry ? 0x80 : 0;
-        parentObj.FCarry = (parentObj.registerA & 1) === 1;
-        parentObj.registerA = parentObj.registerA >> 1 | carry_flag;
-        parentObj.FZero = parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        var carry_flag = this.FCarry ? 0x80 : 0;
+        this.FCarry = (this.registerA & 1) === 1;
+        this.registerA = this.registerA >> 1 | carry_flag;
+        this.FZero = this.FSubtract = this.FHalfCarry = false;
       },
       //JR NZ, n
       //#0x20:
-      function (parentObj) {
-        if (!parentObj.FZero) {
-          parentObj.programCounter = parentObj.programCounter + (parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24) + 1 & 0xFFFF;
-          parentObj.CPUTicks += 4;
+      function () {
+        if (!this.FZero) {
+          this.programCounter = this.programCounter + (this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24) + 1 & 0xffff;
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+          this.programCounter = this.programCounter + 1 & 0xffff;
         }
       },
       //LD HL, nn
       //#0x21:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.registersHL = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //LDI (HL), A
       //#0x22:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerA);
-        parentObj.registersHL = parentObj.registersHL + 1 & 0xFFFF;
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerA]);
+        this.registersHL = this.registersHL + 1 & 0xffff;
       },
       //INC HL
       //#0x23:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL + 1 & 0xFFFF;
+      function () {
+        this.registersHL = this.registersHL + 1 & 0xffff;
       },
       //INC H
       //#0x24:
-      function (parentObj) {
-        var H = (parentObj.registersHL >> 8) + 1 & 0xFF;
-        parentObj.FZero = H === 0;
-        parentObj.FHalfCarry = (H & 0xF) === 0;
-        parentObj.FSubtract = false;
-        parentObj.registersHL = H << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        var H = (this.registersHL >> 8) + 1 & 0xff;
+        this.FZero = H === 0;
+        this.FHalfCarry = (H & 0xf) === 0;
+        this.FSubtract = false;
+        this.registersHL = H << 8 | this.registersHL & 0xff;
       },
       //DEC H
       //#0x25:
-      function (parentObj) {
-        var H = (parentObj.registersHL >> 8) - 1 & 0xFF;
-        parentObj.FZero = H === 0;
-        parentObj.FHalfCarry = (H & 0xF) === 0xF;
-        parentObj.FSubtract = true;
-        parentObj.registersHL = H << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        var H = (this.registersHL >> 8) - 1 & 0xff;
+        this.FZero = H === 0;
+        this.FHalfCarry = (H & 0xf) === 0xf;
+        this.FSubtract = true;
+        this.registersHL = H << 8 | this.registersHL & 0xff;
       },
       //LD H, n
       //#0x26:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 8 | parentObj.registersHL & 0xFF;
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registersHL = this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 8 | this.registersHL & 0xff;
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //DAA
       //#0x27:
-      function (parentObj) {
-        if (!parentObj.FSubtract) {
-          if (parentObj.FCarry || parentObj.registerA > 0x99) {
-            parentObj.registerA = parentObj.registerA + 0x60 & 0xFF;
-            parentObj.FCarry = true;
+      function () {
+        if (!this.FSubtract) {
+          if (this.FCarry || this.registerA > 0x99) {
+            this.registerA = this.registerA + 0x60 & 0xff;
+            this.FCarry = true;
           }
-          if (parentObj.FHalfCarry || (parentObj.registerA & 0xF) > 0x9) {
-            parentObj.registerA = parentObj.registerA + 0x06 & 0xFF;
-            parentObj.FHalfCarry = false;
+          if (this.FHalfCarry || (this.registerA & 0xf) > 0x9) {
+            this.registerA = this.registerA + 0x06 & 0xff;
+            this.FHalfCarry = false;
           }
-        } else if (parentObj.FCarry && parentObj.FHalfCarry) {
-          parentObj.registerA = parentObj.registerA + 0x9A & 0xFF;
-          parentObj.FHalfCarry = false;
-        } else if (parentObj.FCarry) {
-          parentObj.registerA = parentObj.registerA + 0xA0 & 0xFF;
-        } else if (parentObj.FHalfCarry) {
-          parentObj.registerA = parentObj.registerA + 0xFA & 0xFF;
-          parentObj.FHalfCarry = false;
+        } else if (this.FCarry && this.FHalfCarry) {
+          this.registerA = this.registerA + 0x9a & 0xff;
+          this.FHalfCarry = false;
+        } else if (this.FCarry) {
+          this.registerA = this.registerA + 0xa0 & 0xff;
+        } else if (this.FHalfCarry) {
+          this.registerA = this.registerA + 0xfa & 0xff;
+          this.FHalfCarry = false;
         }
-        parentObj.FZero = parentObj.registerA === 0;
+        this.FZero = this.registerA === 0;
       },
       //JR Z, n
       //#0x28:
-      function (parentObj) {
-        if (parentObj.FZero) {
-          parentObj.programCounter = parentObj.programCounter + (parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24) + 1 & 0xFFFF;
-          parentObj.CPUTicks += 4;
+      function () {
+        if (this.FZero) {
+          this.programCounter = this.programCounter + (this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24) + 1 & 0xffff;
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+          this.programCounter = this.programCounter + 1 & 0xffff;
         }
       },
       //ADD HL, HL
       //#0x29:
-      function (parentObj) {
-        parentObj.FHalfCarry = (parentObj.registersHL & 0xFFF) > 0x7FF;
-        parentObj.FCarry = parentObj.registersHL > 0x7FFF;
-        parentObj.registersHL = parentObj.registersHL << 1 & 0xFFFF;
-        parentObj.FSubtract = false;
+      function () {
+        this.FHalfCarry = (this.registersHL & 0xfff) > 0x7ff;
+        this.FCarry = this.registersHL > 0x7fff;
+        this.registersHL = this.registersHL << 1 & 0xffff;
+        this.FSubtract = false;
       },
       //LDI A, (HL)
       //#0x2A:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.registersHL = parentObj.registersHL + 1 & 0xFFFF;
+      function () {
+        this.registerA = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.registersHL = this.registersHL + 1 & 0xffff;
       },
       //DEC HL
       //#0x2B:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL - 1 & 0xFFFF;
+      function () {
+        this.registersHL = this.registersHL - 1 & 0xffff;
       },
       //INC L
       //#0x2C:
-      function (parentObj) {
-        var L = parentObj.registersHL + 1 & 0xFF;
-        parentObj.FZero = L === 0;
-        parentObj.FHalfCarry = (L & 0xF) === 0;
-        parentObj.FSubtract = false;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | L;
+      function () {
+        var L = this.registersHL + 1 & 0xff;
+        this.FZero = L === 0;
+        this.FHalfCarry = (L & 0xf) === 0;
+        this.FSubtract = false;
+        this.registersHL = this.registersHL & 0xff00 | L;
       },
       //DEC L
       //#0x2D:
-      function (parentObj) {
-        var L = parentObj.registersHL - 1 & 0xFF;
-        parentObj.FZero = L === 0;
-        parentObj.FHalfCarry = (L & 0xF) === 0xF;
-        parentObj.FSubtract = true;
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | L;
+      function () {
+        var L = this.registersHL - 1 & 0xff;
+        this.FZero = L === 0;
+        this.FHalfCarry = (L & 0xf) === 0xf;
+        this.FSubtract = true;
+        this.registersHL = this.registersHL & 0xff00 | L;
       },
       //LD L, n
       //#0x2E:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //CPL
       //#0x2F:
-      function (parentObj) {
-        parentObj.registerA ^= 0xFF;
-        parentObj.FSubtract = parentObj.FHalfCarry = true;
+      function () {
+        this.registerA ^= 0xff;
+        this.FSubtract = this.FHalfCarry = true;
       },
       //JR NC, n
       //#0x30:
-      function (parentObj) {
-        if (!parentObj.FCarry) {
-          parentObj.programCounter = parentObj.programCounter + (parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24) + 1 & 0xFFFF;
-          parentObj.CPUTicks += 4;
+      function () {
+        if (!this.FCarry) {
+          this.programCounter = this.programCounter + (this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24) + 1 & 0xffff;
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+          this.programCounter = this.programCounter + 1 & 0xffff;
         }
       },
       //LD SP, nn
       //#0x31:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.stackPointer = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //LDD (HL), A
       //#0x32:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerA);
-        parentObj.registersHL = parentObj.registersHL - 1 & 0xFFFF;
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerA]);
+        this.registersHL = this.registersHL - 1 & 0xffff;
       },
       //INC SP
       //#0x33:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer + 1 & 0xFFFF;
+      function () {
+        this.stackPointer = this.stackPointer + 1 & 0xffff;
       },
       //INC (HL)
       //#0x34:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) + 1 & 0xFF;
-        parentObj.FZero = temp_var === 0;
-        parentObj.FHalfCarry = (temp_var & 0xF) === 0;
-        parentObj.FSubtract = false;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
+      function () {
+        var temp_var = this.memoryReader[this.registersHL].apply(this, [this.registersHL]) + 1 & 0xff;
+        this.FZero = temp_var === 0;
+        this.FHalfCarry = (temp_var & 0xf) === 0;
+        this.FSubtract = false;
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, temp_var]);
       },
       //DEC (HL)
       //#0x35:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) - 1 & 0xFF;
-        parentObj.FZero = temp_var === 0;
-        parentObj.FHalfCarry = (temp_var & 0xF) === 0xF;
-        parentObj.FSubtract = true;
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, temp_var);
+      function () {
+        var temp_var = this.memoryReader[this.registersHL].apply(this, [this.registersHL]) - 1 & 0xff;
+        this.FZero = temp_var === 0;
+        this.FHalfCarry = (temp_var & 0xf) === 0xf;
+        this.FSubtract = true;
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, temp_var]);
       },
       //LD (HL), n
       //#0x36:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter));
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.memoryReader[this.programCounter].apply(this, [this.programCounter])]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //SCF
       //#0x37:
-      function (parentObj) {
-        parentObj.FCarry = true;
-        parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        this.FCarry = true;
+        this.FSubtract = this.FHalfCarry = false;
       },
       //JR C, n
       //#0x38:
-      function (parentObj) {
-        if (parentObj.FCarry) {
-          parentObj.programCounter = parentObj.programCounter + (parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24) + 1 & 0xFFFF;
-          parentObj.CPUTicks += 4;
+      function () {
+        if (this.FCarry) {
+          this.programCounter = this.programCounter + (this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24) + 1 & 0xffff;
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+          this.programCounter = this.programCounter + 1 & 0xffff;
         }
       },
       //ADD HL, SP
       //#0x39:
-      function (parentObj) {
-        var dirtySum = parentObj.registersHL + parentObj.stackPointer;
-        parentObj.FHalfCarry = (parentObj.registersHL & 0xFFF) > (dirtySum & 0xFFF);
-        parentObj.FCarry = dirtySum > 0xFFFF;
-        parentObj.registersHL = dirtySum & 0xFFFF;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registersHL + this.stackPointer;
+        this.FHalfCarry = (this.registersHL & 0xfff) > (dirtySum & 0xfff);
+        this.FCarry = dirtySum > 0xffff;
+        this.registersHL = dirtySum & 0xffff;
+        this.FSubtract = false;
       },
       //LDD A, (HL)
       //#0x3A:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.registersHL = parentObj.registersHL - 1 & 0xFFFF;
+      function () {
+        this.registerA = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.registersHL = this.registersHL - 1 & 0xffff;
       },
       //DEC SP
       //#0x3B:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
       },
       //INC A
       //#0x3C:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerA + 1 & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.registerA = this.registerA + 1 & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = (this.registerA & 0xf) === 0;
+        this.FSubtract = false;
       },
       //DEC A
       //#0x3D:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerA - 1 & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) === 0xF;
-        parentObj.FSubtract = true;
+      function () {
+        this.registerA = this.registerA - 1 & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = (this.registerA & 0xf) === 0xf;
+        this.FSubtract = true;
       },
       //LD A, n
       //#0x3E:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerA = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //CCF
       //#0x3F:
-      function (parentObj) {
-        parentObj.FCarry = !parentObj.FCarry;
-        parentObj.FSubtract = parentObj.FHalfCarry = false;
+      function () {
+        this.FCarry = !this.FCarry;
+        this.FSubtract = this.FHalfCarry = false;
       },
       //LD B, B
       //#0x40:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD B, C
       //#0x41:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerC;
+      function () {
+        this.registerB = this.registerC;
       },
       //LD B, D
       //#0x42:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerD;
+      function () {
+        this.registerB = this.registerD;
       },
       //LD B, E
       //#0x43:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerE;
+      function () {
+        this.registerB = this.registerE;
       },
       //LD B, H
       //#0x44:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registersHL >> 8;
+      function () {
+        this.registerB = this.registersHL >> 8;
       },
       //LD B, L
       //#0x45:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registersHL & 0xFF;
+      function () {
+        this.registerB = this.registersHL & 0xff;
       },
       //LD B, (HL)
       //#0x46:
-      function (parentObj) {
-        parentObj.registerB = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registerB = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD B, A
       //#0x47:
-      function (parentObj) {
-        parentObj.registerB = parentObj.registerA;
+      function () {
+        this.registerB = this.registerA;
       },
       //LD C, B
       //#0x48:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerB;
+      function () {
+        this.registerC = this.registerB;
       },
       //LD C, C
       //#0x49:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD C, D
       //#0x4A:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerD;
+      function () {
+        this.registerC = this.registerD;
       },
       //LD C, E
       //#0x4B:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerE;
+      function () {
+        this.registerC = this.registerE;
       },
       //LD C, H
       //#0x4C:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registersHL >> 8;
+      function () {
+        this.registerC = this.registersHL >> 8;
       },
       //LD C, L
       //#0x4D:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registersHL & 0xFF;
+      function () {
+        this.registerC = this.registersHL & 0xff;
       },
       //LD C, (HL)
       //#0x4E:
-      function (parentObj) {
-        parentObj.registerC = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registerC = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD C, A
       //#0x4F:
-      function (parentObj) {
-        parentObj.registerC = parentObj.registerA;
+      function () {
+        this.registerC = this.registerA;
       },
       //LD D, B
       //#0x50:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerB;
+      function () {
+        this.registerD = this.registerB;
       },
       //LD D, C
       //#0x51:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerC;
+      function () {
+        this.registerD = this.registerC;
       },
       //LD D, D
       //#0x52:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD D, E
       //#0x53:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerE;
+      function () {
+        this.registerD = this.registerE;
       },
       //LD D, H
       //#0x54:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registersHL >> 8;
+      function () {
+        this.registerD = this.registersHL >> 8;
       },
       //LD D, L
       //#0x55:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registersHL & 0xFF;
+      function () {
+        this.registerD = this.registersHL & 0xff;
       },
       //LD D, (HL)
       //#0x56:
-      function (parentObj) {
-        parentObj.registerD = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registerD = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD D, A
       //#0x57:
-      function (parentObj) {
-        parentObj.registerD = parentObj.registerA;
+      function () {
+        this.registerD = this.registerA;
       },
       //LD E, B
       //#0x58:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerB;
+      function () {
+        this.registerE = this.registerB;
       },
       //LD E, C
       //#0x59:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerC;
+      function () {
+        this.registerE = this.registerC;
       },
       //LD E, D
       //#0x5A:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerD;
+      function () {
+        this.registerE = this.registerD;
       },
       //LD E, E
       //#0x5B:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD E, H
       //#0x5C:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registersHL >> 8;
+      function () {
+        this.registerE = this.registersHL >> 8;
       },
       //LD E, L
       //#0x5D:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registersHL & 0xFF;
+      function () {
+        this.registerE = this.registersHL & 0xff;
       },
       //LD E, (HL)
       //#0x5E:
-      function (parentObj) {
-        parentObj.registerE = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registerE = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD E, A
       //#0x5F:
-      function (parentObj) {
-        parentObj.registerE = parentObj.registerA;
+      function () {
+        this.registerE = this.registerA;
       },
       //LD H, B
       //#0x60:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registerB << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.registerB << 8 | this.registersHL & 0xff;
       },
       //LD H, C
       //#0x61:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registerC << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.registerC << 8 | this.registersHL & 0xff;
       },
       //LD H, D
       //#0x62:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registerD << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.registerD << 8 | this.registersHL & 0xff;
       },
       //LD H, E
       //#0x63:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registerE << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.registerE << 8 | this.registersHL & 0xff;
       },
       //LD H, H
       //#0x64:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD H, L
       //#0x65:
-      function (parentObj) {
-        parentObj.registersHL = (parentObj.registersHL & 0xFF) * 0x101;
+      function () {
+        this.registersHL = (this.registersHL & 0xff) * 0x101;
       },
       //LD H, (HL)
       //#0x66:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL) << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.memoryReader[this.registersHL].apply(this, [this.registersHL]) << 8 | this.registersHL & 0xff;
       },
       //LD H, A
       //#0x67:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registerA << 8 | parentObj.registersHL & 0xFF;
+      function () {
+        this.registersHL = this.registerA << 8 | this.registersHL & 0xff;
       },
       //LD L, B
       //#0x68:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registerB;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registerB;
       },
       //LD L, C
       //#0x69:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registerC;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registerC;
       },
       //LD L, D
       //#0x6A:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registerD;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registerD;
       },
       //LD L, E
       //#0x6B:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registerE;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registerE;
       },
       //LD L, H
       //#0x6C:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registersHL >> 8;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registersHL >> 8;
       },
       //LD L, L
       //#0x6D:
-      function (parentObj) {
+      function () {
         //Do nothing...
       },
       //LD L, (HL)
       //#0x6E:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD L, A
       //#0x6F:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.registersHL & 0xFF00 | parentObj.registerA;
+      function () {
+        this.registersHL = this.registersHL & 0xff00 | this.registerA;
       },
       //LD (HL), B
       //#0x70:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerB);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerB]);
       },
       //LD (HL), C
       //#0x71:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerC);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerC]);
       },
       //LD (HL), D
       //#0x72:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerD);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerD]);
       },
       //LD (HL), E
       //#0x73:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerE);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerE]);
       },
       //LD (HL), H
       //#0x74:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registersHL >> 8);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registersHL >> 8]);
       },
       //LD (HL), L
       //#0x75:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registersHL & 0xFF);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registersHL & 0xff]);
       },
       //HALT
       //#0x76:
-      function (parentObj) {
+      function () {
         //See if there's already an IRQ match:
-        if ((parentObj.interruptsEnabled & parentObj.interruptsRequested & 0x1F) > 0) {
-          if (!parentObj.cartridgeSlot.cartridge.cGBC && !parentObj.usedBootROM) {
+        if ((this.interruptsEnabled & this.interruptsRequested & 0x1f) > 0) {
+          if (!this.cartridgeSlot.cartridge.cGBC && !this.usedBootROM) {
             //HALT bug in the DMG CPU model (Program Counter fails to increment for one instruction after HALT):
-            parentObj.skipPCIncrement = true;
+            this.skipPCIncrement = true;
           } else {
             //CGB gets around the HALT PC bug by doubling the hidden NOP.
-            parentObj.CPUTicks += 4;
+            this.CPUTicks += 4;
           }
         } else {
           //CPU is stalled until the next IRQ match:
-          parentObj.calculateHALTPeriod();
+          this.calculateHALTPeriod();
         }
       },
       //LD (HL), A
       //#0x77:
-      function (parentObj) {
-        parentObj.memoryWriter[parentObj.registersHL](parentObj, parentObj.registersHL, parentObj.registerA);
+      function () {
+        this.memoryWriter[this.registersHL].apply(this, [this.registersHL, this.registerA]);
       },
       //LD A, B
       //#0x78:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerB;
+      function () {
+        this.registerA = this.registerB;
       },
       //LD A, C
       //#0x79:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerC;
+      function () {
+        this.registerA = this.registerC;
       },
       //LD A, D
       //#0x7A:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerD;
+      function () {
+        this.registerA = this.registerD;
       },
       //LD A, E
       //#0x7B:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registerE;
+      function () {
+        this.registerA = this.registerE;
       },
       //LD A, H
       //#0x7C:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registersHL >> 8;
+      function () {
+        this.registerA = this.registersHL >> 8;
       },
       //LD A, L
       //#0x7D:
-      function (parentObj) {
-        parentObj.registerA = parentObj.registersHL & 0xFF;
+      function () {
+        this.registerA = this.registersHL & 0xff;
       },
       //LD, A, (HL)
       //#0x7E:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
+      function () {
+        this.registerA = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
       },
       //LD A, A
       //#0x7F:
-      function (parentObj) {
+      function () {
         //Do Nothing...
       },
       //ADD A, B
       //#0x80:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerB;
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerB;
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, C
       //#0x81:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerC;
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerC;
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, D
       //#0x82:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerD;
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerD;
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, E
       //#0x83:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerE;
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerE;
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, H
       //#0x84:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + (parentObj.registersHL >> 8);
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + (this.registersHL >> 8);
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, L
       //#0x85:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + (parentObj.registersHL & 0xFF);
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + (this.registersHL & 0xff);
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, (HL)
       //#0x86:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADD A, A
       //#0x87:
-      function (parentObj) {
-        parentObj.FHalfCarry = (parentObj.registerA & 0x8) === 0x8;
-        parentObj.FCarry = parentObj.registerA > 0x7F;
-        parentObj.registerA = parentObj.registerA << 1 & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        this.FHalfCarry = (this.registerA & 0x8) === 0x8;
+        this.FCarry = this.registerA > 0x7f;
+        this.registerA = this.registerA << 1 & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, B
       //#0x88:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerB + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (parentObj.registerB & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerB + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (this.registerB & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, C
       //#0x89:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerC + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (parentObj.registerC & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerC + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (this.registerC & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, D
       //#0x8A:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerD + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (parentObj.registerD & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerD + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (this.registerD & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, E
       //#0x8B:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.registerE + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (parentObj.registerE & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.registerE + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (this.registerE & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, H
       //#0x8C:
-      function (parentObj) {
-        var tempValue = parentObj.registersHL >> 8;
-        var dirtySum = parentObj.registerA + tempValue + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (tempValue & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var tempValue = this.registersHL >> 8;
+        var dirtySum = this.registerA + tempValue + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (tempValue & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, L
       //#0x8D:
-      function (parentObj) {
-        var tempValue = parentObj.registersHL & 0xFF;
-        var dirtySum = parentObj.registerA + tempValue + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (tempValue & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var tempValue = this.registersHL & 0xff;
+        var dirtySum = this.registerA + tempValue + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (tempValue & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, (HL)
       //#0x8E:
-      function (parentObj) {
-        var tempValue = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        var dirtySum = parentObj.registerA + tempValue + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (tempValue & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var tempValue = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        var dirtySum = this.registerA + tempValue + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (tempValue & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //ADC A, A
       //#0x8F:
-      function (parentObj) {
+      function () {
         //shift left register A one bit for some ops here as an optimization:
-        var dirtySum = parentObj.registerA << 1 | (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA << 1 & 0x1E | (parentObj.FCarry ? 1 : 0)) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+        var dirtySum = this.registerA << 1 | (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA << 1 & 0x1e | (this.FCarry ? 1 : 0)) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //SUB A, B
       //#0x90:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerB;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerB;
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, C
       //#0x91:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerC;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerC;
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, D
       //#0x92:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerD;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerD;
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, E
       //#0x93:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerE;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerE;
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, H
       //#0x94:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - (parentObj.registersHL >> 8);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - (this.registersHL >> 8);
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, L
       //#0x95:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - (parentObj.registersHL & 0xFF);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - (this.registersHL & 0xff);
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, (HL)
       //#0x96:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //SUB A, A
       //#0x97:
-      function (parentObj) {
+      function () {
         //number - same number === 0
-        parentObj.registerA = 0;
-        parentObj.FHalfCarry = parentObj.FCarry = false;
-        parentObj.FZero = parentObj.FSubtract = true;
+        this.registerA = 0;
+        this.FHalfCarry = this.FCarry = false;
+        this.FZero = this.FSubtract = true;
       },
       //SBC A, B
       //#0x98:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerB - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (parentObj.registerB & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerB - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (this.registerB & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, C
       //#0x99:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerC - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (parentObj.registerC & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerC - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (this.registerC & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, D
       //#0x9A:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerD - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (parentObj.registerD & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerD - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (this.registerD & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, E
       //#0x9B:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerE - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (parentObj.registerE & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerE - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (this.registerE & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, H
       //#0x9C:
-      function (parentObj) {
-        var temp_var = parentObj.registersHL >> 8;
-        var dirtySum = parentObj.registerA - temp_var - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (temp_var & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var temp_var = this.registersHL >> 8;
+        var dirtySum = this.registerA - temp_var - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (temp_var & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, L
       //#0x9D:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - (parentObj.registersHL & 0xFF) - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (parentObj.registersHL & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - (this.registersHL & 0xff) - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (this.registersHL & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, (HL)
       //#0x9E:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        var dirtySum = parentObj.registerA - temp_var - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (temp_var & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var temp_var = this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        var dirtySum = this.registerA - temp_var - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (temp_var & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //SBC A, A
       //#0x9F:
-      function (parentObj) {
+      function () {
         //Optimized SBC A:
-        if (parentObj.FCarry) {
-          parentObj.FZero = false;
-          parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = true;
-          parentObj.registerA = 0xFF;
+        if (this.FCarry) {
+          this.FZero = false;
+          this.FSubtract = this.FHalfCarry = this.FCarry = true;
+          this.registerA = 0xff;
         } else {
-          parentObj.FHalfCarry = parentObj.FCarry = false;
-          parentObj.FSubtract = parentObj.FZero = true;
-          parentObj.registerA = 0;
+          this.FHalfCarry = this.FCarry = false;
+          this.FSubtract = this.FZero = true;
+          this.registerA = 0;
         }
       },
       //AND B
       //#0xA0:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registerB;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registerB;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND C
       //#0xA1:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registerC;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registerC;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND D
       //#0xA2:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registerD;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registerD;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND E
       //#0xA3:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registerE;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registerE;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND H
       //#0xA4:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registersHL >> 8;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registersHL >> 8;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND L
       //#0xA5:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.registersHL;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.registersHL;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND (HL)
       //#0xA6:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //AND A
       //#0xA7:
-      function (parentObj) {
+      function () {
         //number & same number = same number
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //XOR B
       //#0xA8:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registerB;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registerB;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR C
       //#0xA9:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registerC;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registerC;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR D
       //#0xAA:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registerD;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registerD;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR E
       //#0xAB:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registerE;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registerE;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR H
       //#0xAC:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registersHL >> 8;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registersHL >> 8;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR L
       //#0xAD:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.registersHL & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.registersHL & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR (HL)
       //#0xAE:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //XOR A
       //#0xAF:
-      function (parentObj) {
+      function () {
         //number ^ same number === 0
-        parentObj.registerA = 0;
-        parentObj.FZero = true;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+        this.registerA = 0;
+        this.FZero = true;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //OR B
       //#0xB0:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registerB;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registerB;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR C
       //#0xB1:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registerC;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registerC;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR D
       //#0xB2:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registerD;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registerD;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR E
       //#0xB3:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registerE;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registerE;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR H
       //#0xB4:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registersHL >> 8;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registersHL >> 8;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR L
       //#0xB5:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.registersHL & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.registersHL & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR (HL)
       //#0xB6:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //OR A
       //#0xB7:
-      function (parentObj) {
+      function () {
         //number | same number === same number
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //CP B
       //#0xB8:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerB;
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerB;
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP C
       //#0xB9:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerC;
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerC;
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP D
       //#0xBA:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerD;
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerD;
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP E
       //#0xBB:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.registerE;
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.registerE;
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP H
       //#0xBC:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - (parentObj.registersHL >> 8);
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - (this.registersHL >> 8);
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP L
       //#0xBD:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - (parentObj.registersHL & 0xFF);
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - (this.registersHL & 0xff);
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP (HL)
       //#0xBE:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.memoryReader[parentObj.registersHL](parentObj, parentObj.registersHL);
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.memoryReader[this.registersHL].apply(this, [this.registersHL]);
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //CP A
       //#0xBF:
-      function (parentObj) {
-        parentObj.FHalfCarry = parentObj.FCarry = false;
-        parentObj.FZero = parentObj.FSubtract = true;
+      function () {
+        this.FHalfCarry = this.FCarry = false;
+        this.FZero = this.FSubtract = true;
       },
       //RET !FZ
       //#0xC0:
-      function (parentObj) {
-        if (!parentObj.FZero) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-          parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (!this.FZero) {
+          this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+          this.stackPointer = this.stackPointer + 2 & 0xffff;
+          this.CPUTicks += 12;
         }
       },
       //POP BC
       //#0xC1:
-      function (parentObj) {
-        parentObj.registerC = parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.registerB = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        this.registerC = this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.registerB = this.memoryRead(this.stackPointer + 1 & 0xffff);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
       },
       //JP !FZ, nn
       //#0xC2:
-      function (parentObj) {
-        if (!parentObj.FZero) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.CPUTicks += 4;
+      function () {
+        if (!this.FZero) {
+          this.programCounter = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //JP nn
       //#0xC3:
-      function (parentObj) {
-        parentObj.programCounter = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
+      function () {
+        this.programCounter = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
       },
       //CALL !FZ, nn
       //#0xC4:
-      function (parentObj) {
-        if (!parentObj.FZero) {
-          var temp_pc = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-          parentObj.programCounter = temp_pc;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (!this.FZero) {
+          var temp_pc = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.programCounter = this.programCounter + 2 & 0xffff;
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+          this.programCounter = temp_pc;
+          this.CPUTicks += 12;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //PUSH BC
       //#0xC5:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registerB);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registerC);
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registerB]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registerC]);
       },
       //ADD, n
       //#0xC6:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA + parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FHalfCarry = (dirtySum & 0xF) < (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var dirtySum = this.registerA + this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FHalfCarry = (dirtySum & 0xf) < (this.registerA & 0xf);
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //RST 0
       //#0xC7:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0;
       },
       //RET FZ
       //#0xC8:
-      function (parentObj) {
-        if (parentObj.FZero) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-          parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (this.FZero) {
+          this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+          this.stackPointer = this.stackPointer + 2 & 0xffff;
+          this.CPUTicks += 12;
         }
       },
       //RET
       //#0xC9:
-      function (parentObj) {
-        parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
       },
       //JP FZ, nn
       //#0xCA:
-      function (parentObj) {
-        if (parentObj.FZero) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.CPUTicks += 4;
+      function () {
+        if (this.FZero) {
+          this.programCounter = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //Secondary OP Code Set:
       //#0xCB:
-      function (parentObj) {
-        var opcode = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
+      function () {
+        var operationCode = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
         //Increment the program counter to the next instruction:
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+        this.programCounter = this.programCounter + 1 & 0xffff;
         //Get how many CPU cycles the current 0xCBXX op code counts for:
-        parentObj.CPUTicks += parentObj.SecondaryTickTable[opcode];
+        this.CPUTicks += this.SecondaryTickTable[operationCode];
         //Execute secondary OP codes for the 0xCB OP code call.
-        secondInstructionSet[opcode](parentObj);
+        bitInstructions[operationCode].apply(this);
       },
       //CALL FZ, nn
       //#0xCC:
-      function (parentObj) {
-        if (parentObj.FZero) {
-          var temp_pc = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-          parentObj.programCounter = temp_pc;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (this.FZero) {
+          var temp_pc = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.programCounter = this.programCounter + 2 & 0xffff;
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+          this.programCounter = temp_pc;
+          this.CPUTicks += 12;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //CALL nn
       //#0xCD:
-      function (parentObj) {
-        var temp_pc = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = temp_pc;
+      function () {
+        var temp_pc = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 2 & 0xffff;
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = temp_pc;
       },
       //ADC A, n
       //#0xCE:
-      function (parentObj) {
-        var tempValue = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        var dirtySum = parentObj.registerA + tempValue + (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) + (tempValue & 0xF) + (parentObj.FCarry ? 1 : 0) > 0xF;
-        parentObj.FCarry = dirtySum > 0xFF;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = false;
+      function () {
+        var tempValue = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        var dirtySum = this.registerA + tempValue + (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) + (tempValue & 0xf) + (this.FCarry ? 1 : 0) > 0xf;
+        this.FCarry = dirtySum > 0xff;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = false;
       },
       //RST 0x8
       //#0xCF:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x8;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x8;
       },
       //RET !FC
       //#0xD0:
-      function (parentObj) {
-        if (!parentObj.FCarry) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-          parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (!this.FCarry) {
+          this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+          this.stackPointer = this.stackPointer + 2 & 0xffff;
+          this.CPUTicks += 12;
         }
       },
       //POP DE
       //#0xD1:
-      function (parentObj) {
-        parentObj.registerE = parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.registerD = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        this.registerE = this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.registerD = this.memoryRead(this.stackPointer + 1 & 0xffff);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
       },
       //JP !FC, nn
       //#0xD2:
-      function (parentObj) {
-        if (!parentObj.FCarry) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.CPUTicks += 4;
+      function () {
+        if (!this.FCarry) {
+          this.programCounter = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //0xD3 - Illegal
       //#0xD3:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xD3 called, pausing emulation.", 2);
         pause();
       },
       //CALL !FC, nn
       //#0xD4:
-      function (parentObj) {
-        if (!parentObj.FCarry) {
-          var temp_pc = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-          parentObj.programCounter = temp_pc;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (!this.FCarry) {
+          var temp_pc = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.programCounter = this.programCounter + 2 & 0xffff;
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+          this.programCounter = temp_pc;
+          this.CPUTicks += 12;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //PUSH DE
       //#0xD5:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registerD);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registerE);
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registerD]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registerE]);
       },
       //SUB A, n
       //#0xD6:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) < (dirtySum & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FHalfCarry = (this.registerA & 0xf) < (dirtySum & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //RST 0x10
       //#0xD7:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x10;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x10;
       },
       //RET FC
       //#0xD8:
-      function (parentObj) {
-        if (parentObj.FCarry) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-          parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (this.FCarry) {
+          this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+          this.stackPointer = this.stackPointer + 2 & 0xffff;
+          this.CPUTicks += 12;
         }
       },
       //RETI
       //#0xD9:
-      function (parentObj) {
-        parentObj.programCounter = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        this.programCounter = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
         //Immediate for HALT:
-        parentObj.IRQEnableDelay = parentObj.IRQEnableDelay === 2 || parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) === 0x76 ? 1 : 2;
+        this.IRQEnableDelay = this.IRQEnableDelay === 2 || this.memoryReader[this.programCounter].apply(this, [this.programCounter]) === 0x76 ? 1 : 2;
       },
       //JP FC, nn
       //#0xDA:
-      function (parentObj) {
-        if (parentObj.FCarry) {
-          parentObj.programCounter = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.CPUTicks += 4;
+      function () {
+        if (this.FCarry) {
+          this.programCounter = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.CPUTicks += 4;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //0xDB - Illegal
       //#0xDB:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xDB called, pausing emulation.", 2);
         pause();
       },
       //CALL FC, nn
       //#0xDC:
-      function (parentObj) {
-        if (parentObj.FCarry) {
-          var temp_pc = parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-          parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-          parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-          parentObj.programCounter = temp_pc;
-          parentObj.CPUTicks += 12;
+      function () {
+        if (this.FCarry) {
+          var temp_pc = this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+          this.programCounter = this.programCounter + 2 & 0xffff;
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+          this.stackPointer = this.stackPointer - 1 & 0xffff;
+          this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+          this.programCounter = temp_pc;
+          this.CPUTicks += 12;
         } else {
-          parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+          this.programCounter = this.programCounter + 2 & 0xffff;
         }
       },
       //0xDD - Illegal
       //#0xDD:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xDD called, pausing emulation.", 2);
         pause();
       },
       //SBC A, n
       //#0xDE:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        var dirtySum = parentObj.registerA - temp_var - (parentObj.FCarry ? 1 : 0);
-        parentObj.FHalfCarry = (parentObj.registerA & 0xF) - (temp_var & 0xF) - (parentObj.FCarry ? 1 : 0) < 0;
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.registerA = dirtySum & 0xFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var temp_var = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        var dirtySum = this.registerA - temp_var - (this.FCarry ? 1 : 0);
+        this.FHalfCarry = (this.registerA & 0xf) - (temp_var & 0xf) - (this.FCarry ? 1 : 0) < 0;
+        this.FCarry = dirtySum < 0;
+        this.registerA = dirtySum & 0xff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = true;
       },
       //RST 0x18
       //#0xDF:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x18;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x18;
       },
       //LDH (n), A
       //#0xE0:
-      function (parentObj) {
-        parentObj.memoryHighWrite(parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter), parentObj.registerA);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.memoryHighWrite(this.memoryReader[this.programCounter].apply(this, [this.programCounter]), this.registerA);
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //POP HL
       //#0xE1:
-      function (parentObj) {
-        parentObj.registersHL = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        this.registersHL = this.memoryRead(this.stackPointer + 1 & 0xffff) << 8 | this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
       },
       //LD (0xFF00 + C), A
       //#0xE2:
-      function (parentObj) {
-        parentObj.memoryHighWriter[parentObj.registerC](parentObj, parentObj.registerC, parentObj.registerA);
+      function () {
+        this.memoryHighWriter[this.registerC].apply(this, [this.registerC, this.registerA]);
       },
       //0xE3 - Illegal
       //#0xE3:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xE3 called, pausing emulation.", 2);
         pause();
       },
       //0xE4 - Illegal
       //#0xE4:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xE4 called, pausing emulation.", 2);
         pause();
       },
       //PUSH HL
       //#0xE5:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registersHL >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registersHL & 0xFF);
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registersHL >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registersHL & 0xff]);
       },
       //AND n
       //#0xE6:
-      function (parentObj) {
-        parentObj.registerA &= parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FHalfCarry = true;
-        parentObj.FSubtract = parentObj.FCarry = false;
+      function () {
+        this.registerA &= this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FZero = this.registerA === 0;
+        this.FHalfCarry = true;
+        this.FSubtract = this.FCarry = false;
       },
       //RST 0x20
       //#0xE7:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x20;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x20;
       },
       //ADD SP, n
       //#0xE8:
-      function (parentObj) {
-        var temp_value2 = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24;
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        var temp_value = parentObj.stackPointer + temp_value2 & 0xFFFF;
-        temp_value2 = parentObj.stackPointer ^ temp_value2 ^ temp_value;
-        parentObj.stackPointer = temp_value;
-        parentObj.FCarry = (temp_value2 & 0x100) === 0x100;
-        parentObj.FHalfCarry = (temp_value2 & 0x10) === 0x10;
-        parentObj.FZero = parentObj.FSubtract = false;
+      function () {
+        var temp_value2 = this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24;
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        var temp_value = this.stackPointer + temp_value2 & 0xffff;
+        temp_value2 = this.stackPointer ^ temp_value2 ^ temp_value;
+        this.stackPointer = temp_value;
+        this.FCarry = (temp_value2 & 0x100) === 0x100;
+        this.FHalfCarry = (temp_value2 & 0x10) === 0x10;
+        this.FZero = this.FSubtract = false;
       },
       //JP, (HL)
       //#0xE9:
-      function (parentObj) {
-        parentObj.programCounter = parentObj.registersHL;
+      function () {
+        this.programCounter = this.registersHL;
       },
       //LD n, A
       //#0xEA:
-      function (parentObj) {
-        parentObj.memoryWrite(parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter), parentObj.registerA);
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.memoryWrite(this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]), this.registerA);
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //0xEB - Illegal
       //#0xEB:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xEB called, pausing emulation.", 2);
         pause();
       },
       //0xEC - Illegal
       //#0xEC:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xEC called, pausing emulation.", 2);
         pause();
       },
       //0xED - Illegal
       //#0xED:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xED called, pausing emulation.", 2);
         pause();
       },
       //XOR n
       //#0xEE:
-      function (parentObj) {
-        parentObj.registerA ^= parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.FSubtract = parentObj.FHalfCarry = parentObj.FCarry = false;
+      function () {
+        this.registerA ^= this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FZero = this.registerA === 0;
+        this.FSubtract = this.FHalfCarry = this.FCarry = false;
       },
       //RST 0x28
       //#0xEF:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x28;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x28;
       },
       //LDH A, (n)
       //#0xF0:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryHighRead(parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter));
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
+      function () {
+        this.registerA = this.memoryHighRead(this.memoryReader[this.programCounter].apply(this, [this.programCounter]));
+        this.programCounter = this.programCounter + 1 & 0xffff;
       },
       //POP AF
       //#0xF1:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.stackPointer](parentObj, parentObj.stackPointer);
-        parentObj.FZero = temp_var > 0x7F;
-        parentObj.FSubtract = (temp_var & 0x40) === 0x40;
-        parentObj.FHalfCarry = (temp_var & 0x20) === 0x20;
-        parentObj.FCarry = (temp_var & 0x10) === 0x10;
-        parentObj.registerA = parentObj.memoryRead(parentObj.stackPointer + 1 & 0xFFFF);
-        parentObj.stackPointer = parentObj.stackPointer + 2 & 0xFFFF;
+      function () {
+        var temp_var = this.memoryReader[this.stackPointer].apply(this, [this.stackPointer]);
+        this.FZero = temp_var > 0x7f;
+        this.FSubtract = (temp_var & 0x40) === 0x40;
+        this.FHalfCarry = (temp_var & 0x20) === 0x20;
+        this.FCarry = (temp_var & 0x10) === 0x10;
+        this.registerA = this.memoryRead(this.stackPointer + 1 & 0xffff);
+        this.stackPointer = this.stackPointer + 2 & 0xffff;
       },
       //LD A, (0xFF00 + C)
       //#0xF2:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryHighReader[parentObj.registerC](parentObj, parentObj.registerC);
+      function () {
+        this.registerA = this.memoryHighReader[this.registerC].apply(this, [this.registerC]);
       },
       //DI
       //#0xF3:
-      function (parentObj) {
-        parentObj.IME = false;
-        parentObj.IRQEnableDelay = 0;
+      function () {
+        this.IME = false;
+        this.IRQEnableDelay = 0;
       },
       //0xF4 - Illegal
       //#0xF4:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xF4 called, pausing emulation.", 2);
         pause();
       },
       //PUSH AF
       //#0xF5:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.registerA);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, (parentObj.FZero ? 0x80 : 0) | (parentObj.FSubtract ? 0x40 : 0) | (parentObj.FHalfCarry ? 0x20 : 0) | (parentObj.FCarry ? 0x10 : 0));
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.registerA]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, (this.FZero ? 0x80 : 0) | (this.FSubtract ? 0x40 : 0) | (this.FHalfCarry ? 0x20 : 0) | (this.FCarry ? 0x10 : 0)]);
       },
       //OR n
       //#0xF6:
-      function (parentObj) {
-        parentObj.registerA |= parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.FZero = parentObj.registerA === 0;
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FSubtract = parentObj.FCarry = parentObj.FHalfCarry = false;
+      function () {
+        this.registerA |= this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.FZero = this.registerA === 0;
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FSubtract = this.FCarry = this.FHalfCarry = false;
       },
       //RST 0x30
       //#0xF7:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x30;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x30;
       },
       //LDHL SP, n
       //#0xF8:
-      function (parentObj) {
-        var temp_var = parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) << 24 >> 24;
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.registersHL = parentObj.stackPointer + temp_var & 0xFFFF;
-        temp_var = parentObj.stackPointer ^ temp_var ^ parentObj.registersHL;
-        parentObj.FCarry = (temp_var & 0x100) === 0x100;
-        parentObj.FHalfCarry = (temp_var & 0x10) === 0x10;
-        parentObj.FZero = parentObj.FSubtract = false;
+      function () {
+        var temp_var = this.memoryReader[this.programCounter].apply(this, [this.programCounter]) << 24 >> 24;
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.registersHL = this.stackPointer + temp_var & 0xffff;
+        temp_var = this.stackPointer ^ temp_var ^ this.registersHL;
+        this.FCarry = (temp_var & 0x100) === 0x100;
+        this.FHalfCarry = (temp_var & 0x10) === 0x10;
+        this.FZero = this.FSubtract = false;
       },
       //LD SP, HL
       //#0xF9:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.registersHL;
+      function () {
+        this.stackPointer = this.registersHL;
       },
       //LD A, (nn)
       //#0xFA:
-      function (parentObj) {
-        parentObj.registerA = parentObj.memoryRead(parentObj.memoryRead(parentObj.programCounter + 1 & 0xFFFF) << 8 | parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter));
-        parentObj.programCounter = parentObj.programCounter + 2 & 0xFFFF;
+      function () {
+        this.registerA = this.memoryRead(this.memoryRead(this.programCounter + 1 & 0xffff) << 8 | this.memoryReader[this.programCounter].apply(this, [this.programCounter]));
+        this.programCounter = this.programCounter + 2 & 0xffff;
       },
       //EI
       //#0xFB:
-      function (parentObj) {
+      function () {
         //Immediate for HALT:
-        parentObj.IRQEnableDelay = parentObj.IRQEnableDelay === 2 || parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter) === 0x76 ? 1 : 2;
+        this.IRQEnableDelay = this.IRQEnableDelay === 2 || this.memoryReader[this.programCounter].apply(this, [this.programCounter]) === 0x76 ? 1 : 2;
       },
       //0xFC - Illegal
       //#0xFC:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xFC called, pausing emulation.", 2);
         pause();
       },
       //0xFD - Illegal
       //#0xFD:
-      function (parentObj) {
+      function () {
         console.log("Illegal op code 0xFD called, pausing emulation.", 2);
         pause();
       },
       //CP n
       //#0xFE:
-      function (parentObj) {
-        var dirtySum = parentObj.registerA - parentObj.memoryReader[parentObj.programCounter](parentObj, parentObj.programCounter);
-        parentObj.programCounter = parentObj.programCounter + 1 & 0xFFFF;
-        parentObj.FHalfCarry = (dirtySum & 0xF) > (parentObj.registerA & 0xF);
-        parentObj.FCarry = dirtySum < 0;
-        parentObj.FZero = dirtySum === 0;
-        parentObj.FSubtract = true;
+      function () {
+        var dirtySum = this.registerA - this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
+        this.programCounter = this.programCounter + 1 & 0xffff;
+        this.FHalfCarry = (dirtySum & 0xf) > (this.registerA & 0xf);
+        this.FCarry = dirtySum < 0;
+        this.FZero = dirtySum === 0;
+        this.FSubtract = true;
       },
       //RST 0x38
       //#0xFF:
-      function (parentObj) {
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter >> 8);
-        parentObj.stackPointer = parentObj.stackPointer - 1 & 0xFFFF;
-        parentObj.memoryWriter[parentObj.stackPointer](parentObj, parentObj.stackPointer, parentObj.programCounter & 0xFF);
-        parentObj.programCounter = 0x38;
+      function () {
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+        this.stackPointer = this.stackPointer - 1 & 0xffff;
+        this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
+        this.programCounter = 0x38;
       }];
       TickTable = [// Number of machine cycles for each instruction:
       /*   0,  1,  2,  3,  4,  5,  6,  7,      8,  9,  A, B,  C,  D, E,  F*/
@@ -17571,8 +17337,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.memoryWriteJumpCompile();
         this.initLCD();
         this.initSound();
-        this.noiseSampleTable = this.channel4BitRange === 0x7FFF ? this.LSFR15Table : this.LSFR7Table;
-        this.channel4VolumeShifter = this.channel4BitRange === 0x7FFF ? 15 : 7;
+        this.noiseSampleTable = this.channel4BitRange === 0x7fff ? this.LSFR15Table : this.LSFR7Table;
+        this.channel4VolumeShifter = this.channel4BitRange === 0x7fff ? 15 : 7;
       };
       GameBoyCore.prototype.returnFromRTCState = function () {
         if (typeof this.openRTC === "function" && this.cartridgeSlot.cartridge.cTIMER) {
@@ -17635,7 +17401,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       GameBoyCore.prototype.initMemory = function () {
         //Initialize the RAM:
         this.memory = util.getTypedArray(0x10000, 0, "uint8");
-        this.frameBuffer = util.getTypedArray(23040, 0xF8F8F8, "int32");
+        this.frameBuffer = util.getTypedArray(23040, 0xf8f8f8, "int32");
         this.BGCHRBank1 = util.getTypedArray(0x800, 0, "uint8");
         this.TickTable = util.toTypedArray(this.TickTable, "uint8");
         this.SecondaryTickTable = util.toTypedArray(this.SecondaryTickTable, "uint8");
@@ -17652,10 +17418,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       GameBoyCore.prototype.initSkipBootstrap = function () {
         //Fill in the boot ROM set register values
         //Default values to the GB boot ROM values, then fill in the GBC boot ROM values after ROM loading
-        var index = 0xFF;
+        var index = 0xff;
         while (index >= 0) {
           if (index >= 0x30 && index < 0x40) {
-            this.memoryWrite(0xFF00 | index, PostBootRegisterState[index]);
+            this.memoryWrite(0xff00 | index, PostBootRegisterState[index]);
           } else {
             switch (index) {
               case 0x00:
@@ -17663,25 +17429,25 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               case 0x02:
               case 0x05:
               case 0x07:
-              case 0x0F:
-              case 0xFF:
-                this.memoryWrite(0xFF00 | index, PostBootRegisterState[index]);
+              case 0x0f:
+              case 0xff:
+                this.memoryWrite(0xff00 | index, PostBootRegisterState[index]);
                 break;
               default:
-                this.memory[0xFF00 | index] = PostBootRegisterState[index];
+                this.memory[0xff00 | index] = PostBootRegisterState[index];
             }
           }
           --index;
         }
 
         if (this.cartridgeSlot.cartridge.cGBC) {
-          this.memory[0xFF6C] = 0xFE;
-          this.memory[0xFF74] = 0xFE;
+          this.memory[0xff6c] = 0xfe;
+          this.memory[0xff74] = 0xfe;
         } else {
-          this.memory[0xFF48] = 0xFF;
-          this.memory[0xFF49] = 0xFF;
-          this.memory[0xFF6C] = 0xFF;
-          this.memory[0xFF74] = 0xFF;
+          this.memory[0xff48] = 0xff;
+          this.memory[0xff49] = 0xff;
+          this.memory[0xff6c] = 0xff;
+          this.memory[0xff74] = 0xff;
         }
 
         //Start as an unset device:
@@ -17690,12 +17456,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.registerB = 0;
         this.registerC = 0x13;
         this.registerD = 0;
-        this.registerE = 0xD8;
+        this.registerE = 0xd8;
         this.FZero = true;
         this.FSubtract = false;
         this.FHalfCarry = true;
         this.FCarry = true;
-        this.registersHL = 0x014D;
+        this.registersHL = 0x014d;
         this.LCDCONTROL = this.LINECONTROL;
         this.IME = false;
         this.IRQLineMatched = 0;
@@ -17752,7 +17518,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel4envelopeSweeps = 0;
         this.channel4envelopeSweepsLast = 0;
         this.channel4consecutive = true;
-        this.channel4BitRange = 0x7FFF;
+        this.channel4BitRange = 0x7fff;
         this.channel4VolumeShifter = 15;
         this.channel1FrequencyCounter = 0x200;
         this.channel2FrequencyCounter = 0x200;
@@ -17823,7 +17589,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel4consecutive = this.channel2consecutive = this.channel1consecutive = false;
         this.VinLeftChannelMasterVolume = 8;
         this.VinRightChannelMasterVolume = 8;
-        this.memory[0xFF00] = 0xF; //Set the joypad state.
+        this.memory[0xff00] = 0xf; //Set the joypad state.
       };
       GameBoyCore.prototype.disableBootROM = function () {
         //Remove any traces of the boot ROM from ROM memory.
@@ -17862,7 +17628,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       GameBoyCore.prototype.JoyPadEvent = function (key, down) {
         if (down) {
-          this.JoyPad &= 0xFF ^ 1 << key;
+          this.JoyPad &= 0xff ^ 1 << key;
           if (this.cartridgeSlot.cartridge && !this.cartridgeSlot.cartridge.cGBC && (!this.usedBootROM || !this.usedGBCBootROM)) {
             this.interruptsRequested |= 0x10; //A real GBC doesn't set this!
             this.remainingClocks = 0;
@@ -17871,22 +17637,22 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else {
           this.JoyPad |= 1 << key;
         }
-        this.memory[0xFF00] = (this.memory[0xFF00] & 0x30) + (((this.memory[0xFF00] & 0x20) === 0 ? this.JoyPad >> 4 : 0xF) & ((this.memory[0xFF00] & 0x10) === 0 ? this.JoyPad & 0xF : 0xF));
+        this.memory[0xff00] = (this.memory[0xff00] & 0x30) + (((this.memory[0xff00] & 0x20) === 0 ? this.JoyPad >> 4 : 0xf) & ((this.memory[0xff00] & 0x10) === 0 ? this.JoyPad & 0xf : 0xf));
         this.CPUStopped = false;
       };
       GameBoyCore.prototype.GyroEvent = function (x, y) {
         x *= -100;
         x += 2047;
         this.highX = x >> 8;
-        this.lowX = x & 0xFF;
+        this.lowX = x & 0xff;
         y *= -100;
         y += 2047;
         this.highY = y >> 8;
-        this.lowY = y & 0xFF;
+        this.lowY = y & 0xff;
       };
       GameBoyCore.prototype.initSound = function () {
-        this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xFFFF / 0x1E0)), 1);
-        this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xF0);
+        this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xffff / 0x1e0)), 1);
+        this.downSampleInputDivider = 1 / (this.audioResamplerFirstPassFactor * 0xf0);
 
         // TODO: create sound controller
         // TODO: separate turn sound off / on
@@ -17917,8 +17683,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         var randomFactor = 1;
         //15-bit LSFR Cache Generation:
         this.LSFR15Table = util.getTypedArray(0x80000, 0, "int8");
-        var LSFR = 0x7FFF; //Seed value has all its bits set.
-        var LSFRShifted = 0x3FFF;
+        var LSFR = 0x7fff; //Seed value has all its bits set.
+        var LSFRShifted = 0x3fff;
         for (var index = 0; index < 0x8000; ++index) {
           //Normalize the last LSFR value for usage:
           randomFactor = 1 - (LSFR & 1); //Docs say it's the inverse.
@@ -17932,19 +17698,19 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.LSFR15Table[0x38000 | index] = randomFactor * 0x7;
           this.LSFR15Table[0x40000 | index] = randomFactor * 0x8;
           this.LSFR15Table[0x48000 | index] = randomFactor * 0x9;
-          this.LSFR15Table[0x50000 | index] = randomFactor * 0xA;
-          this.LSFR15Table[0x58000 | index] = randomFactor * 0xB;
-          this.LSFR15Table[0x60000 | index] = randomFactor * 0xC;
-          this.LSFR15Table[0x68000 | index] = randomFactor * 0xD;
-          this.LSFR15Table[0x70000 | index] = randomFactor * 0xE;
-          this.LSFR15Table[0x78000 | index] = randomFactor * 0xF;
+          this.LSFR15Table[0x50000 | index] = randomFactor * 0xa;
+          this.LSFR15Table[0x58000 | index] = randomFactor * 0xb;
+          this.LSFR15Table[0x60000 | index] = randomFactor * 0xc;
+          this.LSFR15Table[0x68000 | index] = randomFactor * 0xd;
+          this.LSFR15Table[0x70000 | index] = randomFactor * 0xe;
+          this.LSFR15Table[0x78000 | index] = randomFactor * 0xf;
           //Recompute the LSFR algorithm:
           LSFRShifted = LSFR >> 1;
           LSFR = LSFRShifted | ((LSFRShifted ^ LSFR) & 0x1) << 14;
         }
         //7-bit LSFR Cache Generation:
         this.LSFR7Table = util.getTypedArray(0x800, 0, "int8");
-        LSFR = 0x7F; //Seed value has all its bits set.
+        LSFR = 0x7f; //Seed value has all its bits set.
         for (index = 0; index < 0x80; ++index) {
           //Normalize the last LSFR value for usage:
           randomFactor = 1 - (LSFR & 1); //Docs say it's the inverse.
@@ -17958,12 +17724,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.LSFR7Table[0x380 | index] = randomFactor * 0x7;
           this.LSFR7Table[0x400 | index] = randomFactor * 0x8;
           this.LSFR7Table[0x480 | index] = randomFactor * 0x9;
-          this.LSFR7Table[0x500 | index] = randomFactor * 0xA;
-          this.LSFR7Table[0x580 | index] = randomFactor * 0xB;
-          this.LSFR7Table[0x600 | index] = randomFactor * 0xC;
-          this.LSFR7Table[0x680 | index] = randomFactor * 0xD;
-          this.LSFR7Table[0x700 | index] = randomFactor * 0xE;
-          this.LSFR7Table[0x780 | index] = randomFactor * 0xF;
+          this.LSFR7Table[0x500 | index] = randomFactor * 0xa;
+          this.LSFR7Table[0x580 | index] = randomFactor * 0xb;
+          this.LSFR7Table[0x600 | index] = randomFactor * 0xc;
+          this.LSFR7Table[0x680 | index] = randomFactor * 0xd;
+          this.LSFR7Table[0x700 | index] = randomFactor * 0xe;
+          this.LSFR7Table[0x780 | index] = randomFactor * 0xf;
           //Recompute the LSFR algorithm:
           LSFRShifted = LSFR >> 1;
           LSFR = LSFRShifted | ((LSFRShifted ^ LSFR) & 0x1) << 6;
@@ -18024,7 +17790,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel4envelopeSweeps = 0;
         this.channel4envelopeSweepsLast = 0;
         this.channel4consecutive = true;
-        this.channel4BitRange = 0x7FFF;
+        this.channel4BitRange = 0x7fff;
         this.noiseSampleTable = this.LSFR15Table;
         this.channel4VolumeShifter = 15;
         this.channel1FrequencyCounter = 0x2000;
@@ -18059,7 +17825,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       GameBoyCore.prototype.outputAudio = function () {
         this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput >>> 16) * this.downSampleInputDivider - 1;
-        this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput & 0xFFFF) * this.downSampleInputDivider - 1;
+        this.audioBuffer[this.audioDestinationPosition++] = (this.downsampleInput & 0xffff) * this.downSampleInputDivider - 1;
         if (this.audioDestinationPosition === this.numSamplesTotal) {
           this.audioServer.writeAudio(this.audioBuffer);
           this.audioDestinationPosition = 0;
@@ -18161,7 +17927,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else if (this.channel1totalLength === 1) {
           this.channel1totalLength = 0;
           this.channel1EnableCheck();
-          this.memory[0xFF26] &= 0xFE; //Channel #1 On Flag Off
+          this.memory[0xff26] &= 0xfe; //Channel #1 On Flag Off
         }
         //Channel 2:
         if (this.channel2totalLength > 1) {
@@ -18169,7 +17935,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else if (this.channel2totalLength === 1) {
           this.channel2totalLength = 0;
           this.channel2EnableCheck();
-          this.memory[0xFF26] &= 0xFD; //Channel #2 On Flag Off
+          this.memory[0xff26] &= 0xfd; //Channel #2 On Flag Off
         }
         //Channel 3:
         if (this.channel3totalLength > 1) {
@@ -18177,7 +17943,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else if (this.channel3totalLength === 1) {
           this.channel3totalLength = 0;
           this.channel3EnableCheck();
-          this.memory[0xFF26] &= 0xFB; //Channel #3 On Flag Off
+          this.memory[0xff26] &= 0xfb; //Channel #3 On Flag Off
         }
         //Channel 4:
         if (this.channel4totalLength > 1) {
@@ -18185,7 +17951,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else if (this.channel4totalLength === 1) {
           this.channel4totalLength = 0;
           this.channel4EnableCheck();
-          this.memory[0xFF26] &= 0xF7; //Channel #4 On Flag Off
+          this.memory[0xff26] &= 0xf7; //Channel #4 On Flag Off
         }
       };
       GameBoyCore.prototype.clockAudioSweep = function () {
@@ -18203,24 +17969,24 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.channel1Swept = true;
             if (this.channel1decreaseSweep) {
               this.channel1ShadowFrequency -= this.channel1ShadowFrequency >> this.channel1frequencySweepDivider;
-              this.channel1frequency = this.channel1ShadowFrequency & 0x7FF;
+              this.channel1frequency = this.channel1ShadowFrequency & 0x7ff;
               this.channel1FrequencyTracker = 0x800 - this.channel1frequency << 2;
             } else {
               this.channel1ShadowFrequency += this.channel1ShadowFrequency >> this.channel1frequencySweepDivider;
               this.channel1frequency = this.channel1ShadowFrequency;
-              if (this.channel1ShadowFrequency <= 0x7FF) {
+              if (this.channel1ShadowFrequency <= 0x7ff) {
                 this.channel1FrequencyTracker = 0x800 - this.channel1frequency << 2;
                 //Run overflow check twice:
-                if (this.channel1ShadowFrequency + (this.channel1ShadowFrequency >> this.channel1frequencySweepDivider) > 0x7FF) {
+                if (this.channel1ShadowFrequency + (this.channel1ShadowFrequency >> this.channel1frequencySweepDivider) > 0x7ff) {
                   this.channel1SweepFault = true;
                   this.channel1EnableCheck();
-                  this.memory[0xFF26] &= 0xFE; //Channel #1 On Flag Off
+                  this.memory[0xff26] &= 0xfe; //Channel #1 On Flag Off
                 }
               } else {
-                this.channel1frequency &= 0x7FF;
+                this.channel1frequency &= 0x7ff;
                 this.channel1SweepFault = true;
                 this.channel1EnableCheck();
-                this.memory[0xFF26] &= 0xFE; //Channel #1 On Flag Off
+                this.memory[0xff26] &= 0xfe; //Channel #1 On Flag Off
               }
             }
             this.channel1timeSweep = this.channel1lastTimeSweep;
@@ -18236,17 +18002,17 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         if (this.channel1frequencySweepDivider > 0) {
           if (!this.channel1decreaseSweep) {
             var channel1ShadowFrequency = this.channel1ShadowFrequency + (this.channel1ShadowFrequency >> this.channel1frequencySweepDivider);
-            if (channel1ShadowFrequency <= 0x7FF) {
+            if (channel1ShadowFrequency <= 0x7ff) {
               //Run overflow check twice:
-              if (channel1ShadowFrequency + (channel1ShadowFrequency >> this.channel1frequencySweepDivider) > 0x7FF) {
+              if (channel1ShadowFrequency + (channel1ShadowFrequency >> this.channel1frequencySweepDivider) > 0x7ff) {
                 this.channel1SweepFault = true;
                 this.channel1EnableCheck();
-                this.memory[0xFF26] &= 0xFE; //Channel #1 On Flag Off
+                this.memory[0xff26] &= 0xfe; //Channel #1 On Flag Off
               }
             } else {
               this.channel1SweepFault = true;
               this.channel1EnableCheck();
-              this.memory[0xFF26] &= 0xFE; //Channel #1 On Flag Off
+              this.memory[0xff26] &= 0xfe; //Channel #1 On Flag Off
             }
           }
         }
@@ -18265,7 +18031,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               } else {
                 this.channel1envelopeSweepsLast = -1;
               }
-            } else if (this.channel1envelopeVolume < 0xF) {
+            } else if (this.channel1envelopeVolume < 0xf) {
               ++this.channel1envelopeVolume;
               this.channel1envelopeSweeps = this.channel1envelopeSweepsLast;
               this.channel1OutputLevelCache();
@@ -18287,7 +18053,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               } else {
                 this.channel2envelopeSweepsLast = -1;
               }
-            } else if (this.channel2envelopeVolume < 0xF) {
+            } else if (this.channel2envelopeVolume < 0xf) {
               ++this.channel2envelopeVolume;
               this.channel2envelopeSweeps = this.channel2envelopeSweepsLast;
               this.channel2OutputLevelCache();
@@ -18309,7 +18075,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               } else {
                 this.channel4envelopeSweepsLast = -1;
               }
-            } else if (this.channel4envelopeVolume < 0xF) {
+            } else if (this.channel4envelopeVolume < 0xf) {
               this.channel4currentVolume = ++this.channel4envelopeVolume << this.channel4VolumeShifter;
               this.channel4envelopeSweeps = this.channel4envelopeSweepsLast;
               this.channel4UpdateCache();
@@ -18340,7 +18106,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         //Channel 3 counter:
         if (this.channel3Counter === 0) {
           if (this.channel3canPlay) {
-            this.channel3lastSampleLookup = this.channel3lastSampleLookup + 1 & 0x1F;
+            this.channel3lastSampleLookup = this.channel3lastSampleLookup + 1 & 0x1f;
           }
           this.channel3Counter = this.channel3FrequencyPeriod;
           this.channel3UpdateCache();
@@ -18359,7 +18125,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel1OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel1VolumeEnableCheck = function () {
-        this.channel1canPlay = this.memory[0xFF12] > 7;
+        this.channel1canPlay = this.memory[0xff12] > 7;
         this.channel1EnableCheck();
         this.channel1OutputLevelSecondaryCache();
       };
@@ -18393,7 +18159,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel2OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel2VolumeEnableCheck = function () {
-        this.channel2canPlay = this.memory[0xFF17] > 7;
+        this.channel2canPlay = this.memory[0xff17] > 7;
         this.channel2EnableCheck();
         this.channel2OutputLevelSecondaryCache();
       };
@@ -18423,7 +18189,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.mixerOutputLevelCache();
       };
       GameBoyCore.prototype.channel3EnableCheck = function () {
-        this.channel3Enabled = /*this.channel3canPlay && */this.channel3consecutive || this.channel3totalLength > 0;
+        this.channel3Enabled /*this.channel3canPlay && */ = this.channel3consecutive || this.channel3totalLength > 0;
         this.channel3OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel3OutputLevelCache = function () {
@@ -18446,7 +18212,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel4OutputLevelSecondaryCache();
       };
       GameBoyCore.prototype.channel4VolumeEnableCheck = function () {
-        this.channel4canPlay = this.memory[0xFF21] > 7;
+        this.channel4canPlay = this.memory[0xff21] > 7;
         this.channel4EnableCheck();
         this.channel4OutputLevelSecondaryCache();
       };
@@ -18477,10 +18243,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.audioJIT();
           //address = this.channel3lastSampleLookup >> 1;
         }
-        this.memory[0xFF30 | address] = data;
+        this.memory[0xff30 | address] = data;
         address <<= 1;
         this.channel3PCM[address] = data >> 4;
-        this.channel3PCM[address | 1] = data & 0xF;
+        this.channel3PCM[address | 1] = data & 0xf;
       };
       GameBoyCore.prototype.channel4UpdateCache = function () {
         this.cachedChannel4Sample = this.noiseSampleTable[this.channel4currentVolume | this.channel4lastSampleLookup];
@@ -18524,7 +18290,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       GameBoyCore.prototype.executeIteration = function () {
         //Iterate the interpreter loop:
-        var opcodeToExecute = 0;
+        var operationCode = 0;
         var timedTicks = 0;
         while (this.stopEmulator === 0) {
           //Interrupt Arming:
@@ -18541,19 +18307,19 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.launchIRQ();
           }
           //Fetch the current opcode:
-          opcodeToExecute = this.memoryReader[this.programCounter](this, this.programCounter);
+          operationCode = this.memoryReader[this.programCounter].apply(this, [this.programCounter]);
           //Increment the program counter to the next instruction:
-          this.programCounter = this.programCounter + 1 & 0xFFFF;
+          this.programCounter = this.programCounter + 1 & 0xffff;
           //Check for the program counter quirk:
           if (this.skipPCIncrement) {
-            this.programCounter = this.programCounter - 1 & 0xFFFF;
+            this.programCounter = this.programCounter - 1 & 0xffff;
             this.skipPCIncrement = false;
           }
           //Get how many CPU cycles the current instruction counts for:
-          this.CPUTicks = this.TickTable[opcodeToExecute];
+          this.CPUTicks = this.TickTable[operationCode];
 
           //Execute the current instruction:
-          instructionSet[opcodeToExecute](this);
+          mainInstructions[operationCode].apply(this);
 
           //Update the state (Inlined updateCoreFull manually here):
           //Update the clocking for the LCD emulation:
@@ -18571,8 +18337,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.timerTicks += this.CPUTicks;
             while (this.timerTicks >= this.TACClocker) {
               this.timerTicks -= this.TACClocker;
-              if (++this.memory[0xFF05] === 0x100) {
-                this.memory[0xFF05] = this.memory[0xFF06];
+              if (++this.memory[0xff05] === 0x100) {
+                this.memory[0xff05] = this.memory[0xff06];
                 this.interruptsRequested |= 0x4;
                 this.checkIRQMatching();
               }
@@ -18590,7 +18356,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.serialShiftTimer -= this.CPUTicks;
             if (this.serialShiftTimer <= 0) {
               this.serialShiftTimer = this.serialShiftTimerAllocated;
-              this.memory[0xFF01] = this.memory[0xFF01] << 1 & 0xFE | 0x01; //We could shift in actual link data here if we were to implement such!!!
+              this.memory[0xff01] = this.memory[0xff01] << 1 & 0xfe | 0x01; //We could shift in actual link data here if we were to implement such!!!
             }
           }
           //End of iteration routine:
@@ -18603,8 +18369,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         if ((this.stopEmulator & 0x1) === 0) {
           this.audioJIT(); //Make sure we at least output once per iteration.
           //Update DIV Alignment (Integer overflow safety):
-          this.memory[0xFF04] = this.memory[0xFF04] + (this.DIVTicks >> 8) & 0xFF;
-          this.DIVTicks &= 0xFF;
+          this.memory[0xff04] = this.memory[0xff04] + (this.DIVTicks >> 8) & 0xff;
+          this.DIVTicks &= 0xff;
           //Update emulator flags:
           this.stopEmulator |= 1; //End current loop.
           this.emulatorTicks -= this.CPUCyclesTotal;
@@ -18679,13 +18445,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.clocksUntilLYCMatch = function () {
-        if (this.memory[0xFF45] != 0) {
-          if (this.memory[0xFF45] > this.actualScanLine) {
-            return 456 * (this.memory[0xFF45] - this.actualScanLine);
+        if (this.memory[0xff45] != 0) {
+          if (this.memory[0xff45] > this.actualScanLine) {
+            return 456 * (this.memory[0xff45] - this.actualScanLine);
           }
-          return 456 * (154 - this.actualScanLine + this.memory[0xFF45]);
+          return 456 * (154 - this.actualScanLine + this.memory[0xff45]);
         }
-        return 456 * (this.actualScanLine === 153 && this.memory[0xFF44] === 0 ? 154 : 153 - this.actualScanLine) + 8;
+        return 456 * (this.actualScanLine === 153 && this.memory[0xff44] === 0 ? 154 : 153 - this.actualScanLine) + 8;
       };
       GameBoyCore.prototype.clocksUntilMode0 = function () {
         switch (this.modeSTAT) {
@@ -18712,7 +18478,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           var lineAdjusted = line + 0x10;
           var yoffset = 0;
           var yCap = this.gfxSpriteNormalHeight ? 0x8 : 0x10;
-          for (var OAMAddress = 0xFE00; OAMAddress < 0xFEA0 && this.spriteCount < 312; OAMAddress += 4) {
+          for (var OAMAddress = 0xfe00; OAMAddress < 0xfea0 && this.spriteCount < 312; OAMAddress += 4) {
             yoffset = lineAdjusted - this.memory[OAMAddress];
             if (yoffset > -1 && yoffset < yCap) {
               this.spriteCount += 6;
@@ -18722,14 +18488,14 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       GameBoyCore.prototype.matchLYC = function () {
         //LYC Register Compare
-        if (this.memory[0xFF44] === this.memory[0xFF45]) {
-          this.memory[0xFF41] |= 0x04;
+        if (this.memory[0xff44] === this.memory[0xff45]) {
+          this.memory[0xff41] |= 0x04;
           if (this.LYCMatchTriggerSTAT) {
             this.interruptsRequested |= 0x2;
             this.checkIRQMatching();
           }
         } else {
-          this.memory[0xFF41] &= 0x7B;
+          this.memory[0xff41] &= 0x7b;
         }
       };
       GameBoyCore.prototype.updateCore = function () {
@@ -18747,8 +18513,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.timerTicks += this.CPUTicks;
           while (this.timerTicks >= this.TACClocker) {
             this.timerTicks -= this.TACClocker;
-            if (++this.memory[0xFF05] === 0x100) {
-              this.memory[0xFF05] = this.memory[0xFF06];
+            if (++this.memory[0xff05] === 0x100) {
+              this.memory[0xff05] = this.memory[0xff06];
               this.interruptsRequested |= 0x4;
               this.checkIRQMatching();
             }
@@ -18766,7 +18532,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.serialShiftTimer -= this.CPUTicks;
           if (this.serialShiftTimer <= 0) {
             this.serialShiftTimer = this.serialShiftTimerAllocated;
-            this.memory[0xFF01] = this.memory[0xFF01] << 1 & 0xFE | 0x01; //We could shift in actual link data here if we were to implement such!!!
+            this.memory[0xff01] = this.memory[0xff01] << 1 & 0xfe | 0x01; //We could shift in actual link data here if we were to implement such!!!
           }
         }
       };
@@ -18779,160 +18545,162 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.initializeLCDController = function () {
+        var _this = this;
+
         //Display on hanlding:
         var line = 0;
         while (line < 154) {
           if (line < 143) {
             //We're on a normal scan line:
-            this.LINECONTROL[line] = function (parentObj) {
-              if (parentObj.LCDTicks < 80) {
-                parentObj.scanLineMode2();
-              } else if (parentObj.LCDTicks < 252) {
-                parentObj.scanLineMode3();
-              } else if (parentObj.LCDTicks < 456) {
-                parentObj.scanLineMode0();
+            this.LINECONTROL[line] = function () {
+              if (_this.LCDTicks < 80) {
+                _this.scanLineMode2();
+              } else if (_this.LCDTicks < 252) {
+                _this.scanLineMode3();
+              } else if (_this.LCDTicks < 456) {
+                _this.scanLineMode0();
               } else {
                 //We're on a new scan line:
-                parentObj.LCDTicks -= 456;
-                if (parentObj.STATTracker != 3) {
+                _this.LCDTicks -= 456;
+                if (_this.STATTracker != 3) {
                   //Make sure the mode 0 handler was run at least once per scan line:
-                  if (parentObj.STATTracker != 2) {
-                    if (parentObj.STATTracker === 0 && parentObj.mode2TriggerSTAT) {
-                      parentObj.interruptsRequested |= 0x2;
+                  if (_this.STATTracker != 2) {
+                    if (_this.STATTracker === 0 && _this.mode2TriggerSTAT) {
+                      _this.interruptsRequested |= 0x2;
                     }
-                    parentObj.incrementScanLineQueue();
+                    _this.incrementScanLineQueue();
                   }
-                  if (parentObj.hdmaRunning) {
-                    parentObj.executeHDMA();
+                  if (_this.hdmaRunning) {
+                    _this.executeHDMA();
                   }
-                  if (parentObj.mode0TriggerSTAT) {
-                    parentObj.interruptsRequested |= 0x2;
+                  if (_this.mode0TriggerSTAT) {
+                    _this.interruptsRequested |= 0x2;
                   }
                 }
 
                 //Update the scanline registers and assert the LYC counter:
-                parentObj.actualScanLine = ++parentObj.memory[0xFF44];
+                _this.actualScanLine = ++_this.memory[0xff44];
 
                 //Perform a LYC counter assert:
-                if (parentObj.actualScanLine === parentObj.memory[0xFF45]) {
-                  parentObj.memory[0xFF41] |= 0x04;
-                  if (parentObj.LYCMatchTriggerSTAT) {
-                    parentObj.interruptsRequested |= 0x2;
+                if (_this.actualScanLine === _this.memory[0xff45]) {
+                  _this.memory[0xff41] |= 0x04;
+                  if (_this.LYCMatchTriggerSTAT) {
+                    _this.interruptsRequested |= 0x2;
                   }
                 } else {
-                  parentObj.memory[0xFF41] &= 0x7B;
+                  _this.memory[0xff41] &= 0x7b;
                 }
-                parentObj.checkIRQMatching();
+                _this.checkIRQMatching();
                 //Reset our mode contingency variables:
-                parentObj.STATTracker = 0;
-                parentObj.modeSTAT = 2;
-                parentObj.LINECONTROL[parentObj.actualScanLine](parentObj); //Scan Line and STAT Mode Control.
+                _this.STATTracker = 0;
+                _this.modeSTAT = 2;
+                _this.LINECONTROL[_this.actualScanLine].apply(_this); //Scan Line and STAT Mode Control.
               }
             };
           } else if (line === 143) {
             //We're on the last visible scan line of the LCD screen:
-            this.LINECONTROL[143] = function (parentObj) {
-              if (parentObj.LCDTicks < 80) {
-                parentObj.scanLineMode2();
-              } else if (parentObj.LCDTicks < 252) {
-                parentObj.scanLineMode3();
-              } else if (parentObj.LCDTicks < 456) {
-                parentObj.scanLineMode0();
+            this.LINECONTROL[143] = function () {
+              if (_this.LCDTicks < 80) {
+                _this.scanLineMode2();
+              } else if (_this.LCDTicks < 252) {
+                _this.scanLineMode3();
+              } else if (_this.LCDTicks < 456) {
+                _this.scanLineMode0();
               } else {
                 //Starting V-Blank:
                 //Just finished the last visible scan line:
-                parentObj.LCDTicks -= 456;
-                if (parentObj.STATTracker != 3) {
+                _this.LCDTicks -= 456;
+                if (_this.STATTracker != 3) {
                   //Make sure the mode 0 handler was run at least once per scan line:
-                  if (parentObj.STATTracker != 2) {
-                    if (parentObj.STATTracker === 0 && parentObj.mode2TriggerSTAT) {
-                      parentObj.interruptsRequested |= 0x2;
+                  if (_this.STATTracker != 2) {
+                    if (_this.STATTracker === 0 && _this.mode2TriggerSTAT) {
+                      _this.interruptsRequested |= 0x2;
                     }
-                    parentObj.incrementScanLineQueue();
+                    _this.incrementScanLineQueue();
                   }
-                  if (parentObj.hdmaRunning) {
-                    parentObj.executeHDMA();
+                  if (_this.hdmaRunning) {
+                    _this.executeHDMA();
                   }
-                  if (parentObj.mode0TriggerSTAT) {
-                    parentObj.interruptsRequested |= 0x2;
+                  if (_this.mode0TriggerSTAT) {
+                    _this.interruptsRequested |= 0x2;
                   }
                 }
                 //Update the scanline registers and assert the LYC counter:
-                parentObj.actualScanLine = parentObj.memory[0xFF44] = 144;
+                _this.actualScanLine = _this.memory[0xff44] = 144;
                 //Perform a LYC counter assert:
-                if (parentObj.memory[0xFF45] === 144) {
-                  parentObj.memory[0xFF41] |= 0x04;
-                  if (parentObj.LYCMatchTriggerSTAT) {
-                    parentObj.interruptsRequested |= 0x2;
+                if (_this.memory[0xff45] === 144) {
+                  _this.memory[0xff41] |= 0x04;
+                  if (_this.LYCMatchTriggerSTAT) {
+                    _this.interruptsRequested |= 0x2;
                   }
                 } else {
-                  parentObj.memory[0xFF41] &= 0x7B;
+                  _this.memory[0xff41] &= 0x7b;
                 }
                 //Reset our mode contingency variables:
-                parentObj.STATTracker = 0;
+                _this.STATTracker = 0;
                 //Update our state for v-blank:
-                parentObj.modeSTAT = 1;
-                parentObj.interruptsRequested |= parentObj.mode1TriggerSTAT ? 0x3 : 0x1;
-                parentObj.checkIRQMatching();
+                _this.modeSTAT = 1;
+                _this.interruptsRequested |= _this.mode1TriggerSTAT ? 0x3 : 0x1;
+                _this.checkIRQMatching();
                 //Attempt to blit out to our canvas:
-                if (parentObj.drewBlank === 0) {
+                if (_this.drewBlank === 0) {
                   //Ensure JIT framing alignment:
-                  if (parentObj.totalLinesPassed < 144 || parentObj.totalLinesPassed === 144 && parentObj.midScanlineOffset > -1) {
+                  if (_this.totalLinesPassed < 144 || _this.totalLinesPassed === 144 && _this.midScanlineOffset > -1) {
                     //Make sure our gfx are up-to-date:
-                    parentObj.graphicsJITVBlank();
+                    _this.graphicsJITVBlank();
                     //Draw the frame:
-                    parentObj.lcd.prepareFrame();
+                    _this.lcd.prepareFrame();
                   }
                 } else {
                   //LCD off takes at least 2 frames:
-                  --parentObj.drewBlank;
+                  --_this.drewBlank;
                 }
-                parentObj.LINECONTROL[144](parentObj); //Scan Line and STAT Mode Control.
+                _this.LINECONTROL[144].apply(_this); //Scan Line and STAT Mode Control.
               }
             };
           } else if (line < 153) {
             //In VBlank
-            this.LINECONTROL[line] = function (parentObj) {
-              if (parentObj.LCDTicks >= 456) {
+            this.LINECONTROL[line] = function () {
+              if (_this.LCDTicks >= 456) {
                 //We're on a new scan line:
-                parentObj.LCDTicks -= 456;
-                parentObj.actualScanLine = ++parentObj.memory[0xFF44];
+                _this.LCDTicks -= 456;
+                _this.actualScanLine = ++_this.memory[0xff44];
                 //Perform a LYC counter assert:
-                if (parentObj.actualScanLine === parentObj.memory[0xFF45]) {
-                  parentObj.memory[0xFF41] |= 0x04;
-                  if (parentObj.LYCMatchTriggerSTAT) {
-                    parentObj.interruptsRequested |= 0x2;
-                    parentObj.checkIRQMatching();
+                if (_this.actualScanLine === _this.memory[0xff45]) {
+                  _this.memory[0xff41] |= 0x04;
+                  if (_this.LYCMatchTriggerSTAT) {
+                    _this.interruptsRequested |= 0x2;
+                    _this.checkIRQMatching();
                   }
                 } else {
-                  parentObj.memory[0xFF41] &= 0x7B;
+                  _this.memory[0xff41] &= 0x7b;
                 }
-                parentObj.LINECONTROL[parentObj.actualScanLine](parentObj); //Scan Line and STAT Mode Control.
+                _this.LINECONTROL[_this.actualScanLine].apply(_this); //Scan Line and STAT Mode Control.
               }
             };
           } else {
             //VBlank Ending (We're on the last actual scan line)
-            this.LINECONTROL[153] = function (parentObj) {
-              if (parentObj.LCDTicks >= 8) {
-                if (parentObj.STATTracker != 4 && parentObj.memory[0xFF44] === 153) {
-                  parentObj.memory[0xFF44] = 0; //LY register resets to 0 early.
+            this.LINECONTROL[153] = function () {
+              if (_this.LCDTicks >= 8) {
+                if (_this.STATTracker != 4 && _this.memory[0xff44] === 153) {
+                  _this.memory[0xff44] = 0; //LY register resets to 0 early.
                   //Perform a LYC counter assert:
-                  if (parentObj.memory[0xFF45] === 0) {
-                    parentObj.memory[0xFF41] |= 0x04;
-                    if (parentObj.LYCMatchTriggerSTAT) {
-                      parentObj.interruptsRequested |= 0x2;
-                      parentObj.checkIRQMatching();
+                  if (_this.memory[0xff45] === 0) {
+                    _this.memory[0xff41] |= 0x04;
+                    if (_this.LYCMatchTriggerSTAT) {
+                      _this.interruptsRequested |= 0x2;
+                      _this.checkIRQMatching();
                     }
                   } else {
-                    parentObj.memory[0xFF41] &= 0x7B;
+                    _this.memory[0xff41] &= 0x7b;
                   }
-                  parentObj.STATTracker = 4;
+                  _this.STATTracker = 4;
                 }
-                if (parentObj.LCDTicks >= 456) {
+                if (_this.LCDTicks >= 456) {
                   //We reset back to the beginning:
-                  parentObj.LCDTicks -= 456;
-                  parentObj.STATTracker = parentObj.actualScanLine = 0;
-                  parentObj.LINECONTROL[0](parentObj); //Scan Line and STAT Mode Control.
+                  _this.LCDTicks -= 456;
+                  _this.STATTracker = _this.actualScanLine = 0;
+                  _this.LINECONTROL[0].apply(_this); //Scan Line and STAT Mode Control.
                 }
               }
             };
@@ -18951,11 +18719,11 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         } else {
           this.LCDTicks += 4 >> this.doubleSpeedShifter | 0x20; //LCD Timing Update For HDMA.
         }
-        if (this.memory[0xFF55] === 0) {
+        if (this.memory[0xff55] === 0) {
           this.hdmaRunning = false;
-          this.memory[0xFF55] = 0xFF; //Transfer completed ("Hidden last step," since some ROMs don't imply this, but most do).
+          this.memory[0xff55] = 0xff; //Transfer completed ("Hidden last step," since some ROMs don't imply this, but most do).
         } else {
-          --this.memory[0xFF55];
+          --this.memory[0xff55];
         }
       };
       GameBoyCore.prototype.clockUpdate = function () {
@@ -18994,7 +18762,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.WindowLayerRender(scanlineToRender);
         } else {
           var pixelLine = (scanlineToRender + 1) * 160;
-          var defaultColor = this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes ? 0xF8F8F8 : 0xEFFFDE;
+          var defaultColor = this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes ? 0xf8f8f8 : 0xefffde;
           for (var pixelPosition = scanlineToRender * 160 + this.currentX; pixelPosition < pixelLine; pixelPosition++) {
             this.frameBuffer[pixelPosition] = defaultColor;
           }
@@ -19012,6 +18780,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           if (this.LCDTicks >= 82) {
             this.pixelEnd = this.LCDTicks - 74;
             this.pixelEnd = Math.min(this.pixelEnd - this.midScanlineOffset - this.pixelEnd % 0x8, 160);
+
             if (this.bgEnabled) {
               this.pixelStart = this.lastUnrenderedLine * 160;
               this.BGLayerRender(this.lastUnrenderedLine);
@@ -19019,7 +18788,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               //TODO: Do midscanline JIT for sprites...
             } else {
               var pixelLine = this.lastUnrenderedLine * 160 + this.pixelEnd;
-              var defaultColor = this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes ? 0xF8F8F8 : 0xEFFFDE;
+              var defaultColor = this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes ? 0xf8f8f8 : 0xefffde;
               for (var pixelPosition = this.lastUnrenderedLine * 160 + this.currentX; pixelPosition < pixelLine; pixelPosition++) {
                 this.frameBuffer[pixelPosition] = defaultColor;
               }
@@ -19037,7 +18806,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.gbcBGPalette = util.getTypedArray(0x40, 0, "int32");
           this.BGCHRBank2 = util.getTypedArray(0x800, 0, "uint8");
           this.BGCHRCurrentBank = this.currVRAMBank > 0 ? this.BGCHRBank2 : this.BGCHRBank1;
-          this.tileCache = this.generateCacheArray(0xF80);
+          this.tileCache = this.generateCacheArray(0xf80);
         } else {
           this.gbOBJPalette = util.getTypedArray(8, 0, "int32");
           this.gbBGPalette = util.getTypedArray(4, 0, "int32");
@@ -19117,7 +18886,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.OAMAddressCache = util.getTypedArray(10, 0, "int32");
         } else {
           this.BGCHRCurrentBank = this.currVRAMBank > 0 ? this.BGCHRBank2 : this.BGCHRBank1;
-          this.tileCache = this.generateCacheArray(0xF80);
+          this.tileCache = this.generateCacheArray(0xf80);
           for (; tileIndex < 0x1800; tileIndex += 0x10) {
             this.generateGBCTileBank1(tileIndex);
             this.generateGBCTileBank2(tileIndex);
@@ -19127,9 +18896,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       GameBoyCore.prototype.RGBTint = function (value) {
         //Adjustment for the GBC's tinting (According to Gambatte):
-        var r = value & 0x1F;
-        var g = value >> 5 & 0x1F;
-        var b = value >> 10 & 0x1F;
+        var r = value & 0x1f;
+        var g = value >> 5 & 0x1f;
+        var b = value >> 10 & 0x1f;
         return r * 13 + g * 2 + b >> 1 << 16 | g * 3 + b << 9 | r * 3 + g * 2 + b * 11 >> 1;
       };
       GameBoyCore.prototype.getGBCColor = function () {
@@ -19150,9 +18919,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         //Update the palette entries:
         this.updateGBBGPalette = this.updateGBColorizedBGPalette;
         this.updateGBOBJPalette = this.updateGBColorizedOBJPalette;
-        this.updateGBBGPalette(this.memory[0xFF47]);
-        this.updateGBOBJPalette(0, this.memory[0xFF48]);
-        this.updateGBOBJPalette(1, this.memory[0xFF49]);
+        this.updateGBBGPalette(this.memory[0xff47]);
+        this.updateGBOBJPalette(0, this.memory[0xff48]);
+        this.updateGBOBJPalette(1, this.memory[0xff49]);
         this.colorizedGBPalettes = true;
       };
       GameBoyCore.prototype.updateGBRegularBGPalette = function (data) {
@@ -19186,13 +18955,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.gbcBGRawPalette[index] = data;
           if ((index & 0x06) === 0) {
             //Palette 0 (Special tile Priority stuff)
-            data = 0x2000000 | this.RGBTint(this.gbcBGRawPalette[index | 1] << 8 | this.gbcBGRawPalette[index & 0x3E]);
+            data = 0x2000000 | this.RGBTint(this.gbcBGRawPalette[index | 1] << 8 | this.gbcBGRawPalette[index & 0x3e]);
             index >>= 1;
             this.gbcBGPalette[index] = data;
             this.gbcBGPalette[0x20 | index] = 0x1000000 | data;
           } else {
             //Regular Palettes (No special crap)
-            data = this.RGBTint(this.gbcBGRawPalette[index | 1] << 8 | this.gbcBGRawPalette[index & 0x3E]);
+            data = this.RGBTint(this.gbcBGRawPalette[index | 1] << 8 | this.gbcBGRawPalette[index & 0x3e]);
             index >>= 1;
             this.gbcBGPalette[index] = data;
             this.gbcBGPalette[0x20 | index] = 0x1000000 | data;
@@ -19206,15 +18975,15 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           if ((index & 0x06) > 0) {
             //Regular Palettes (No special crap)
             this.midScanLineJIT();
-            this.gbcOBJPalette[index >> 1] = 0x1000000 | this.RGBTint(this.gbcOBJRawPalette[index | 1] << 8 | this.gbcOBJRawPalette[index & 0x3E]);
+            this.gbcOBJPalette[index >> 1] = 0x1000000 | this.RGBTint(this.gbcOBJRawPalette[index | 1] << 8 | this.gbcOBJRawPalette[index & 0x3e]);
           }
         }
       };
       GameBoyCore.prototype.BGGBLayerRender = function (scanlineToRender) {
-        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xFF; //The line of the BG we're at.
+        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xff; //The line of the BG we're at.
         var tileYLine = (scrollYAdjusted & 7) << 3;
-        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xF8) << 2; //The row of cached tiles we're fetching from.
-        var scrollXAdjusted = this.backgroundX + this.currentX & 0xFF; //The scroll amount of the BG.
+        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xf8) << 2; //The row of cached tiles we're fetching from.
+        var scrollXAdjusted = this.backgroundX + this.currentX & 0xff; //The scroll amount of the BG.
         var pixelPosition = this.pixelStart + this.currentX; //Current pixel we're working on.
         var pixelPositionEnd = this.pixelStart + (this.gfxWindowDisplay && scanlineToRender - this.windowY >= 0 ? Math.min(Math.max(this.windowX, 0) + this.currentX, this.pixelEnd) : this.pixelEnd); //Make sure we do at most 160 pixels a scanline.
         var tileNumber = tileYDown + (scrollXAdjusted >> 3);
@@ -19299,10 +19068,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.BGGBCLayerRender = function (scanlineToRender) {
-        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xFF; //The line of the BG we're at.
+        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xff; //The line of the BG we're at.
         var tileYLine = (scrollYAdjusted & 7) << 3;
-        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xF8) << 2; //The row of cached tiles we're fetching from.
-        var scrollXAdjusted = this.backgroundX + this.currentX & 0xFF; //The scroll amount of the BG.
+        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xf8) << 2; //The row of cached tiles we're fetching from.
+        var scrollXAdjusted = this.backgroundX + this.currentX & 0xff; //The scroll amount of the BG.
         var pixelPosition = this.pixelStart + this.currentX; //Current pixel we're working on.
         var pixelPositionEnd = this.pixelStart + (this.gfxWindowDisplay && scanlineToRender - this.windowY >= 0 ? Math.min(Math.max(this.windowX, 0) + this.currentX, this.pixelEnd) : this.pixelEnd); //Make sure we do at most 160 pixels a scanline.
         var tileNumber = tileYDown + (scrollXAdjusted >> 3);
@@ -19397,10 +19166,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.BGGBCLayerRenderNoPriorityFlagging = function (scanlineToRender) {
-        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xFF; //The line of the BG we're at.
+        var scrollYAdjusted = this.backgroundY + scanlineToRender & 0xff; //The line of the BG we're at.
         var tileYLine = (scrollYAdjusted & 7) << 3;
-        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xF8) << 2; //The row of cached tiles we're fetching from.
-        var scrollXAdjusted = this.backgroundX + this.currentX & 0xFF; //The scroll amount of the BG.
+        var tileYDown = this.gfxBackgroundCHRBankPosition | (scrollYAdjusted & 0xf8) << 2; //The row of cached tiles we're fetching from.
+        var scrollXAdjusted = this.backgroundX + this.currentX & 0xff; //The scroll amount of the BG.
         var pixelPosition = this.pixelStart + this.currentX; //Current pixel we're working on.
         var pixelPositionEnd = this.pixelStart + (this.gfxWindowDisplay && scanlineToRender - this.windowY >= 0 ? Math.min(Math.max(this.windowX, 0) + this.currentX, this.pixelEnd) : this.pixelEnd); //Make sure we do at most 160 pixels a scanline.
         var tileNumber = tileYDown + (scrollXAdjusted >> 3);
@@ -19504,7 +19273,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             var pixelPositionEnd = this.pixelStart + this.pixelEnd;
             if (pixelPosition < pixelPositionEnd) {
               var tileYLine = (scrollYAdjusted & 0x7) << 3;
-              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xF8) << 2) + (this.currentX >> 3);
+              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xf8) << 2) + (this.currentX >> 3);
               var chrCode = this.BGCHRBank1[tileNumber];
               if (chrCode < this.gfxBackgroundBankOffset) {
                 chrCode |= 0x100;
@@ -19569,7 +19338,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             var pixelPositionEnd = this.pixelStart + this.pixelEnd;
             if (pixelPosition < pixelPositionEnd) {
               var tileYLine = (scrollYAdjusted & 0x7) << 3;
-              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xF8) << 2) + (this.currentX >> 3);
+              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xf8) << 2) + (this.currentX >> 3);
               var chrCode = this.BGCHRBank1[tileNumber];
               if (chrCode < this.gfxBackgroundBankOffset) {
                 chrCode |= 0x100;
@@ -19640,7 +19409,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             var pixelPositionEnd = this.pixelStart + this.pixelEnd;
             if (pixelPosition < pixelPositionEnd) {
               var tileYLine = (scrollYAdjusted & 0x7) << 3;
-              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xF8) << 2) + (this.currentX >> 3);
+              var tileNumber = (this.gfxWindowCHRBankPosition | (scrollYAdjusted & 0xf8) << 2) + (this.currentX >> 3);
               var chrCode = this.BGCHRBank1[tileNumber];
               if (chrCode < this.gfxBackgroundBankOffset) {
                 chrCode |= 0x100;
@@ -19705,7 +19474,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         if (this.gfxSpriteShow) {
           //Are sprites enabled?
           var lineAdjusted = scanlineToRender + 0x10;
-          var OAMAddress = 0xFE00;
+          var OAMAddress = 0xfe00;
           var yoffset = 0;
           var xcoord = 1;
           var xCoordStart = 0;
@@ -19720,7 +19489,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           var linePixel = 0;
           //Clear our x-coord sort buffer:
           while (xcoord < 168) {
-            this.sortBuffer[xcoord++] = 0xFF;
+            this.sortBuffer[xcoord++] = 0xff;
           }
           if (this.gfxSpriteNormalHeight) {
             //Draw the visible sprites:
@@ -19753,17 +19522,17 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             }
           } else {
             //Draw the visible sprites:
-            for (var length = this.findLowestSpriteDrawable(lineAdjusted, 0xF); spriteCount < length; ++spriteCount) {
+            for (var length = this.findLowestSpriteDrawable(lineAdjusted, 0xf); spriteCount < length; ++spriteCount) {
               OAMAddress = this.OAMAddressCache[spriteCount];
               yoffset = lineAdjusted - this.memory[OAMAddress] << 3;
               attrCode = this.memory[OAMAddress | 3];
               palette = (attrCode & 0x10) >> 2;
               if ((attrCode & 0x40) === (0x40 & yoffset)) {
-                tile = this.tileCache[(attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] & 0xFE];
+                tile = this.tileCache[(attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] & 0xfe];
               } else {
                 tile = this.tileCache[(attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] | 1];
               }
-              yoffset &= 0x3F;
+              yoffset &= 0x3f;
               linePixel = xCoordStart = this.memory[OAMAddress | 1];
               xCoordEnd = Math.min(168 - linePixel, 8);
               xcoord = linePixel > 7 ? 0 : 8 - linePixel;
@@ -19789,10 +19558,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.findLowestSpriteDrawable = function (scanlineToRender, drawableRange) {
-        var address = 0xFE00;
+        var address = 0xfe00;
         var spriteCount = 0;
         var diff = 0;
-        while (address < 0xFEA0 && spriteCount < 10) {
+        while (address < 0xfea0 && spriteCount < 10) {
           diff = scanlineToRender - this.memory[address];
           if ((diff & drawableRange) === diff) {
             this.OAMAddressCache[spriteCount++] = address;
@@ -19804,7 +19573,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       GameBoyCore.prototype.SpriteGBCLayerRender = function (scanlineToRender) {
         if (this.gfxSpriteShow) {
           //Are sprites enabled?
-          var OAMAddress = 0xFE00;
+          var OAMAddress = 0xfe00;
           var lineAdjusted = scanlineToRender + 0x10;
           var yoffset = 0;
           var xcoord = 0;
@@ -19817,7 +19586,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           var currentPixel = 0;
           var spriteCount = 0;
           if (this.gfxSpriteNormalHeight) {
-            for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
+            for (; OAMAddress < 0xfea0 && spriteCount < 10; OAMAddress += 4) {
               yoffset = lineAdjusted - this.memory[OAMAddress];
               if ((yoffset & 0x7) === yoffset) {
                 xcoord = this.memory[OAMAddress | 1] - 8;
@@ -19845,15 +19614,15 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               }
             }
           } else {
-            for (; OAMAddress < 0xFEA0 && spriteCount < 10; OAMAddress += 4) {
+            for (; OAMAddress < 0xfea0 && spriteCount < 10; OAMAddress += 4) {
               yoffset = lineAdjusted - this.memory[OAMAddress];
-              if ((yoffset & 0xF) === yoffset) {
+              if ((yoffset & 0xf) === yoffset) {
                 xcoord = this.memory[OAMAddress | 1] - 8;
                 endX = Math.min(160, xcoord + 8);
                 attrCode = this.memory[OAMAddress | 3];
                 palette = (attrCode & 7) << 2;
                 if ((attrCode & 0x40) === (0x40 & yoffset << 3)) {
-                  tile = this.tileCache[(attrCode & 0x08) << 8 | (attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] & 0xFE];
+                  tile = this.tileCache[(attrCode & 0x08) << 8 | (attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] & 0xfe];
                 } else {
                   tile = this.tileCache[(attrCode & 0x08) << 8 | (attrCode & 0x60) << 4 | this.memory[OAMAddress | 0x2] | 1];
                 }
@@ -19881,9 +19650,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       //Generate only a single tile line for the GB tile cache mode:
       GameBoyCore.prototype.generateGBTileLine = function (address) {
-        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9FFE & address];
-        var tileBlock = this.tileCache[(address & 0x1FF0) >> 4];
-        address = (address & 0xE) << 2;
+        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9ffe & address];
+        var tileBlock = this.tileCache[(address & 0x1ff0) >> 4];
+        address = (address & 0xe) << 2;
         tileBlock[address | 7] = (lineCopy & 0x100) >> 7 | lineCopy & 0x1;
         tileBlock[address | 6] = (lineCopy & 0x200) >> 8 | (lineCopy & 0x2) >> 1;
         tileBlock[address | 5] = (lineCopy & 0x400) >> 9 | (lineCopy & 0x4) >> 2;
@@ -19895,13 +19664,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       //Generate only a single tile line for the GBC tile cache mode (Bank 1):
       GameBoyCore.prototype.generateGBCTileLineBank1 = function (address) {
-        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9FFE & address];
-        address &= 0x1FFE;
+        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9ffe & address];
+        address &= 0x1ffe;
         var tileBlock1 = this.tileCache[address >> 4];
         var tileBlock2 = this.tileCache[0x200 | address >> 4];
         var tileBlock3 = this.tileCache[0x400 | address >> 4];
         var tileBlock4 = this.tileCache[0x600 | address >> 4];
-        address = (address & 0xE) << 2;
+        address = (address & 0xe) << 2;
         var addressFlipped = 0x38 - address;
         tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = (lineCopy & 0x100) >> 7 | lineCopy & 0x1;
         tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = (lineCopy & 0x200) >> 8 | (lineCopy & 0x2) >> 1;
@@ -19940,12 +19709,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       //Generate only a single tile line for the GBC tile cache mode (Bank 2):
       GameBoyCore.prototype.generateGBCTileLineBank2 = function (address) {
-        var lineCopy = this.VRAM[0x1 | address] << 8 | this.VRAM[0x1FFE & address];
+        var lineCopy = this.VRAM[0x1 | address] << 8 | this.VRAM[0x1ffe & address];
         var tileBlock1 = this.tileCache[0x800 | address >> 4];
-        var tileBlock2 = this.tileCache[0xA00 | address >> 4];
-        var tileBlock3 = this.tileCache[0xC00 | address >> 4];
-        var tileBlock4 = this.tileCache[0xE00 | address >> 4];
-        address = (address & 0xE) << 2;
+        var tileBlock2 = this.tileCache[0xa00 | address >> 4];
+        var tileBlock3 = this.tileCache[0xc00 | address >> 4];
+        var tileBlock4 = this.tileCache[0xe00 | address >> 4];
+        address = (address & 0xe) << 2;
         var addressFlipped = 0x38 - address;
         tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = (lineCopy & 0x100) >> 7 | lineCopy & 0x1;
         tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = (lineCopy & 0x200) >> 8 | (lineCopy & 0x2) >> 1;
@@ -19960,9 +19729,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       GameBoyCore.prototype.generateGBCTileBank2 = function (vramAddress) {
         var address = vramAddress >> 4;
         var tileBlock1 = this.tileCache[0x800 | address];
-        var tileBlock2 = this.tileCache[0xA00 | address];
-        var tileBlock3 = this.tileCache[0xC00 | address];
-        var tileBlock4 = this.tileCache[0xE00 | address];
+        var tileBlock2 = this.tileCache[0xa00 | address];
+        var tileBlock3 = this.tileCache[0xc00 | address];
+        var tileBlock4 = this.tileCache[0xe00 | address];
         var lineCopy = 0;
         address = 0;
         var addressFlipped = 56;
@@ -19983,13 +19752,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
       //Generate only a single tile line for the GB tile cache mode (OAM accessible range):
       GameBoyCore.prototype.generateGBOAMTileLine = function (address) {
-        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9FFE & address];
-        address &= 0x1FFE;
+        var lineCopy = this.memory[0x1 | address] << 8 | this.memory[0x9ffe & address];
+        address &= 0x1ffe;
         var tileBlock1 = this.tileCache[address >> 4];
         var tileBlock2 = this.tileCache[0x200 | address >> 4];
         var tileBlock3 = this.tileCache[0x400 | address >> 4];
         var tileBlock4 = this.tileCache[0x600 | address >> 4];
-        address = (address & 0xE) << 2;
+        address = (address & 0xe) << 2;
         var addressFlipped = 0x38 - address;
         tileBlock4[addressFlipped] = tileBlock2[address] = tileBlock3[addressFlipped | 7] = tileBlock1[address | 7] = (lineCopy & 0x100) >> 7 | lineCopy & 0x1;
         tileBlock4[addressFlipped | 1] = tileBlock2[address | 1] = tileBlock3[addressFlipped | 6] = tileBlock1[address | 6] = (lineCopy & 0x200) >> 8 | (lineCopy & 0x2) >> 1;
@@ -20053,10 +19822,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             //Interrupts have a certain clock cycle length:
             this.CPUTicks = 20;
             //Set the stack pointer to the current program counter value:
-            this.stackPointer = this.stackPointer - 1 & 0xFFFF;
-            this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter >> 8);
-            this.stackPointer = this.stackPointer - 1 & 0xFFFF;
-            this.memoryWriter[this.stackPointer](this, this.stackPointer, this.programCounter & 0xFF);
+            this.stackPointer = this.stackPointer - 1 & 0xffff;
+            this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter >> 8]);
+            this.stackPointer = this.stackPointer - 1 & 0xffff;
+            this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
             //Set the program counter to the interrupt's address:
             this.programCounter = 0x40 | bitShift << 3;
             //Clock the core for mid-instruction updates:
@@ -20071,7 +19840,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       */
       GameBoyCore.prototype.checkIRQMatching = function () {
         if (this.IME) {
-          this.IRQLineMatched = this.interruptsEnabled & this.interruptsRequested & 0x1F;
+          this.IRQLineMatched = this.interruptsEnabled & this.interruptsRequested & 0x1f;
         }
       };
       /*
@@ -20112,7 +19881,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
                   currentClocks = temp_var;
                 }
               }
-              if (this.LYCMatchTriggerSTAT && this.memory[0xFF45] <= 153) {
+              if (this.LYCMatchTriggerSTAT && this.memory[0xff45] <= 153) {
                 temp_var = this.clocksUntilLYCMatch() - this.LCDTicks << this.doubleSpeedShifter;
                 if (temp_var <= currentClocks || currentClocks === -1) {
                   currentClocks = temp_var;
@@ -20122,7 +19891,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           }
           if (this.TIMAEnabled && (this.interruptsEnabled & 0x4) === 0x4) {
             //CPU timer IRQ prediction:
-            temp_var = (0x100 - this.memory[0xFF05]) * this.TACClocker - this.timerTicks;
+            temp_var = (0x100 - this.memory[0xff05]) * this.TACClocker - this.timerTicks;
             if (temp_var <= currentClocks || currentClocks === -1) {
               currentClocks = temp_var;
             }
@@ -20158,25 +19927,27 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       //Memory Reading:
       GameBoyCore.prototype.memoryRead = function (address) {
         //Act as a wrapper for reading the returns from the compiled jumps to memory.
-        return this.memoryReader[address](this, address); //This seems to be faster than the usual if/else.
+        return this.memoryReader[address].apply(this, [address]); //This seems to be faster than the usual if/else.
       };
       GameBoyCore.prototype.memoryHighRead = function (address) {
         //Act as a wrapper for reading the returns from the compiled jumps to memory.
-        return this.memoryHighReader[address](this, address); //This seems to be faster than the usual if/else.
+        return this.memoryHighReader[address].apply(this, [address]); //This seems to be faster than the usual if/else.
       };
       GameBoyCore.prototype.memoryReadJumpCompile = function () {
+        var _this2 = this;
+
         //Faster in some browsers, since we are doing less conditionals overall by implementing them in advance.
-        for (var index = 0x0000; index <= 0xFFFF; index++) {
+        for (var index = 0x0000; index <= 0xffff; index++) {
           if (index < 0x4000) {
             this.memoryReader[index] = this.memoryReadNormal;
           } else if (index < 0x8000) {
             this.memoryReader[index] = this.memoryReadROM;
           } else if (index < 0x9800) {
             this.memoryReader[index] = this.cartridgeSlot.cartridge.cGBC ? this.VRAMDATAReadCGBCPU : this.VRAMDATAReadDMGCPU;
-          } else if (index < 0xA000) {
+          } else if (index < 0xa000) {
             this.memoryReader[index] = this.cartridgeSlot.cartridge.cGBC ? this.VRAMCHRReadCGBCPU : this.VRAMCHRReadDMGCPU;
-          } else if (index >= 0xA000 && index < 0xC000) {
-            if (this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xA200 || this.cartridgeSlot.cartridge.numRAMBanks >= 1) {
+          } else if (index >= 0xa000 && index < 0xc000) {
+            if (this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xa200 || this.cartridgeSlot.cartridge.numRAMBanks >= 1) {
               if (this.cartridgeSlot.cartridge.cMBC7) {
                 this.memoryReader[index] = this.memoryReadMBC7;
               } else if (!this.cartridgeSlot.cartridge.cMBC3) {
@@ -20188,514 +19959,514 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             } else {
               this.memoryReader[index] = this.memoryReadBAD;
             }
-          } else if (index >= 0xC000 && index < 0xE000) {
-            if (!this.cartridgeSlot.cartridge.cGBC || index < 0xD000) {
+          } else if (index >= 0xc000 && index < 0xe000) {
+            if (!this.cartridgeSlot.cartridge.cGBC || index < 0xd000) {
               this.memoryReader[index] = this.memoryReadNormal;
             } else {
               this.memoryReader[index] = this.memoryReadGBCMemory;
             }
-          } else if (index >= 0xE000 && index < 0xFE00) {
-            if (!this.cartridgeSlot.cartridge.cGBC || index < 0xF000) {
+          } else if (index >= 0xe000 && index < 0xfe00) {
+            if (!this.cartridgeSlot.cartridge.cGBC || index < 0xf000) {
               this.memoryReader[index] = this.memoryReadECHONormal;
             } else {
               this.memoryReader[index] = this.memoryReadECHOGBCMemory;
             }
-          } else if (index < 0xFEA0) {
+          } else if (index < 0xfea0) {
             this.memoryReader[index] = this.memoryReadOAM;
-          } else if (this.cartridgeSlot.cartridge.cGBC && index >= 0xFEA0 && index < 0xFF00) {
+          } else if (this.cartridgeSlot.cartridge.cGBC && index >= 0xfea0 && index < 0xff00) {
             this.memoryReader[index] = this.memoryReadNormal;
-          } else if (index >= 0xFF00) {
+          } else if (index >= 0xff00) {
             switch (index) {
-              case 0xFF00:
+              case 0xff00:
                 //JOYPAD:
-                this.memoryHighReader[0] = this.memoryReader[0xFF00] = function (parentObj, address) {
-                  return 0xC0 | parentObj.memory[0xFF00]; //Top nibble returns as set.
+                this.memoryHighReader[0] = this.memoryReader[0xff00] = function (address) {
+                  return 0xc0 | _this2.memory[0xff00]; //Top nibble retu =>rns as set.
                 };
                 break;
-              case 0xFF01:
+              case 0xff01:
                 //SB
-                this.memoryHighReader[0x01] = this.memoryReader[0xFF01] = function (parentObj, address) {
-                  return parentObj.memory[0xFF02] < 0x80 ? parentObj.memory[0xFF01] : 0xFF;
+                this.memoryHighReader[0x01] = this.memoryReader[0xff01] = function (address) {
+                  return _this2.memory[0xff02] < 0x80 ? _this2.memory[0xff01] : 0xff;
                 };
                 break;
-              case 0xFF02:
+              case 0xff02:
                 //SC
                 if (this.cartridgeSlot.cartridge.cGBC) {
-                  this.memoryHighReader[0x02] = this.memoryReader[0xFF02] = function (parentObj, address) {
-                    return (parentObj.serialTimer <= 0 ? 0x7C : 0xFC) | parentObj.memory[0xFF02];
+                  this.memoryHighReader[0x02] = this.memoryReader[0xff02] = function (address) {
+                    return (_this2.serialTimer <= 0 ? 0x7c : 0xfc) | _this2.memory[0xff02];
                   };
                 } else {
-                  this.memoryHighReader[0x02] = this.memoryReader[0xFF02] = function (parentObj, address) {
-                    return (parentObj.serialTimer <= 0 ? 0x7E : 0xFE) | parentObj.memory[0xFF02];
+                  this.memoryHighReader[0x02] = this.memoryReader[0xff02] = function (address) {
+                    return (_this2.serialTimer <= 0 ? 0x7e : 0xfe) | _this2.memory[0xff02];
                   };
                 }
                 break;
-              case 0xFF03:
-                this.memoryHighReader[0x03] = this.memoryReader[0xFF03] = this.memoryReadBAD;
+              case 0xff03:
+                this.memoryHighReader[0x03] = this.memoryReader[0xff03] = this.memoryReadBAD;
                 break;
-              case 0xFF04:
+              case 0xff04:
                 //DIV
-                this.memoryHighReader[0x04] = this.memoryReader[0xFF04] = function (parentObj, address) {
-                  parentObj.memory[0xFF04] = parentObj.memory[0xFF04] + (parentObj.DIVTicks >> 8) & 0xFF;
-                  parentObj.DIVTicks &= 0xFF;
-                  return parentObj.memory[0xFF04];
+                this.memoryHighReader[0x04] = this.memoryReader[0xff04] = function (address) {
+                  _this2.memory[0xff04] = _this2.memory[0xff04] + (_this2.DIVTicks >> 8) & 0xff;
+                  _this2.DIVTicks &= 0xff;
+                  return _this2.memory[0xff04];
                 };
                 break;
-              case 0xFF05:
-              case 0xFF06:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff05:
+              case 0xff06:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF07:
-                this.memoryHighReader[0x07] = this.memoryReader[0xFF07] = function (parentObj, address) {
-                  return 0xF8 | parentObj.memory[0xFF07];
+              case 0xff07:
+                this.memoryHighReader[0x07] = this.memoryReader[0xff07] = function (address) {
+                  return 0xf8 | _this2.memory[0xff07];
                 };
                 break;
-              case 0xFF08:
-              case 0xFF09:
-              case 0xFF0A:
-              case 0xFF0B:
-              case 0xFF0C:
-              case 0xFF0D:
-              case 0xFF0E:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff08:
+              case 0xff09:
+              case 0xff0a:
+              case 0xff0b:
+              case 0xff0c:
+              case 0xff0d:
+              case 0xff0e:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFF0F:
+              case 0xff0f:
                 //IF
-                this.memoryHighReader[0x0F] = this.memoryReader[0xFF0F] = function (parentObj, address) {
-                  return 0xE0 | parentObj.interruptsRequested;
+                this.memoryHighReader[0x0f] = this.memoryReader[0xff0f] = function (address) {
+                  return 0xe0 | _this2.interruptsRequested;
                 };
                 break;
-              case 0xFF10:
-                this.memoryHighReader[0x10] = this.memoryReader[0xFF10] = function (parentObj, address) {
-                  return 0x80 | parentObj.memory[0xFF10];
+              case 0xff10:
+                this.memoryHighReader[0x10] = this.memoryReader[0xff10] = function (address) {
+                  return 0x80 | _this2.memory[0xff10];
                 };
                 break;
-              case 0xFF11:
-                this.memoryHighReader[0x11] = this.memoryReader[0xFF11] = function (parentObj, address) {
-                  return 0x3F | parentObj.memory[0xFF11];
+              case 0xff11:
+                this.memoryHighReader[0x11] = this.memoryReader[0xff11] = function (address) {
+                  return 0x3f | _this2.memory[0xff11];
                 };
                 break;
-              case 0xFF12:
+              case 0xff12:
                 this.memoryHighReader[0x12] = this.memoryHighReadNormal;
-                this.memoryReader[0xFF12] = this.memoryReadNormal;
+                this.memoryReader[0xff12] = this.memoryReadNormal;
                 break;
-              case 0xFF13:
-                this.memoryHighReader[0x13] = this.memoryReader[0xFF13] = this.memoryReadBAD;
+              case 0xff13:
+                this.memoryHighReader[0x13] = this.memoryReader[0xff13] = this.memoryReadBAD;
                 break;
-              case 0xFF14:
-                this.memoryHighReader[0x14] = this.memoryReader[0xFF14] = function (parentObj, address) {
-                  return 0xBF | parentObj.memory[0xFF14];
+              case 0xff14:
+                this.memoryHighReader[0x14] = this.memoryReader[0xff14] = function (address) {
+                  return 0xbf | _this2.memory[0xff14];
                 };
                 break;
-              case 0xFF15:
+              case 0xff15:
                 this.memoryHighReader[0x15] = this.memoryReadBAD;
-                this.memoryReader[0xFF15] = this.memoryReadBAD;
+                this.memoryReader[0xff15] = this.memoryReadBAD;
                 break;
-              case 0xFF16:
-                this.memoryHighReader[0x16] = this.memoryReader[0xFF16] = function (parentObj, address) {
-                  return 0x3F | parentObj.memory[0xFF16];
+              case 0xff16:
+                this.memoryHighReader[0x16] = this.memoryReader[0xff16] = function (address) {
+                  return 0x3f | _this2.memory[0xff16];
                 };
                 break;
-              case 0xFF17:
+              case 0xff17:
                 this.memoryHighReader[0x17] = this.memoryHighReadNormal;
-                this.memoryReader[0xFF17] = this.memoryReadNormal;
+                this.memoryReader[0xff17] = this.memoryReadNormal;
                 break;
-              case 0xFF18:
-                this.memoryHighReader[0x18] = this.memoryReader[0xFF18] = this.memoryReadBAD;
+              case 0xff18:
+                this.memoryHighReader[0x18] = this.memoryReader[0xff18] = this.memoryReadBAD;
                 break;
-              case 0xFF19:
-                this.memoryHighReader[0x19] = this.memoryReader[0xFF19] = function (parentObj, address) {
-                  return 0xBF | parentObj.memory[0xFF19];
+              case 0xff19:
+                this.memoryHighReader[0x19] = this.memoryReader[0xff19] = function (address) {
+                  return 0xbf | _this2.memory[0xff19];
                 };
                 break;
-              case 0xFF1A:
-                this.memoryHighReader[0x1A] = this.memoryReader[0xFF1A] = function (parentObj, address) {
-                  return 0x7F | parentObj.memory[0xFF1A];
+              case 0xff1a:
+                this.memoryHighReader[0x1a] = this.memoryReader[0xff1a] = function (address) {
+                  return 0x7f | _this2.memory[0xff1a];
                 };
                 break;
-              case 0xFF1B:
-                this.memoryHighReader[0x1B] = this.memoryReader[0xFF1B] = this.memoryReadBAD;
+              case 0xff1b:
+                this.memoryHighReader[0x1b] = this.memoryReader[0xff1b] = this.memoryReadBAD;
                 break;
-              case 0xFF1C:
-                this.memoryHighReader[0x1C] = this.memoryReader[0xFF1C] = function (parentObj, address) {
-                  return 0x9F | parentObj.memory[0xFF1C];
+              case 0xff1c:
+                this.memoryHighReader[0x1c] = this.memoryReader[0xff1c] = function (address) {
+                  return 0x9f | _this2.memory[0xff1c];
                 };
                 break;
-              case 0xFF1D:
-                this.memoryHighReader[0x1D] = this.memoryReader[0xFF1D] = this.memoryReadBAD;
+              case 0xff1d:
+                this.memoryHighReader[0x1d] = this.memoryReader[0xff1d] = this.memoryReadBAD;
                 break;
-              case 0xFF1E:
-                this.memoryHighReader[0x1E] = this.memoryReader[0xFF1E] = function (parentObj, address) {
-                  return 0xBF | parentObj.memory[0xFF1E];
+              case 0xff1e:
+                this.memoryHighReader[0x1e] = this.memoryReader[0xff1e] = function (address) {
+                  return 0xbf | _this2.memory[0xff1e];
                 };
                 break;
-              case 0xFF1F:
-              case 0xFF20:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff1f:
+              case 0xff20:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFF21:
-              case 0xFF22:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff21:
+              case 0xff22:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF23:
-                this.memoryHighReader[0x23] = this.memoryReader[0xFF23] = function (parentObj, address) {
-                  return 0xBF | parentObj.memory[0xFF23];
+              case 0xff23:
+                this.memoryHighReader[0x23] = this.memoryReader[0xff23] = function (address) {
+                  return 0xbf | _this2.memory[0xff23];
                 };
                 break;
-              case 0xFF24:
-              case 0xFF25:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff24:
+              case 0xff25:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF26:
-                this.memoryHighReader[0x26] = this.memoryReader[0xFF26] = function (parentObj, address) {
-                  parentObj.audioJIT();
-                  return 0x70 | parentObj.memory[0xFF26];
+              case 0xff26:
+                this.memoryHighReader[0x26] = this.memoryReader[0xff26] = function (address) {
+                  _this2.audioJIT();
+                  return 0x70 | _this2.memory[0xff26];
                 };
                 break;
-              case 0xFF27:
-              case 0xFF28:
-              case 0xFF29:
-              case 0xFF2A:
-              case 0xFF2B:
-              case 0xFF2C:
-              case 0xFF2D:
-              case 0xFF2E:
-              case 0xFF2F:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff27:
+              case 0xff28:
+              case 0xff29:
+              case 0xff2a:
+              case 0xff2b:
+              case 0xff2c:
+              case 0xff2d:
+              case 0xff2e:
+              case 0xff2f:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFF30:
-              case 0xFF31:
-              case 0xFF32:
-              case 0xFF33:
-              case 0xFF34:
-              case 0xFF35:
-              case 0xFF36:
-              case 0xFF37:
-              case 0xFF38:
-              case 0xFF39:
-              case 0xFF3A:
-              case 0xFF3B:
-              case 0xFF3C:
-              case 0xFF3D:
-              case 0xFF3E:
-              case 0xFF3F:
-                this.memoryReader[index] = function (parentObj, address) {
-                  return parentObj.channel3canPlay ? parentObj.memory[0xFF00 | parentObj.channel3lastSampleLookup >> 1] : parentObj.memory[address];
+              case 0xff30:
+              case 0xff31:
+              case 0xff32:
+              case 0xff33:
+              case 0xff34:
+              case 0xff35:
+              case 0xff36:
+              case 0xff37:
+              case 0xff38:
+              case 0xff39:
+              case 0xff3a:
+              case 0xff3b:
+              case 0xff3c:
+              case 0xff3d:
+              case 0xff3e:
+              case 0xff3f:
+                this.memoryReader[index] = function (address) {
+                  return _this2.channel3canPlay ? _this2.memory[0xff00 | _this2.channel3lastSampleLookup >> 1] : _this2.memory[address];
                 };
-                this.memoryHighReader[index & 0xFF] = function (parentObj, address) {
-                  return parentObj.channel3canPlay ? parentObj.memory[0xFF00 | parentObj.channel3lastSampleLookup >> 1] : parentObj.memory[0xFF00 | address];
+                this.memoryHighReader[index & 0xff] = function (address) {
+                  return _this2.channel3canPlay ? _this2.memory[0xff00 | _this2.channel3lastSampleLookup >> 1] : _this2.memory[0xff00 | address];
                 };
                 break;
-              case 0xFF40:
+              case 0xff40:
                 this.memoryHighReader[0x40] = this.memoryHighReadNormal;
-                this.memoryReader[0xFF40] = this.memoryReadNormal;
+                this.memoryReader[0xff40] = this.memoryReadNormal;
                 break;
-              case 0xFF41:
-                this.memoryHighReader[0x41] = this.memoryReader[0xFF41] = function (parentObj, address) {
-                  return 0x80 | parentObj.memory[0xFF41] | parentObj.modeSTAT;
+              case 0xff41:
+                this.memoryHighReader[0x41] = this.memoryReader[0xff41] = function (address) {
+                  return 0x80 | _this2.memory[0xff41] | _this2.modeSTAT;
                 };
                 break;
-              case 0xFF42:
-                this.memoryHighReader[0x42] = this.memoryReader[0xFF42] = function (parentObj, address) {
-                  return parentObj.backgroundY;
+              case 0xff42:
+                this.memoryHighReader[0x42] = this.memoryReader[0xff42] = function (address) {
+                  return _this2.backgroundY;
                 };
                 break;
-              case 0xFF43:
-                this.memoryHighReader[0x43] = this.memoryReader[0xFF43] = function (parentObj, address) {
-                  return parentObj.backgroundX;
+              case 0xff43:
+                this.memoryHighReader[0x43] = this.memoryReader[0xff43] = function (address) {
+                  return _this2.backgroundX;
                 };
                 break;
-              case 0xFF44:
-                this.memoryHighReader[0x44] = this.memoryReader[0xFF44] = function (parentObj, address) {
-                  return parentObj.LCDisOn ? parentObj.memory[0xFF44] : 0;
+              case 0xff44:
+                this.memoryHighReader[0x44] = this.memoryReader[0xff44] = function (address) {
+                  return _this2.LCDisOn ? _this2.memory[0xff44] : 0;
                 };
                 break;
-              case 0xFF45:
-              case 0xFF46:
-              case 0xFF47:
-              case 0xFF48:
-              case 0xFF49:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff45:
+              case 0xff46:
+              case 0xff47:
+              case 0xff48:
+              case 0xff49:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF4A:
+              case 0xff4a:
                 //WY
-                this.memoryHighReader[0x4A] = this.memoryReader[0xFF4A] = function (parentObj, address) {
-                  return parentObj.windowY;
+                this.memoryHighReader[0x4a] = this.memoryReader[0xff4a] = function (address) {
+                  return _this2.windowY;
                 };
                 break;
-              case 0xFF4B:
-                this.memoryHighReader[0x4B] = this.memoryHighReadNormal;
-                this.memoryReader[0xFF4B] = this.memoryReadNormal;
+              case 0xff4b:
+                this.memoryHighReader[0x4b] = this.memoryHighReadNormal;
+                this.memoryReader[0xff4b] = this.memoryReadNormal;
                 break;
-              case 0xFF4C:
-                this.memoryHighReader[0x4C] = this.memoryReader[0xFF4C] = this.memoryReadBAD;
+              case 0xff4c:
+                this.memoryHighReader[0x4c] = this.memoryReader[0xff4c] = this.memoryReadBAD;
                 break;
-              case 0xFF4D:
-                this.memoryHighReader[0x4D] = this.memoryHighReadNormal;
-                this.memoryReader[0xFF4D] = this.memoryReadNormal;
+              case 0xff4d:
+                this.memoryHighReader[0x4d] = this.memoryHighReadNormal;
+                this.memoryReader[0xff4d] = this.memoryReadNormal;
                 break;
-              case 0xFF4E:
-                this.memoryHighReader[0x4E] = this.memoryReader[0xFF4E] = this.memoryReadBAD;
+              case 0xff4e:
+                this.memoryHighReader[0x4e] = this.memoryReader[0xff4e] = this.memoryReadBAD;
                 break;
-              case 0xFF4F:
-                this.memoryHighReader[0x4F] = this.memoryReader[0xFF4F] = function (parentObj, address) {
-                  return parentObj.currVRAMBank;
+              case 0xff4f:
+                this.memoryHighReader[0x4f] = this.memoryReader[0xff4f] = function (address) {
+                  return _this2.currVRAMBank;
                 };
                 break;
-              case 0xFF50:
-              case 0xFF51:
-              case 0xFF52:
-              case 0xFF53:
-              case 0xFF54:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff50:
+              case 0xff51:
+              case 0xff52:
+              case 0xff53:
+              case 0xff54:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF55:
+              case 0xff55:
                 if (this.cartridgeSlot.cartridge.cGBC) {
-                  this.memoryHighReader[0x55] = this.memoryReader[0xFF55] = function (parentObj, address) {
-                    if (!parentObj.LCDisOn && parentObj.hdmaRunning) {
+                  this.memoryHighReader[0x55] = this.memoryReader[0xff55] = function (address) {
+                    if (!_this2.LCDisOn && _this2.hdmaRunning) {
                       //Undocumented behavior alert: HDMA becomes GDMA when LCD is off (Worms Armageddon Fix).
                       //DMA
-                      parentObj.DMAWrite((parentObj.memory[0xFF55] & 0x7F) + 1);
-                      parentObj.memory[0xFF55] = 0xFF; //Transfer completed.
-                      parentObj.hdmaRunning = false;
+                      _this2.DMAWrite((_this2.memory[0xff55] & 0x7f) + 1);
+                      _this2.memory[0xff55] = 0xff; //Transfer completed.
+                      _this2.hdmaRunning = false;
                     }
-                    return parentObj.memory[0xFF55];
+                    return _this2.memory[0xff55];
                   };
                 } else {
-                  this.memoryReader[0xFF55] = this.memoryReadNormal;
+                  this.memoryReader[0xff55] = this.memoryReadNormal;
                   this.memoryHighReader[0x55] = this.memoryHighReadNormal;
                 }
                 break;
-              case 0xFF56:
+              case 0xff56:
                 if (this.cartridgeSlot.cartridge.cGBC) {
-                  this.memoryHighReader[0x56] = this.memoryReader[0xFF56] = function (parentObj, address) {
+                  this.memoryHighReader[0x56] = this.memoryReader[0xff56] = function (address) {
                     //Return IR "not connected" status:
-                    return 0x3C | (parentObj.memory[0xFF56] >= 0xC0 ? 0x2 | parentObj.memory[0xFF56] & 0xC1 : parentObj.memory[0xFF56] & 0xC3);
+                    return 0x3c | (_this2.memory[0xff56] >= 0xc0 ? 0x2 | _this2.memory[0xff56] & 0xc1 : _this2.memory[0xff56] & 0xc3);
                   };
                 } else {
-                  this.memoryReader[0xFF56] = this.memoryReadNormal;
+                  this.memoryReader[0xff56] = this.memoryReadNormal;
                   this.memoryHighReader[0x56] = this.memoryHighReadNormal;
                 }
                 break;
-              case 0xFF57:
-              case 0xFF58:
-              case 0xFF59:
-              case 0xFF5A:
-              case 0xFF5B:
-              case 0xFF5C:
-              case 0xFF5D:
-              case 0xFF5E:
-              case 0xFF5F:
-              case 0xFF60:
-              case 0xFF61:
-              case 0xFF62:
-              case 0xFF63:
-              case 0xFF64:
-              case 0xFF65:
-              case 0xFF66:
-              case 0xFF67:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff57:
+              case 0xff58:
+              case 0xff59:
+              case 0xff5a:
+              case 0xff5b:
+              case 0xff5c:
+              case 0xff5d:
+              case 0xff5e:
+              case 0xff5f:
+              case 0xff60:
+              case 0xff61:
+              case 0xff62:
+              case 0xff63:
+              case 0xff64:
+              case 0xff65:
+              case 0xff66:
+              case 0xff67:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFF68:
-              case 0xFF69:
-              case 0xFF6A:
-              case 0xFF6B:
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+              case 0xff68:
+              case 0xff69:
+              case 0xff6a:
+              case 0xff6b:
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
                 this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF6C:
+              case 0xff6c:
                 if (this.cartridgeSlot.cartridge.cGBC) {
-                  this.memoryHighReader[0x6C] = this.memoryReader[0xFF6C] = function (parentObj, address) {
-                    return 0xFE | parentObj.memory[0xFF6C];
+                  this.memoryHighReader[0x6c] = this.memoryReader[0xff6c] = function (address) {
+                    return 0xfe | _this2.memory[0xff6c];
                   };
                 } else {
-                  this.memoryHighReader[0x6C] = this.memoryReader[0xFF6C] = this.memoryReadBAD;
+                  this.memoryHighReader[0x6c] = this.memoryReader[0xff6c] = this.memoryReadBAD;
                 }
                 break;
-              case 0xFF6D:
-              case 0xFF6E:
-              case 0xFF6F:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff6d:
+              case 0xff6e:
+              case 0xff6f:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFF70:
+              case 0xff70:
                 if (this.cartridgeSlot.cartridge.cGBC) {
                   //SVBK
-                  this.memoryHighReader[0x70] = this.memoryReader[0xFF70] = function (parentObj, address) {
-                    return 0x40 | parentObj.memory[0xFF70];
+                  this.memoryHighReader[0x70] = this.memoryReader[0xff70] = function (address) {
+                    return 0x40 | _this2.memory[0xff70];
                   };
                 } else {
-                  this.memoryHighReader[0x70] = this.memoryReader[0xFF70] = this.memoryReadBAD;
+                  this.memoryHighReader[0x70] = this.memoryReader[0xff70] = this.memoryReadBAD;
                 }
                 break;
-              case 0xFF71:
-                this.memoryHighReader[0x71] = this.memoryReader[0xFF71] = this.memoryReadBAD;
+              case 0xff71:
+                this.memoryHighReader[0x71] = this.memoryReader[0xff71] = this.memoryReadBAD;
                 break;
-              case 0xFF72:
-              case 0xFF73:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadNormal;
+              case 0xff72:
+              case 0xff73:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadNormal;
                 break;
-              case 0xFF74:
+              case 0xff74:
                 if (this.cartridgeSlot.cartridge.cGBC) {
-                  this.memoryHighReader[0x74] = this.memoryReader[0xFF74] = this.memoryReadNormal;
+                  this.memoryHighReader[0x74] = this.memoryReader[0xff74] = this.memoryReadNormal;
                 } else {
-                  this.memoryHighReader[0x74] = this.memoryReader[0xFF74] = this.memoryReadBAD;
+                  this.memoryHighReader[0x74] = this.memoryReader[0xff74] = this.memoryReadBAD;
                 }
                 break;
-              case 0xFF75:
-                this.memoryHighReader[0x75] = this.memoryReader[0xFF75] = function (parentObj, address) {
-                  return 0x8F | parentObj.memory[0xFF75];
+              case 0xff75:
+                this.memoryHighReader[0x75] = this.memoryReader[0xff75] = function (address) {
+                  return 0x8f | _this2.memory[0xff75];
                 };
                 break;
-              case 0xFF76:
+              case 0xff76:
                 //Undocumented realtime PCM amplitude readback:
-                this.memoryHighReader[0x76] = this.memoryReader[0xFF76] = function (parentObj, address) {
-                  parentObj.audioJIT();
-                  return parentObj.channel2envelopeVolume << 4 | parentObj.channel1envelopeVolume;
+                this.memoryHighReader[0x76] = this.memoryReader[0xff76] = function (address) {
+                  _this2.audioJIT();
+                  return _this2.channel2envelopeVolume << 4 | _this2.channel1envelopeVolume;
                 };
                 break;
-              case 0xFF77:
+              case 0xff77:
                 //Undocumented realtime PCM amplitude readback:
-                this.memoryHighReader[0x77] = this.memoryReader[0xFF77] = function (parentObj, address) {
-                  parentObj.audioJIT();
-                  return parentObj.channel4envelopeVolume << 4 | parentObj.channel3envelopeVolume;
+                this.memoryHighReader[0x77] = this.memoryReader[0xff77] = function (address) {
+                  _this2.audioJIT();
+                  return _this2.channel4envelopeVolume << 4 | _this2.channel3envelopeVolume;
                 };
                 break;
-              case 0xFF78:
-              case 0xFF79:
-              case 0xFF7A:
-              case 0xFF7B:
-              case 0xFF7C:
-              case 0xFF7D:
-              case 0xFF7E:
-              case 0xFF7F:
-                this.memoryHighReader[index & 0xFF] = this.memoryReader[index] = this.memoryReadBAD;
+              case 0xff78:
+              case 0xff79:
+              case 0xff7a:
+              case 0xff7b:
+              case 0xff7c:
+              case 0xff7d:
+              case 0xff7e:
+              case 0xff7f:
+                this.memoryHighReader[index & 0xff] = this.memoryReader[index] = this.memoryReadBAD;
                 break;
-              case 0xFFFF:
+              case 0xffff:
                 //IE
-                this.memoryHighReader[0xFF] = this.memoryReader[0xFFFF] = function (parentObj, address) {
-                  return parentObj.interruptsEnabled;
+                this.memoryHighReader[0xff] = this.memoryReader[0xffff] = function (address) {
+                  return _this2.interruptsEnabled;
                 };
                 break;
               default:
                 this.memoryReader[index] = this.memoryReadNormal;
-                this.memoryHighReader[index & 0xFF] = this.memoryHighReadNormal;
+                this.memoryHighReader[index & 0xff] = this.memoryHighReadNormal;
             }
           } else {
             this.memoryReader[index] = this.memoryReadBAD;
           }
         }
       };
-      GameBoyCore.prototype.memoryReadNormal = function (parentObj, address) {
-        return parentObj.memory[address];
+      GameBoyCore.prototype.memoryReadNormal = function (address) {
+        return this.memory[address];
       };
-      GameBoyCore.prototype.memoryHighReadNormal = function (parentObj, address) {
-        return parentObj.memory[0xFF00 | address];
+      GameBoyCore.prototype.memoryHighReadNormal = function (address) {
+        return this.memory[0xff00 | address];
       };
-      GameBoyCore.prototype.memoryReadROM = function (parentObj, address) {
-        return parentObj.cartridgeSlot.cartridge.ROM[parentObj.currentROMBank + address];
+      GameBoyCore.prototype.memoryReadROM = function (address) {
+        return this.cartridgeSlot.cartridge.ROM[this.currentROMBank + address];
       };
-      GameBoyCore.prototype.memoryReadMBC = function (parentObj, address) {
+      GameBoyCore.prototype.memoryReadMBC = function (address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          return parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition];
+        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+          return this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currMBCRAMBankPosition];
         }
         //console.log("Reading from disabled RAM.", 1);
-        return 0xFF;
+        return 0xff;
       };
-      GameBoyCore.prototype.memoryReadMBC7 = function (parentObj, address) {
+      GameBoyCore.prototype.memoryReadMBC7 = function (address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           switch (address) {
-            case 0xA000:
-            case 0xA060:
-            case 0xA070:
+            case 0xa000:
+            case 0xa060:
+            case 0xa070:
               return 0;
-            case 0xA080:
+            case 0xa080:
               //TODO: Gyro Control Register
               return 0;
-            case 0xA050:
+            case 0xa050:
               //Y High Byte
-              return parentObj.highY;
-            case 0xA040:
+              return this.highY;
+            case 0xa040:
               //Y Low Byte
-              return parentObj.lowY;
-            case 0xA030:
+              return this.lowY;
+            case 0xa030:
               //X High Byte
-              return parentObj.highX;
-            case 0xA020:
+              return this.highX;
+            case 0xa020:
               //X Low Byte:
-              return parentObj.lowX;
+              return this.lowX;
             default:
-              return parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition];
+              return this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currMBCRAMBankPosition];
           }
         }
         //console.log("Reading from disabled RAM.", 1);
-        return 0xFF;
+        return 0xff;
       };
-      GameBoyCore.prototype.memoryReadMBC3 = function (parentObj, address) {
+      GameBoyCore.prototype.memoryReadMBC3 = function (address) {
         //Switchable RAM
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          switch (parentObj.cartridgeSlot.cartridge.currMBCRAMBank) {
+        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+          switch (this.cartridgeSlot.cartridge.currMBCRAMBank) {
             case 0x00:
             case 0x01:
             case 0x02:
             case 0x03:
-              return parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition];
+              return this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currMBCRAMBankPosition];
               break;
             case 0x08:
-              return parentObj.latchedSeconds;
+              return this.latchedSeconds;
               break;
             case 0x09:
-              return parentObj.latchedMinutes;
+              return this.latchedMinutes;
               break;
-            case 0x0A:
-              return parentObj.latchedHours;
+            case 0x0a:
+              return this.latchedHours;
               break;
-            case 0x0B:
-              return parentObj.latchedLDays;
+            case 0x0b:
+              return this.latchedLDays;
               break;
-            case 0x0C:
-              return (parentObj.RTCDayOverFlow ? 0x80 : 0) + (parentObj.RTCHALT ? 0x40 : 0) + parentObj.latchedHDays;
+            case 0x0c:
+              return (this.RTCDayOverFlow ? 0x80 : 0) + (this.RTCHALT ? 0x40 : 0) + this.latchedHDays;
           }
         }
         //console.log("Reading from invalid or disabled RAM.", 1);
-        return 0xFF;
+        return 0xff;
       };
-      GameBoyCore.prototype.memoryReadGBCMemory = function (parentObj, address) {
-        return parentObj.GBCMemory[address + parentObj.gbcRamBankPosition];
+      GameBoyCore.prototype.memoryReadGBCMemory = function (address) {
+        return this.GBCMemory[address + this.gbcRamBankPosition];
       };
-      GameBoyCore.prototype.memoryReadOAM = function (parentObj, address) {
-        return parentObj.modeSTAT > 1 ? 0xFF : parentObj.memory[address];
+      GameBoyCore.prototype.memoryReadOAM = function (address) {
+        return this.modeSTAT > 1 ? 0xff : this.memory[address];
       };
-      GameBoyCore.prototype.memoryReadECHOGBCMemory = function (parentObj, address) {
-        return parentObj.GBCMemory[address + parentObj.gbcRamBankPositionECHO];
+      GameBoyCore.prototype.memoryReadECHOGBCMemory = function (address) {
+        return this.GBCMemory[address + this.gbcRamBankPositionECHO];
       };
-      GameBoyCore.prototype.memoryReadECHONormal = function (parentObj, address) {
-        return parentObj.memory[address - 0x2000];
+      GameBoyCore.prototype.memoryReadECHONormal = function (address) {
+        return this.memory[address - 0x2000];
       };
-      GameBoyCore.prototype.memoryReadBAD = function (parentObj, address) {
-        return 0xFF;
+      GameBoyCore.prototype.memoryReadBAD = function (address) {
+        return 0xff;
       };
-      GameBoyCore.prototype.VRAMDATAReadCGBCPU = function (parentObj, address) {
+      GameBoyCore.prototype.VRAMDATAReadCGBCPU = function (address) {
         //CPU Side Reading The VRAM (Optimized for GameBoy Color)
-        return parentObj.modeSTAT > 2 ? 0xFF : parentObj.currVRAMBank === 0 ? parentObj.memory[address] : parentObj.VRAM[address & 0x1FFF];
+        return this.modeSTAT > 2 ? 0xff : this.currVRAMBank === 0 ? this.memory[address] : this.VRAM[address & 0x1fff];
       };
-      GameBoyCore.prototype.VRAMDATAReadDMGCPU = function (parentObj, address) {
+      GameBoyCore.prototype.VRAMDATAReadDMGCPU = function (address) {
         //CPU Side Reading The VRAM (Optimized for classic GameBoy)
-        return parentObj.modeSTAT > 2 ? 0xFF : parentObj.memory[address];
+        return this.modeSTAT > 2 ? 0xff : this.memory[address];
       };
-      GameBoyCore.prototype.VRAMCHRReadCGBCPU = function (parentObj, address) {
+      GameBoyCore.prototype.VRAMCHRReadCGBCPU = function (address) {
         //CPU Side Reading the Character Data Map:
-        return parentObj.modeSTAT > 2 ? 0xFF : parentObj.BGCHRCurrentBank[address & 0x7FF];
+        return this.modeSTAT > 2 ? 0xff : this.BGCHRCurrentBank[address & 0x7ff];
       };
-      GameBoyCore.prototype.VRAMCHRReadDMGCPU = function (parentObj, address) {
+      GameBoyCore.prototype.VRAMCHRReadDMGCPU = function (address) {
         //CPU Side Reading the Character Data Map:
-        return parentObj.modeSTAT > 2 ? 0xFF : parentObj.BGCHRBank1[address & 0x7FF];
+        return this.modeSTAT > 2 ? 0xff : this.BGCHRBank1[address & 0x7ff];
       };
       GameBoyCore.prototype.setCurrentMBC1ROMBank = function () {
         //Read the cartridge ROM data from RAM memory:
@@ -20723,16 +20494,16 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       //Memory Writing:
       GameBoyCore.prototype.memoryWrite = function (address, data) {
         //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
-        this.memoryWriter[address](this, address, data);
+        this.memoryWriter[address].apply(this, [address, data]);
       };
       //0xFFXX fast path:
       GameBoyCore.prototype.memoryHighWrite = function (address, data) {
         //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
-        this.memoryHighWriter[address](this, address, data);
+        this.memoryHighWriter[address].apply(this, [address, data]);
       };
       GameBoyCore.prototype.memoryWriteJumpCompile = function () {
         //Faster in some browsers, since we are doing less conditionals overall by implementing them in advance.
-        for (var index = 0x0000; index <= 0xFFFF; index++) {
+        for (var index = 0x0000; index <= 0xffff; index++) {
           if (index < 0x8000) {
             if (this.cartridgeSlot.cartridge.cMBC1) {
               if (index < 0x2000) {
@@ -20791,10 +20562,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.memoryWriter[index] = this.cartridgeSlot.cartridge.cGBC ? this.VRAMGBCDATAWrite : this.VRAMGBDATAWrite;
           } else if (index < 0x9800) {
             this.memoryWriter[index] = this.cartridgeSlot.cartridge.cGBC ? this.VRAMGBCDATAWrite : this.VRAMGBDATAUpperWrite;
-          } else if (index < 0xA000) {
+          } else if (index < 0xa000) {
             this.memoryWriter[index] = this.cartridgeSlot.cartridge.cGBC ? this.VRAMGBCCHRMAPWrite : this.VRAMGBCHRMAPWrite;
-          } else if (index < 0xC000) {
-            if (this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xA200 || this.cartridgeSlot.cartridge.numRAMBanks >= 1) {
+          } else if (index < 0xc000) {
+            if (this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xa200 || this.cartridgeSlot.cartridge.numRAMBanks >= 1) {
               if (!this.cartridgeSlot.cartridge.cMBC3) {
                 this.memoryWriter[index] = this.memoryWriteMBCRAM;
               } else {
@@ -20804,21 +20575,21 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             } else {
               this.memoryWriter[index] = this.cartIgnoreWrite;
             }
-          } else if (index < 0xE000) {
-            if (this.cartridgeSlot.cartridge.cGBC && index >= 0xD000) {
+          } else if (index < 0xe000) {
+            if (this.cartridgeSlot.cartridge.cGBC && index >= 0xd000) {
               this.memoryWriter[index] = this.memoryWriteGBCRAM;
             } else {
               this.memoryWriter[index] = this.memoryWriteNormal;
             }
-          } else if (index < 0xFE00) {
-            if (this.cartridgeSlot.cartridge.cGBC && index >= 0xF000) {
+          } else if (index < 0xfe00) {
+            if (this.cartridgeSlot.cartridge.cGBC && index >= 0xf000) {
               this.memoryWriter[index] = this.memoryWriteECHOGBCRAM;
             } else {
               this.memoryWriter[index] = this.memoryWriteECHONormal;
             }
-          } else if (index <= 0xFEA0) {
+          } else if (index <= 0xfea0) {
             this.memoryWriter[index] = this.memoryWriteOAMRAM;
-          } else if (index < 0xFF00) {
+          } else if (index < 0xff00) {
             if (this.cartridgeSlot.cartridge.cGBC) {
               //Only GBC has access to this RAM.
               this.memoryWriter[index] = this.memoryWriteNormal;
@@ -20828,237 +20599,237 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           } else {
             //Start the I/O initialization by filling in the slots as normal memory:
             this.memoryWriter[index] = this.memoryWriteNormal;
-            this.memoryHighWriter[index & 0xFF] = this.memoryHighWriteNormal;
+            this.memoryHighWriter[index & 0xff] = this.memoryHighWriteNormal;
           }
         }
         this.registerWriteJumpCompile(); //Compile the I/O write functions separately...
       };
-      GameBoyCore.prototype.MBCWriteEnable = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBCWriteEnable = function (address, data) {
         //MBC RAM Bank Enable/Disable:
-        parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled = (data & 0x0F) === 0x0A; //If lower nibble is 0x0A, then enable, otherwise disable.
+        this.cartridgeSlot.cartridge.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; //If lower nibble is 0x0A, then enable, otherwise disable.
       };
-      GameBoyCore.prototype.MBC1WriteROMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC1WriteROMBank = function (address, data) {
         //MBC1 ROM bank switching:
-        parentObj.ROMBank1offs = parentObj.ROMBank1offs & 0x60 | data & 0x1F;
-        parentObj.setCurrentMBC1ROMBank();
+        this.ROMBank1offs = this.ROMBank1offs & 0x60 | data & 0x1f;
+        this.setCurrentMBC1ROMBank();
       };
-      GameBoyCore.prototype.MBC1WriteRAMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC1WriteRAMBank = function (address, data) {
         //MBC1 RAM bank switching
-        if (parentObj.cartridgeSlot.cartridge.MBC1Mode) {
+        if (this.cartridgeSlot.cartridge.MBC1Mode) {
           //4/32 Mode
-          parentObj.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
-          parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = (parentObj.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xA000;
+          this.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
+          this.cartridgeSlot.cartridge.currMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xa000;
         } else {
           //16/8 Mode
-          parentObj.ROMBank1offs = (data & 0x03) << 5 | parentObj.ROMBank1offs & 0x1F;
-          parentObj.setCurrentMBC1ROMBank();
+          this.ROMBank1offs = (data & 0x03) << 5 | this.ROMBank1offs & 0x1f;
+          this.setCurrentMBC1ROMBank();
         }
       };
-      GameBoyCore.prototype.MBC1WriteType = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC1WriteType = function (address, data) {
         //MBC1 mode setting:
-        parentObj.cartridgeSlot.cartridge.MBC1Mode = (data & 0x1) === 0x1;
-        if (parentObj.cartridgeSlot.cartridge.MBC1Mode) {
-          parentObj.ROMBank1offs &= 0x1F;
-          parentObj.setCurrentMBC1ROMBank();
+        this.cartridgeSlot.cartridge.MBC1Mode = (data & 0x1) === 0x1;
+        if (this.cartridgeSlot.cartridge.MBC1Mode) {
+          this.ROMBank1offs &= 0x1f;
+          this.setCurrentMBC1ROMBank();
         } else {
-          parentObj.cartridgeSlot.cartridge.currMBCRAMBank = 0;
-          parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = -0xA000;
+          this.cartridgeSlot.cartridge.currMBCRAMBank = 0;
+          this.cartridgeSlot.cartridge.currMBCRAMBankPosition = -0xa000;
         }
       };
-      GameBoyCore.prototype.MBC2WriteROMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC2WriteROMBank = function (address, data) {
         //MBC2 ROM bank switching:
-        parentObj.ROMBank1offs = data & 0x0F;
-        parentObj.setCurrentMBC2AND3ROMBank();
+        this.ROMBank1offs = data & 0x0f;
+        this.setCurrentMBC2AND3ROMBank();
       };
-      GameBoyCore.prototype.MBC3WriteROMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC3WriteROMBank = function (address, data) {
         //MBC3 ROM bank switching:
-        parentObj.ROMBank1offs = data & 0x7F;
-        parentObj.setCurrentMBC2AND3ROMBank();
+        this.ROMBank1offs = data & 0x7f;
+        this.setCurrentMBC2AND3ROMBank();
       };
-      GameBoyCore.prototype.MBC3WriteRAMBank = function (parentObj, address, data) {
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBank = data;
+      GameBoyCore.prototype.MBC3WriteRAMBank = function (address, data) {
+        this.cartridgeSlot.cartridge.currMBCRAMBank = data;
         if (data < 4) {
           //MBC3 RAM bank switching
-          parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = (parentObj.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xA000;
+          this.cartridgeSlot.cartridge.currMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xa000;
         }
       };
-      GameBoyCore.prototype.MBC3WriteRTCLatch = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC3WriteRTCLatch = function (address, data) {
         if (data === 0) {
-          parentObj.RTCisLatched = false;
-        } else if (!parentObj.RTCisLatched) {
+          this.RTCisLatched = false;
+        } else if (!this.RTCisLatched) {
           //Copy over the current RTC time for reading.
-          parentObj.RTCisLatched = true;
-          parentObj.latchedSeconds = parentObj.RTCSeconds | 0;
-          parentObj.latchedMinutes = parentObj.RTCMinutes;
-          parentObj.latchedHours = parentObj.RTCHours;
-          parentObj.latchedLDays = parentObj.RTCDays & 0xFF;
-          parentObj.latchedHDays = parentObj.RTCDays >> 8;
+          this.RTCisLatched = true;
+          this.latchedSeconds = this.RTCSeconds | 0;
+          this.latchedMinutes = this.RTCMinutes;
+          this.latchedHours = this.RTCHours;
+          this.latchedLDays = this.RTCDays & 0xff;
+          this.latchedHDays = this.RTCDays >> 8;
         }
       };
-      GameBoyCore.prototype.MBC5WriteROMBankLow = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC5WriteROMBankLow = function (address, data) {
         //MBC5 ROM bank switching:
-        parentObj.ROMBank1offs = parentObj.ROMBank1offs & 0x100 | data;
-        parentObj.setCurrentMBC5ROMBank();
+        this.ROMBank1offs = this.ROMBank1offs & 0x100 | data;
+        this.setCurrentMBC5ROMBank();
       };
-      GameBoyCore.prototype.MBC5WriteROMBankHigh = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC5WriteROMBankHigh = function (address, data) {
         //MBC5 ROM bank switching (by least significant bit):
-        parentObj.ROMBank1offs = (data & 0x01) << 8 | parentObj.ROMBank1offs & 0xFF;
-        parentObj.setCurrentMBC5ROMBank();
+        this.ROMBank1offs = (data & 0x01) << 8 | this.ROMBank1offs & 0xff;
+        this.setCurrentMBC5ROMBank();
       };
-      GameBoyCore.prototype.MBC5WriteRAMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.MBC5WriteRAMBank = function (address, data) {
         //MBC5 RAM bank switching
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBank = data & 0xF;
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = (parentObj.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xA000;
+        this.cartridgeSlot.cartridge.currMBCRAMBank = data & 0xf;
+        this.cartridgeSlot.cartridge.currMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xa000;
       };
-      GameBoyCore.prototype.RUMBLEWriteRAMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.RUMBLEWriteRAMBank = function (address, data) {
         //MBC5 RAM bank switching
         //Like MBC5, but bit 3 of the lower nibble is used for rumbling and bit 2 is ignored.
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = (parentObj.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xA000;
+        this.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
+        this.cartridgeSlot.cartridge.currMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xa000;
       };
-      GameBoyCore.prototype.HuC3WriteRAMBank = function (parentObj, address, data) {
+      GameBoyCore.prototype.HuC3WriteRAMBank = function (address, data) {
         //HuC3 RAM bank switching
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
-        parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition = (parentObj.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xA000;
+        this.cartridgeSlot.cartridge.currMBCRAMBank = data & 0x03;
+        this.cartridgeSlot.cartridge.currMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currMBCRAMBank << 13) - 0xa000;
       };
-      GameBoyCore.prototype.cartIgnoreWrite = function (parentObj, address, data) {
+      GameBoyCore.prototype.cartIgnoreWrite = function (address, data) {
         //We might have encountered illegal RAM writing or such, so just do nothing...
       };
-      GameBoyCore.prototype.memoryWriteNormal = function (parentObj, address, data) {
-        parentObj.memory[address] = data;
+      GameBoyCore.prototype.memoryWriteNormal = function (address, data) {
+        this.memory[address] = data;
       };
-      GameBoyCore.prototype.memoryHighWriteNormal = function (parentObj, address, data) {
-        parentObj.memory[0xFF00 | address] = data;
+      GameBoyCore.prototype.memoryHighWriteNormal = function (address, data) {
+        this.memory[0xff00 | address] = data;
       };
-      GameBoyCore.prototype.memoryWriteMBCRAM = function (parentObj, address, data) {
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+      GameBoyCore.prototype.memoryWriteMBCRAM = function (address, data) {
+        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
           console.log("writing mbc...");
-          parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition] = data;
+          this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currMBCRAMBankPosition] = data;
         }
       };
-      GameBoyCore.prototype.memoryWriteMBC3RAM = function (parentObj, address, data) {
-        if (parentObj.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          switch (parentObj.cartridgeSlot.cartridge.currMBCRAMBank) {
+      GameBoyCore.prototype.memoryWriteMBC3RAM = function (address, data) {
+        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+          switch (this.cartridgeSlot.cartridge.currMBCRAMBank) {
             case 0x00:
             case 0x01:
             case 0x02:
             case 0x03:
-              parentObj.cartridgeSlot.cartridge.MBCRam[address + parentObj.cartridgeSlot.cartridge.currMBCRAMBankPosition] = data;
+              this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currMBCRAMBankPosition] = data;
               break;
             case 0x08:
               if (data < 60) {
-                parentObj.RTCSeconds = data;
+                this.RTCSeconds = data;
               } else {
-                console.log("(Bank #" + parentObj.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
+                console.log("(Bank #" + this.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
               }
               break;
             case 0x09:
               if (data < 60) {
-                parentObj.RTCMinutes = data;
+                this.RTCMinutes = data;
               } else {
-                console.log("(Bank #" + parentObj.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
+                console.log("(Bank #" + this.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
               }
               break;
-            case 0x0A:
+            case 0x0a:
               if (data < 24) {
-                parentObj.RTCHours = data;
+                this.RTCHours = data;
               } else {
-                console.log("(Bank #" + parentObj.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
+                console.log("(Bank #" + this.cartridgeSlot.cartridge.currMBCRAMBank + ") RTC write out of range: " + data, 1);
               }
               break;
-            case 0x0B:
-              parentObj.RTCDays = data & 0xFF | parentObj.RTCDays & 0x100;
+            case 0x0b:
+              this.RTCDays = data & 0xff | this.RTCDays & 0x100;
               break;
-            case 0x0C:
-              parentObj.RTCDayOverFlow = data > 0x7F;
-              parentObj.RTCHalt = (data & 0x40) === 0x40;
-              parentObj.RTCDays = (data & 0x1) << 8 | parentObj.RTCDays & 0xFF;
+            case 0x0c:
+              this.RTCDayOverFlow = data > 0x7f;
+              this.RTCHalt = (data & 0x40) === 0x40;
+              this.RTCDays = (data & 0x1) << 8 | this.RTCDays & 0xff;
               break;
             default:
-              console.log("Invalid MBC3 bank address selected: " + parentObj.cartridgeSlot.cartridge.currMBCRAMBank, 0);
+              console.log("Invalid MBC3 bank address selected: " + this.cartridgeSlot.cartridge.currMBCRAMBank, 0);
           }
         }
       };
-      GameBoyCore.prototype.memoryWriteGBCRAM = function (parentObj, address, data) {
-        parentObj.GBCMemory[address + parentObj.gbcRamBankPosition] = data;
+      GameBoyCore.prototype.memoryWriteGBCRAM = function (address, data) {
+        this.GBCMemory[address + this.gbcRamBankPosition] = data;
       };
-      GameBoyCore.prototype.memoryWriteOAMRAM = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 2) {
+      GameBoyCore.prototype.memoryWriteOAMRAM = function (address, data) {
+        if (this.modeSTAT < 2) {
           //OAM RAM cannot be written to in mode 2 & 3
-          if (parentObj.memory[address] != data) {
-            parentObj.graphicsJIT();
-            parentObj.memory[address] = data;
+          if (this.memory[address] != data) {
+            this.graphicsJIT();
+            this.memory[address] = data;
           }
         }
       };
-      GameBoyCore.prototype.memoryWriteECHOGBCRAM = function (parentObj, address, data) {
-        parentObj.GBCMemory[address + parentObj.gbcRamBankPositionECHO] = data;
+      GameBoyCore.prototype.memoryWriteECHOGBCRAM = function (address, data) {
+        this.GBCMemory[address + this.gbcRamBankPositionECHO] = data;
       };
-      GameBoyCore.prototype.memoryWriteECHONormal = function (parentObj, address, data) {
-        parentObj.memory[address - 0x2000] = data;
+      GameBoyCore.prototype.memoryWriteECHONormal = function (address, data) {
+        this.memory[address - 0x2000] = data;
       };
-      GameBoyCore.prototype.VRAMGBDATAWrite = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 3) {
+      GameBoyCore.prototype.VRAMGBDATAWrite = function (address, data) {
+        if (this.modeSTAT < 3) {
           //VRAM cannot be written to during mode 3
-          if (parentObj.memory[address] != data) {
+          if (this.memory[address] != data) {
             //JIT the graphics render queue:
-            parentObj.graphicsJIT();
-            parentObj.memory[address] = data;
-            parentObj.generateGBOAMTileLine(address);
+            this.graphicsJIT();
+            this.memory[address] = data;
+            this.generateGBOAMTileLine(address);
           }
         }
       };
-      GameBoyCore.prototype.VRAMGBDATAUpperWrite = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 3) {
+      GameBoyCore.prototype.VRAMGBDATAUpperWrite = function (address, data) {
+        if (this.modeSTAT < 3) {
           //VRAM cannot be written to during mode 3
-          if (parentObj.memory[address] != data) {
+          if (this.memory[address] != data) {
             //JIT the graphics render queue:
-            parentObj.graphicsJIT();
-            parentObj.memory[address] = data;
-            parentObj.generateGBTileLine(address);
+            this.graphicsJIT();
+            this.memory[address] = data;
+            this.generateGBTileLine(address);
           }
         }
       };
-      GameBoyCore.prototype.VRAMGBCDATAWrite = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 3) {
+      GameBoyCore.prototype.VRAMGBCDATAWrite = function (address, data) {
+        if (this.modeSTAT < 3) {
           //VRAM cannot be written to during mode 3
-          if (parentObj.currVRAMBank === 0) {
-            if (parentObj.memory[address] != data) {
+          if (this.currVRAMBank === 0) {
+            if (this.memory[address] != data) {
               //JIT the graphics render queue:
-              parentObj.graphicsJIT();
-              parentObj.memory[address] = data;
-              parentObj.generateGBCTileLineBank1(address);
+              this.graphicsJIT();
+              this.memory[address] = data;
+              this.generateGBCTileLineBank1(address);
             }
           } else {
-            address &= 0x1FFF;
-            if (parentObj.VRAM[address] != data) {
+            address &= 0x1fff;
+            if (this.VRAM[address] != data) {
               //JIT the graphics render queue:
-              parentObj.graphicsJIT();
-              parentObj.VRAM[address] = data;
-              parentObj.generateGBCTileLineBank2(address);
+              this.graphicsJIT();
+              this.VRAM[address] = data;
+              this.generateGBCTileLineBank2(address);
             }
           }
         }
       };
-      GameBoyCore.prototype.VRAMGBCHRMAPWrite = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 3) {
+      GameBoyCore.prototype.VRAMGBCHRMAPWrite = function (address, data) {
+        if (this.modeSTAT < 3) {
           //VRAM cannot be written to during mode 3
-          address &= 0x7FF;
-          if (parentObj.BGCHRBank1[address] != data) {
+          address &= 0x7ff;
+          if (this.BGCHRBank1[address] != data) {
             //JIT the graphics render queue:
-            parentObj.graphicsJIT();
-            parentObj.BGCHRBank1[address] = data;
+            this.graphicsJIT();
+            this.BGCHRBank1[address] = data;
           }
         }
       };
-      GameBoyCore.prototype.VRAMGBCCHRMAPWrite = function (parentObj, address, data) {
-        if (parentObj.modeSTAT < 3) {
+      GameBoyCore.prototype.VRAMGBCCHRMAPWrite = function (address, data) {
+        if (this.modeSTAT < 3) {
           //VRAM cannot be written to during mode 3
-          address &= 0x7FF;
-          if (parentObj.BGCHRCurrentBank[address] != data) {
+          address &= 0x7ff;
+          if (this.BGCHRCurrentBank[address] != data) {
             //JIT the graphics render queue:
-            parentObj.graphicsJIT();
-            parentObj.BGCHRCurrentBank[address] = data;
+            this.graphicsJIT();
+            this.BGCHRCurrentBank[address] = data;
           }
         }
       };
@@ -21068,9 +20839,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.CPUTicks += 4 | tilesToTransfer << 5 << this.doubleSpeedShifter;
         }
         //Source address of the transfer:
-        var source = this.memory[0xFF51] << 8 | this.memory[0xFF52];
+        var source = this.memory[0xff51] << 8 | this.memory[0xff52];
         //Destination address in the VRAM memory range:
-        var destination = this.memory[0xFF53] << 8 | this.memory[0xFF54];
+        var destination = this.memory[0xff53] << 8 | this.memory[0xff54];
         //Creating some references:
         var memoryReader = this.memoryReader;
         //JIT the graphics render queue:
@@ -21081,45 +20852,45 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           //DMA transfer for VRAM bank 0:
           do {
             if (destination < 0x1800) {
-              memory[0x8000 | destination] = memoryReader[source](this, source++);
-              memory[0x8001 | destination] = memoryReader[source](this, source++);
-              memory[0x8002 | destination] = memoryReader[source](this, source++);
-              memory[0x8003 | destination] = memoryReader[source](this, source++);
-              memory[0x8004 | destination] = memoryReader[source](this, source++);
-              memory[0x8005 | destination] = memoryReader[source](this, source++);
-              memory[0x8006 | destination] = memoryReader[source](this, source++);
-              memory[0x8007 | destination] = memoryReader[source](this, source++);
-              memory[0x8008 | destination] = memoryReader[source](this, source++);
-              memory[0x8009 | destination] = memoryReader[source](this, source++);
-              memory[0x800A | destination] = memoryReader[source](this, source++);
-              memory[0x800B | destination] = memoryReader[source](this, source++);
-              memory[0x800C | destination] = memoryReader[source](this, source++);
-              memory[0x800D | destination] = memoryReader[source](this, source++);
-              memory[0x800E | destination] = memoryReader[source](this, source++);
-              memory[0x800F | destination] = memoryReader[source](this, source++);
+              memory[0x8000 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8001 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8002 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8003 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8004 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8005 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8006 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8007 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8008 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x8009 | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800a | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800b | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800c | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800d | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800e | destination] = memoryReader[source].apply(this, [source++]);
+              memory[0x800f | destination] = memoryReader[source].apply(this, [source++]);
               this.generateGBCTileBank1(destination);
               destination += 0x10;
             } else {
-              destination &= 0x7F0;
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank1[destination++] = memoryReader[source](this, source++);
-              destination = destination + 0x1800 & 0x1FF0;
+              destination &= 0x7f0;
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank1[destination++] = memoryReader[source].apply(this, [source++]);
+              destination = destination + 0x1800 & 0x1ff0;
             }
-            source &= 0xFFF0;
+            source &= 0xfff0;
             --tilesToTransfer;
           } while (tilesToTransfer > 0);
         } else {
@@ -21127,916 +20898,922 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           //DMA transfer for VRAM bank 1:
           do {
             if (destination < 0x1800) {
-              VRAM[destination] = memoryReader[source](this, source++);
-              VRAM[destination | 0x1] = memoryReader[source](this, source++);
-              VRAM[destination | 0x2] = memoryReader[source](this, source++);
-              VRAM[destination | 0x3] = memoryReader[source](this, source++);
-              VRAM[destination | 0x4] = memoryReader[source](this, source++);
-              VRAM[destination | 0x5] = memoryReader[source](this, source++);
-              VRAM[destination | 0x6] = memoryReader[source](this, source++);
-              VRAM[destination | 0x7] = memoryReader[source](this, source++);
-              VRAM[destination | 0x8] = memoryReader[source](this, source++);
-              VRAM[destination | 0x9] = memoryReader[source](this, source++);
-              VRAM[destination | 0xA] = memoryReader[source](this, source++);
-              VRAM[destination | 0xB] = memoryReader[source](this, source++);
-              VRAM[destination | 0xC] = memoryReader[source](this, source++);
-              VRAM[destination | 0xD] = memoryReader[source](this, source++);
-              VRAM[destination | 0xE] = memoryReader[source](this, source++);
-              VRAM[destination | 0xF] = memoryReader[source](this, source++);
+              VRAM[destination] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x1] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x2] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x3] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x4] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x5] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x6] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x7] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x8] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0x9] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xa] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xb] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xc] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xd] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xe] = memoryReader[source].apply(this, [source++]);
+              VRAM[destination | 0xf] = memoryReader[source].apply(this, [source++]);
               this.generateGBCTileBank2(destination);
               destination += 0x10;
             } else {
-              destination &= 0x7F0;
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              this.BGCHRBank2[destination++] = memoryReader[source](this, source++);
-              destination = destination + 0x1800 & 0x1FF0;
+              destination &= 0x7f0;
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              this.BGCHRBank2[destination++] = memoryReader[source].apply(this, [source++]);
+              destination = destination + 0x1800 & 0x1ff0;
             }
-            source &= 0xFFF0;
+            source &= 0xfff0;
             --tilesToTransfer;
           } while (tilesToTransfer > 0);
         }
         //Update the HDMA registers to their next addresses:
-        memory[0xFF51] = source >> 8;
-        memory[0xFF52] = source & 0xF0;
-        memory[0xFF53] = destination >> 8;
-        memory[0xFF54] = destination & 0xF0;
+        memory[0xff51] = source >> 8;
+        memory[0xff52] = source & 0xf0;
+        memory[0xff53] = destination >> 8;
+        memory[0xff54] = destination & 0xf0;
       };
       GameBoyCore.prototype.registerWriteJumpCompile = function () {
+        var _this3 = this;
+
         //I/O Registers (GB + GBC):
         //JoyPad
-        this.memoryHighWriter[0] = this.memoryWriter[0xFF00] = function (parentObj, address, data) {
-          parentObj.memory[0xFF00] = data & 0x30 | ((data & 0x20) === 0 ? parentObj.JoyPad >> 4 : 0xF) & ((data & 0x10) === 0 ? parentObj.JoyPad & 0xF : 0xF);
+        this.memoryHighWriter[0] = this.memoryWriter[0xff00] = function (address, data) {
+          _this3.memory[0xff00] = data & 0x30 | ((data & 0x20) === 0 ? _this3.JoyPad >> 4 : 0xf) & ((data & 0x10) === 0 ? _this3.JoyPad & 0xf : 0xf);
         };
         //SB (Serial Transfer Data)
-        this.memoryHighWriter[0x1] = this.memoryWriter[0xFF01] = function (parentObj, address, data) {
-          if (parentObj.memory[0xFF02] < 0x80) {
+        this.memoryHighWriter[0x1] = this.memoryWriter[0xff01] = function (address, data) {
+          if (_this3.memory[0xff02] < 0x80) {
             //Cannot write while a serial transfer is active.
-            parentObj.memory[0xFF01] = data;
+            _this3.memory[0xff01] = data;
           }
         };
         //SC (Serial Transfer Control):
         this.memoryHighWriter[0x2] = this.memoryHighWriteNormal;
-        this.memoryWriter[0xFF02] = this.memoryWriteNormal;
+        this.memoryWriter[0xff02] = this.memoryWriteNormal;
         //Unmapped I/O:
-        this.memoryHighWriter[0x3] = this.memoryWriter[0xFF03] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x3] = this.memoryWriter[0xff03] = this.cartIgnoreWrite;
         //DIV
-        this.memoryHighWriter[0x4] = this.memoryWriter[0xFF04] = function (parentObj, address, data) {
-          parentObj.DIVTicks &= 0xFF; //Update DIV for realignment.
-          parentObj.memory[0xFF04] = 0;
+        this.memoryHighWriter[0x4] = this.memoryWriter[0xff04] = function (address, data) {
+          _this3.DIVTicks &= 0xff; //Update DIV for realignment.
+          _this3.memory[0xff04] = 0;
         };
         //TIMA
-        this.memoryHighWriter[0x5] = this.memoryWriter[0xFF05] = function (parentObj, address, data) {
-          parentObj.memory[0xFF05] = data;
+        this.memoryHighWriter[0x5] = this.memoryWriter[0xff05] = function (address, data) {
+          _this3.memory[0xff05] = data;
         };
         //TMA
-        this.memoryHighWriter[0x6] = this.memoryWriter[0xFF06] = function (parentObj, address, data) {
-          parentObj.memory[0xFF06] = data;
+        this.memoryHighWriter[0x6] = this.memoryWriter[0xff06] = function (address, data) {
+          _this3.memory[0xff06] = data;
         };
         //TAC
-        this.memoryHighWriter[0x7] = this.memoryWriter[0xFF07] = function (parentObj, address, data) {
-          parentObj.memory[0xFF07] = data & 0x07;
-          parentObj.TIMAEnabled = (data & 0x04) === 0x04;
-          parentObj.TACClocker = Math.pow(4, (data & 0x3) != 0 ? data & 0x3 : 4) << 2; //TODO: Find a way to not make a conditional in here...
+        this.memoryHighWriter[0x7] = this.memoryWriter[0xff07] = function (address, data) {
+          _this3.memory[0xff07] = data & 0x07;
+          _this3.TIMAEnabled = (data & 0x04) === 0x04;
+          _this3.TACClocker = Math.pow(4, (data & 0x3) != 0 ? data & 0x3 : 4) << 2; //TODO: Find a way to not make a conditional in here...
         };
         //Unmapped I/O:
-        this.memoryHighWriter[0x8] = this.memoryWriter[0xFF08] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x9] = this.memoryWriter[0xFF09] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0xA] = this.memoryWriter[0xFF0A] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0xB] = this.memoryWriter[0xFF0B] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0xC] = this.memoryWriter[0xFF0C] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0xD] = this.memoryWriter[0xFF0D] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0xE] = this.memoryWriter[0xFF0E] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x8] = this.memoryWriter[0xff08] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x9] = this.memoryWriter[0xff09] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0xa] = this.memoryWriter[0xff0a] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0xb] = this.memoryWriter[0xff0b] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0xc] = this.memoryWriter[0xff0c] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0xd] = this.memoryWriter[0xff0d] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0xe] = this.memoryWriter[0xff0e] = this.cartIgnoreWrite;
         //IF (Interrupt Request)
-        this.memoryHighWriter[0xF] = this.memoryWriter[0xFF0F] = function (parentObj, address, data) {
-          parentObj.interruptsRequested = data;
-          parentObj.checkIRQMatching();
+        this.memoryHighWriter[0xf] = this.memoryWriter[0xff0f] = function (address, data) {
+          _this3.interruptsRequested = data;
+          _this3.checkIRQMatching();
         };
         //NR10:
-        this.memoryHighWriter[0x10] = this.memoryWriter[0xFF10] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (parentObj.channel1decreaseSweep && (data & 0x08) === 0) {
-              if (parentObj.channel1Swept) {
-                parentObj.channel1SweepFault = true;
+        this.memoryHighWriter[0x10] = this.memoryWriter[0xff10] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (_this3.channel1decreaseSweep && (data & 0x08) === 0) {
+              if (_this3.channel1Swept) {
+                _this3.channel1SweepFault = true;
               }
             }
-            parentObj.channel1lastTimeSweep = (data & 0x70) >> 4;
-            parentObj.channel1frequencySweepDivider = data & 0x07;
-            parentObj.channel1decreaseSweep = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF10] = data;
-            parentObj.channel1EnableCheck();
+            _this3.channel1lastTimeSweep = (data & 0x70) >> 4;
+            _this3.channel1frequencySweepDivider = data & 0x07;
+            _this3.channel1decreaseSweep = (data & 0x08) === 0x08;
+            _this3.memory[0xff10] = data;
+            _this3.channel1EnableCheck();
           }
         };
         //NR11:
-        this.memoryHighWriter[0x11] = this.memoryWriter[0xFF11] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-            if (parentObj.soundMasterEnabled) {
-              parentObj.audioJIT();
+        this.memoryHighWriter[0x11] = this.memoryWriter[0xff11] = function (address, data) {
+          if (_this3.soundMasterEnabled || !_this3.cartridgeSlot.cartridge.cGBC) {
+            if (_this3.soundMasterEnabled) {
+              _this3.audioJIT();
             } else {
-              data &= 0x3F;
+              data &= 0x3f;
             }
-            parentObj.channel1CachedDuty = parentObj.dutyLookup[data >> 6];
-            parentObj.channel1totalLength = 0x40 - (data & 0x3F);
-            parentObj.memory[0xFF11] = data;
-            parentObj.channel1EnableCheck();
+            _this3.channel1CachedDuty = _this3.dutyLookup[data >> 6];
+            _this3.channel1totalLength = 0x40 - (data & 0x3f);
+            _this3.memory[0xff11] = data;
+            _this3.channel1EnableCheck();
           }
         };
         //NR12:
-        this.memoryHighWriter[0x12] = this.memoryWriter[0xFF12] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (parentObj.channel1Enabled && parentObj.channel1envelopeSweeps === 0) {
+        this.memoryHighWriter[0x12] = this.memoryWriter[0xff12] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (_this3.channel1Enabled && _this3.channel1envelopeSweeps === 0) {
               //Zombie Volume PAPU Bug:
-              if (((parentObj.memory[0xFF12] ^ data) & 0x8) === 0x8) {
-                if ((parentObj.memory[0xFF12] & 0x8) === 0) {
-                  if ((parentObj.memory[0xFF12] & 0x7) === 0x7) {
-                    parentObj.channel1envelopeVolume += 2;
+              if (((_this3.memory[0xff12] ^ data) & 0x8) === 0x8) {
+                if ((_this3.memory[0xff12] & 0x8) === 0) {
+                  if ((_this3.memory[0xff12] & 0x7) === 0x7) {
+                    _this3.channel1envelopeVolume += 2;
                   } else {
-                    ++parentObj.channel1envelopeVolume;
+                    ++_this3.channel1envelopeVolume;
                   }
                 }
-                parentObj.channel1envelopeVolume = 16 - parentObj.channel1envelopeVolume & 0xF;
-              } else if ((parentObj.memory[0xFF12] & 0xF) === 0x8) {
-                parentObj.channel1envelopeVolume = 1 + parentObj.channel1envelopeVolume & 0xF;
+                _this3.channel1envelopeVolume = 16 - _this3.channel1envelopeVolume & 0xf;
+              } else if ((_this3.memory[0xff12] & 0xf) === 0x8) {
+                _this3.channel1envelopeVolume = 1 + _this3.channel1envelopeVolume & 0xf;
               }
-              parentObj.channel1OutputLevelCache();
+              _this3.channel1OutputLevelCache();
             }
-            parentObj.channel1envelopeType = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF12] = data;
-            parentObj.channel1VolumeEnableCheck();
+            _this3.channel1envelopeType = (data & 0x08) === 0x08;
+            _this3.memory[0xff12] = data;
+            _this3.channel1VolumeEnableCheck();
           }
         };
         //NR13:
-        this.memoryHighWriter[0x13] = this.memoryWriter[0xFF13] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.channel1frequency = parentObj.channel1frequency & 0x700 | data;
-            parentObj.channel1FrequencyTracker = 0x800 - parentObj.channel1frequency << 2;
+        this.memoryHighWriter[0x13] = this.memoryWriter[0xff13] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.channel1frequency = _this3.channel1frequency & 0x700 | data;
+            _this3.channel1FrequencyTracker = 0x800 - _this3.channel1frequency << 2;
           }
         };
         //NR14:
-        this.memoryHighWriter[0x14] = this.memoryWriter[0xFF14] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.channel1consecutive = (data & 0x40) === 0x0;
-            parentObj.channel1frequency = (data & 0x7) << 8 | parentObj.channel1frequency & 0xFF;
-            parentObj.channel1FrequencyTracker = 0x800 - parentObj.channel1frequency << 2;
-            if (data > 0x7F) {
+        this.memoryHighWriter[0x14] = this.memoryWriter[0xff14] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.channel1consecutive = (data & 0x40) === 0x0;
+            _this3.channel1frequency = (data & 0x7) << 8 | _this3.channel1frequency & 0xff;
+            _this3.channel1FrequencyTracker = 0x800 - _this3.channel1frequency << 2;
+            if (data > 0x7f) {
               //Reload 0xFF10:
-              parentObj.channel1timeSweep = parentObj.channel1lastTimeSweep;
-              parentObj.channel1Swept = false;
+              _this3.channel1timeSweep = _this3.channel1lastTimeSweep;
+              _this3.channel1Swept = false;
               //Reload 0xFF12:
-              var nr12 = parentObj.memory[0xFF12];
-              parentObj.channel1envelopeVolume = nr12 >> 4;
-              parentObj.channel1OutputLevelCache();
-              parentObj.channel1envelopeSweepsLast = (nr12 & 0x7) - 1;
-              if (parentObj.channel1totalLength === 0) {
-                parentObj.channel1totalLength = 0x40;
+              var nr12 = _this3.memory[0xff12];
+              _this3.channel1envelopeVolume = nr12 >> 4;
+              _this3.channel1OutputLevelCache();
+              _this3.channel1envelopeSweepsLast = (nr12 & 0x7) - 1;
+              if (_this3.channel1totalLength === 0) {
+                _this3.channel1totalLength = 0x40;
               }
-              if (parentObj.channel1lastTimeSweep > 0 || parentObj.channel1frequencySweepDivider > 0) {
-                parentObj.memory[0xFF26] |= 0x1;
+              if (_this3.channel1lastTimeSweep > 0 || _this3.channel1frequencySweepDivider > 0) {
+                _this3.memory[0xff26] |= 0x1;
               } else {
-                parentObj.memory[0xFF26] &= 0xFE;
+                _this3.memory[0xff26] &= 0xfe;
               }
               if ((data & 0x40) === 0x40) {
-                parentObj.memory[0xFF26] |= 0x1;
+                _this3.memory[0xff26] |= 0x1;
               }
-              parentObj.channel1ShadowFrequency = parentObj.channel1frequency;
+              _this3.channel1ShadowFrequency = _this3.channel1frequency;
               //Reset frequency overflow check + frequency sweep type check:
-              parentObj.channel1SweepFault = false;
+              _this3.channel1SweepFault = false;
               //Supposed to run immediately:
-              parentObj.channel1AudioSweepPerformDummy();
+              _this3.channel1AudioSweepPerformDummy();
             }
-            parentObj.channel1EnableCheck();
-            parentObj.memory[0xFF14] = data;
+            _this3.channel1EnableCheck();
+            _this3.memory[0xff14] = data;
           }
         };
         //NR20 (Unused I/O):
-        this.memoryHighWriter[0x15] = this.memoryWriter[0xFF15] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x15] = this.memoryWriter[0xff15] = this.cartIgnoreWrite;
         //NR21:
-        this.memoryHighWriter[0x16] = this.memoryWriter[0xFF16] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-            if (parentObj.soundMasterEnabled) {
-              parentObj.audioJIT();
+        this.memoryHighWriter[0x16] = this.memoryWriter[0xff16] = function (address, data) {
+          if (_this3.soundMasterEnabled || !_this3.cartridgeSlot.cartridge.cGBC) {
+            if (_this3.soundMasterEnabled) {
+              _this3.audioJIT();
             } else {
-              data &= 0x3F;
+              data &= 0x3f;
             }
-            parentObj.channel2CachedDuty = parentObj.dutyLookup[data >> 6];
-            parentObj.channel2totalLength = 0x40 - (data & 0x3F);
-            parentObj.memory[0xFF16] = data;
-            parentObj.channel2EnableCheck();
+            _this3.channel2CachedDuty = _this3.dutyLookup[data >> 6];
+            _this3.channel2totalLength = 0x40 - (data & 0x3f);
+            _this3.memory[0xff16] = data;
+            _this3.channel2EnableCheck();
           }
         };
         //NR22:
-        this.memoryHighWriter[0x17] = this.memoryWriter[0xFF17] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (parentObj.channel2Enabled && parentObj.channel2envelopeSweeps === 0) {
+        this.memoryHighWriter[0x17] = this.memoryWriter[0xff17] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (_this3.channel2Enabled && _this3.channel2envelopeSweeps === 0) {
               //Zombie Volume PAPU Bug:
-              if (((parentObj.memory[0xFF17] ^ data) & 0x8) === 0x8) {
-                if ((parentObj.memory[0xFF17] & 0x8) === 0) {
-                  if ((parentObj.memory[0xFF17] & 0x7) === 0x7) {
-                    parentObj.channel2envelopeVolume += 2;
+              if (((_this3.memory[0xff17] ^ data) & 0x8) === 0x8) {
+                if ((_this3.memory[0xff17] & 0x8) === 0) {
+                  if ((_this3.memory[0xff17] & 0x7) === 0x7) {
+                    _this3.channel2envelopeVolume += 2;
                   } else {
-                    ++parentObj.channel2envelopeVolume;
+                    ++_this3.channel2envelopeVolume;
                   }
                 }
-                parentObj.channel2envelopeVolume = 16 - parentObj.channel2envelopeVolume & 0xF;
-              } else if ((parentObj.memory[0xFF17] & 0xF) === 0x8) {
-                parentObj.channel2envelopeVolume = 1 + parentObj.channel2envelopeVolume & 0xF;
+                _this3.channel2envelopeVolume = 16 - _this3.channel2envelopeVolume & 0xf;
+              } else if ((_this3.memory[0xff17] & 0xf) === 0x8) {
+                _this3.channel2envelopeVolume = 1 + _this3.channel2envelopeVolume & 0xf;
               }
-              parentObj.channel2OutputLevelCache();
+              _this3.channel2OutputLevelCache();
             }
-            parentObj.channel2envelopeType = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF17] = data;
-            parentObj.channel2VolumeEnableCheck();
+            _this3.channel2envelopeType = (data & 0x08) === 0x08;
+            _this3.memory[0xff17] = data;
+            _this3.channel2VolumeEnableCheck();
           }
         };
         //NR23:
-        this.memoryHighWriter[0x18] = this.memoryWriter[0xFF18] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.channel2frequency = parentObj.channel2frequency & 0x700 | data;
-            parentObj.channel2FrequencyTracker = 0x800 - parentObj.channel2frequency << 2;
+        this.memoryHighWriter[0x18] = this.memoryWriter[0xff18] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.channel2frequency = _this3.channel2frequency & 0x700 | data;
+            _this3.channel2FrequencyTracker = 0x800 - _this3.channel2frequency << 2;
           }
         };
         //NR24:
-        this.memoryHighWriter[0x19] = this.memoryWriter[0xFF19] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (data > 0x7F) {
+        this.memoryHighWriter[0x19] = this.memoryWriter[0xff19] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (data > 0x7f) {
               //Reload 0xFF17:
-              var nr22 = parentObj.memory[0xFF17];
-              parentObj.channel2envelopeVolume = nr22 >> 4;
-              parentObj.channel2OutputLevelCache();
-              parentObj.channel2envelopeSweepsLast = (nr22 & 0x7) - 1;
-              if (parentObj.channel2totalLength === 0) {
-                parentObj.channel2totalLength = 0x40;
+              var nr22 = _this3.memory[0xff17];
+              _this3.channel2envelopeVolume = nr22 >> 4;
+              _this3.channel2OutputLevelCache();
+              _this3.channel2envelopeSweepsLast = (nr22 & 0x7) - 1;
+              if (_this3.channel2totalLength === 0) {
+                _this3.channel2totalLength = 0x40;
               }
               if ((data & 0x40) === 0x40) {
-                parentObj.memory[0xFF26] |= 0x2;
+                _this3.memory[0xff26] |= 0x2;
               }
             }
-            parentObj.channel2consecutive = (data & 0x40) === 0x0;
-            parentObj.channel2frequency = (data & 0x7) << 8 | parentObj.channel2frequency & 0xFF;
-            parentObj.channel2FrequencyTracker = 0x800 - parentObj.channel2frequency << 2;
-            parentObj.memory[0xFF19] = data;
-            parentObj.channel2EnableCheck();
+            _this3.channel2consecutive = (data & 0x40) === 0x0;
+            _this3.channel2frequency = (data & 0x7) << 8 | _this3.channel2frequency & 0xff;
+            _this3.channel2FrequencyTracker = 0x800 - _this3.channel2frequency << 2;
+            _this3.memory[0xff19] = data;
+            _this3.channel2EnableCheck();
           }
         };
         //NR30:
-        this.memoryHighWriter[0x1A] = this.memoryWriter[0xFF1A] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (!parentObj.channel3canPlay && data >= 0x80) {
-              parentObj.channel3lastSampleLookup = 0;
-              parentObj.channel3UpdateCache();
+        this.memoryHighWriter[0x1a] = this.memoryWriter[0xff1a] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (!_this3.channel3canPlay && data >= 0x80) {
+              _this3.channel3lastSampleLookup = 0;
+              _this3.channel3UpdateCache();
             }
-            parentObj.channel3canPlay = data > 0x7F;
-            if (parentObj.channel3canPlay && parentObj.memory[0xFF1A] > 0x7F && !parentObj.channel3consecutive) {
-              parentObj.memory[0xFF26] |= 0x4;
+            _this3.channel3canPlay = data > 0x7f;
+            if (_this3.channel3canPlay && _this3.memory[0xff1a] > 0x7f && !_this3.channel3consecutive) {
+              _this3.memory[0xff26] |= 0x4;
             }
-            parentObj.memory[0xFF1A] = data;
-            //parentObj.channel3EnableCheck();
+            _this3.memory[0xff1a] = data;
+            //this.channel3EnableCheck();
           }
         };
         //NR31:
-        this.memoryHighWriter[0x1B] = this.memoryWriter[0xFF1B] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-            if (parentObj.soundMasterEnabled) {
-              parentObj.audioJIT();
+        this.memoryHighWriter[0x1b] = this.memoryWriter[0xff1b] = function (address, data) {
+          if (_this3.soundMasterEnabled || !_this3.cartridgeSlot.cartridge.cGBC) {
+            if (_this3.soundMasterEnabled) {
+              _this3.audioJIT();
             }
-            parentObj.channel3totalLength = 0x100 - data;
-            parentObj.channel3EnableCheck();
+            _this3.channel3totalLength = 0x100 - data;
+            _this3.channel3EnableCheck();
           }
         };
         //NR32:
-        this.memoryHighWriter[0x1C] = this.memoryWriter[0xFF1C] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
+        this.memoryHighWriter[0x1c] = this.memoryWriter[0xff1c] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
             data &= 0x60;
-            parentObj.memory[0xFF1C] = data;
-            parentObj.channel3patternType = data === 0 ? 4 : (data >> 5) - 1;
+            _this3.memory[0xff1c] = data;
+            _this3.channel3patternType = data === 0 ? 4 : (data >> 5) - 1;
           }
         };
         //NR33:
-        this.memoryHighWriter[0x1D] = this.memoryWriter[0xFF1D] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.channel3frequency = parentObj.channel3frequency & 0x700 | data;
-            parentObj.channel3FrequencyPeriod = 0x800 - parentObj.channel3frequency << 1;
+        this.memoryHighWriter[0x1d] = this.memoryWriter[0xff1d] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.channel3frequency = _this3.channel3frequency & 0x700 | data;
+            _this3.channel3FrequencyPeriod = 0x800 - _this3.channel3frequency << 1;
           }
         };
         //NR34:
-        this.memoryHighWriter[0x1E] = this.memoryWriter[0xFF1E] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (data > 0x7F) {
-              if (parentObj.channel3totalLength === 0) {
-                parentObj.channel3totalLength = 0x100;
+        this.memoryHighWriter[0x1e] = this.memoryWriter[0xff1e] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (data > 0x7f) {
+              if (_this3.channel3totalLength === 0) {
+                _this3.channel3totalLength = 0x100;
               }
-              parentObj.channel3lastSampleLookup = 0;
+              _this3.channel3lastSampleLookup = 0;
               if ((data & 0x40) === 0x40) {
-                parentObj.memory[0xFF26] |= 0x4;
+                _this3.memory[0xff26] |= 0x4;
               }
             }
-            parentObj.channel3consecutive = (data & 0x40) === 0x0;
-            parentObj.channel3frequency = (data & 0x7) << 8 | parentObj.channel3frequency & 0xFF;
-            parentObj.channel3FrequencyPeriod = 0x800 - parentObj.channel3frequency << 1;
-            parentObj.memory[0xFF1E] = data;
-            parentObj.channel3EnableCheck();
+            _this3.channel3consecutive = (data & 0x40) === 0x0;
+            _this3.channel3frequency = (data & 0x7) << 8 | _this3.channel3frequency & 0xff;
+            _this3.channel3FrequencyPeriod = 0x800 - _this3.channel3frequency << 1;
+            _this3.memory[0xff1e] = data;
+            _this3.channel3EnableCheck();
           }
         };
         //NR40 (Unused I/O):
-        this.memoryHighWriter[0x1F] = this.memoryWriter[0xFF1F] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x1f] = this.memoryWriter[0xff1f] = this.cartIgnoreWrite;
         //NR41:
-        this.memoryHighWriter[0x20] = this.memoryWriter[0xFF20] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled || !parentObj.cartridgeSlot.cartridge.cGBC) {
-            if (parentObj.soundMasterEnabled) {
-              parentObj.audioJIT();
+        this.memoryHighWriter[0x20] = this.memoryWriter[0xff20] = function (address, data) {
+          if (_this3.soundMasterEnabled || !_this3.cartridgeSlot.cartridge.cGBC) {
+            if (_this3.soundMasterEnabled) {
+              _this3.audioJIT();
             }
-            parentObj.channel4totalLength = 0x40 - (data & 0x3F);
-            parentObj.channel4EnableCheck();
+            _this3.channel4totalLength = 0x40 - (data & 0x3f);
+            _this3.channel4EnableCheck();
           }
         };
         //NR42:
-        this.memoryHighWriter[0x21] = this.memoryWriter[0xFF21] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            if (parentObj.channel4Enabled && parentObj.channel4envelopeSweeps === 0) {
+        this.memoryHighWriter[0x21] = this.memoryWriter[0xff21] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            if (_this3.channel4Enabled && _this3.channel4envelopeSweeps === 0) {
               //Zombie Volume PAPU Bug:
-              if (((parentObj.memory[0xFF21] ^ data) & 0x8) === 0x8) {
-                if ((parentObj.memory[0xFF21] & 0x8) === 0) {
-                  if ((parentObj.memory[0xFF21] & 0x7) === 0x7) {
-                    parentObj.channel4envelopeVolume += 2;
+              if (((_this3.memory[0xff21] ^ data) & 0x8) === 0x8) {
+                if ((_this3.memory[0xff21] & 0x8) === 0) {
+                  if ((_this3.memory[0xff21] & 0x7) === 0x7) {
+                    _this3.channel4envelopeVolume += 2;
                   } else {
-                    ++parentObj.channel4envelopeVolume;
+                    ++_this3.channel4envelopeVolume;
                   }
                 }
-                parentObj.channel4envelopeVolume = 16 - parentObj.channel4envelopeVolume & 0xF;
-              } else if ((parentObj.memory[0xFF21] & 0xF) === 0x8) {
-                parentObj.channel4envelopeVolume = 1 + parentObj.channel4envelopeVolume & 0xF;
+                _this3.channel4envelopeVolume = 16 - _this3.channel4envelopeVolume & 0xf;
+              } else if ((_this3.memory[0xff21] & 0xf) === 0x8) {
+                _this3.channel4envelopeVolume = 1 + _this3.channel4envelopeVolume & 0xf;
               }
-              parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
+              _this3.channel4currentVolume = _this3.channel4envelopeVolume << _this3.channel4VolumeShifter;
             }
-            parentObj.channel4envelopeType = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF21] = data;
-            parentObj.channel4UpdateCache();
-            parentObj.channel4VolumeEnableCheck();
+            _this3.channel4envelopeType = (data & 0x08) === 0x08;
+            _this3.memory[0xff21] = data;
+            _this3.channel4UpdateCache();
+            _this3.channel4VolumeEnableCheck();
           }
         };
         //NR43:
-        this.memoryHighWriter[0x22] = this.memoryWriter[0xFF22] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.channel4FrequencyPeriod = Math.max((data & 0x7) << 4, 8) << (data >> 4);
+        this.memoryHighWriter[0x22] = this.memoryWriter[0xff22] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.channel4FrequencyPeriod = Math.max((data & 0x7) << 4, 8) << (data >> 4);
             var bitWidth = data & 0x8;
-            if (bitWidth === 0x8 && parentObj.channel4BitRange === 0x7FFF || bitWidth === 0 && parentObj.channel4BitRange === 0x7F) {
-              parentObj.channel4lastSampleLookup = 0;
-              parentObj.channel4BitRange = bitWidth === 0x8 ? 0x7F : 0x7FFF;
-              parentObj.channel4VolumeShifter = bitWidth === 0x8 ? 7 : 15;
-              parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
-              parentObj.noiseSampleTable = bitWidth === 0x8 ? parentObj.LSFR7Table : parentObj.LSFR15Table;
+            if (bitWidth === 0x8 && _this3.channel4BitRange === 0x7fff || bitWidth === 0 && _this3.channel4BitRange === 0x7f) {
+              _this3.channel4lastSampleLookup = 0;
+              _this3.channel4BitRange = bitWidth === 0x8 ? 0x7f : 0x7fff;
+              _this3.channel4VolumeShifter = bitWidth === 0x8 ? 7 : 15;
+              _this3.channel4currentVolume = _this3.channel4envelopeVolume << _this3.channel4VolumeShifter;
+              _this3.noiseSampleTable = bitWidth === 0x8 ? _this3.LSFR7Table : _this3.LSFR15Table;
             }
-            parentObj.memory[0xFF22] = data;
-            parentObj.channel4UpdateCache();
+            _this3.memory[0xff22] = data;
+            _this3.channel4UpdateCache();
           }
         };
         //NR44:
-        this.memoryHighWriter[0x23] = this.memoryWriter[0xFF23] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled) {
-            parentObj.audioJIT();
-            parentObj.memory[0xFF23] = data;
-            parentObj.channel4consecutive = (data & 0x40) === 0x0;
-            if (data > 0x7F) {
-              var nr42 = parentObj.memory[0xFF21];
-              parentObj.channel4envelopeVolume = nr42 >> 4;
-              parentObj.channel4currentVolume = parentObj.channel4envelopeVolume << parentObj.channel4VolumeShifter;
-              parentObj.channel4envelopeSweepsLast = (nr42 & 0x7) - 1;
-              if (parentObj.channel4totalLength === 0) {
-                parentObj.channel4totalLength = 0x40;
+        this.memoryHighWriter[0x23] = this.memoryWriter[0xff23] = function (address, data) {
+          if (_this3.soundMasterEnabled) {
+            _this3.audioJIT();
+            _this3.memory[0xff23] = data;
+            _this3.channel4consecutive = (data & 0x40) === 0x0;
+            if (data > 0x7f) {
+              var nr42 = _this3.memory[0xff21];
+              _this3.channel4envelopeVolume = nr42 >> 4;
+              _this3.channel4currentVolume = _this3.channel4envelopeVolume << _this3.channel4VolumeShifter;
+              _this3.channel4envelopeSweepsLast = (nr42 & 0x7) - 1;
+              if (_this3.channel4totalLength === 0) {
+                _this3.channel4totalLength = 0x40;
               }
               if ((data & 0x40) === 0x40) {
-                parentObj.memory[0xFF26] |= 0x8;
+                _this3.memory[0xff26] |= 0x8;
               }
             }
-            parentObj.channel4EnableCheck();
+            _this3.channel4EnableCheck();
           }
         };
         //NR50:
-        this.memoryHighWriter[0x24] = this.memoryWriter[0xFF24] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled && parentObj.memory[0xFF24] != data) {
-            parentObj.audioJIT();
-            parentObj.memory[0xFF24] = data;
-            parentObj.VinLeftChannelMasterVolume = (data >> 4 & 0x07) + 1;
-            parentObj.VinRightChannelMasterVolume = (data & 0x07) + 1;
-            parentObj.mixerOutputLevelCache();
+        this.memoryHighWriter[0x24] = this.memoryWriter[0xff24] = function (address, data) {
+          if (_this3.soundMasterEnabled && _this3.memory[0xff24] != data) {
+            _this3.audioJIT();
+            _this3.memory[0xff24] = data;
+            _this3.VinLeftChannelMasterVolume = (data >> 4 & 0x07) + 1;
+            _this3.VinRightChannelMasterVolume = (data & 0x07) + 1;
+            _this3.mixerOutputLevelCache();
           }
         };
         //NR51:
-        this.memoryHighWriter[0x25] = this.memoryWriter[0xFF25] = function (parentObj, address, data) {
-          if (parentObj.soundMasterEnabled && parentObj.memory[0xFF25] != data) {
-            parentObj.audioJIT();
-            parentObj.memory[0xFF25] = data;
-            parentObj.rightChannel1 = (data & 0x01) === 0x01;
-            parentObj.rightChannel2 = (data & 0x02) === 0x02;
-            parentObj.rightChannel3 = (data & 0x04) === 0x04;
-            parentObj.rightChannel4 = (data & 0x08) === 0x08;
-            parentObj.leftChannel1 = (data & 0x10) === 0x10;
-            parentObj.leftChannel2 = (data & 0x20) === 0x20;
-            parentObj.leftChannel3 = (data & 0x40) === 0x40;
-            parentObj.leftChannel4 = data > 0x7F;
-            parentObj.channel1OutputLevelCache();
-            parentObj.channel2OutputLevelCache();
-            parentObj.channel3OutputLevelCache();
-            parentObj.channel4OutputLevelCache();
+        this.memoryHighWriter[0x25] = this.memoryWriter[0xff25] = function (address, data) {
+          if (_this3.soundMasterEnabled && _this3.memory[0xff25] != data) {
+            _this3.audioJIT();
+            _this3.memory[0xff25] = data;
+            _this3.rightChannel1 = (data & 0x01) === 0x01;
+            _this3.rightChannel2 = (data & 0x02) === 0x02;
+            _this3.rightChannel3 = (data & 0x04) === 0x04;
+            _this3.rightChannel4 = (data & 0x08) === 0x08;
+            _this3.leftChannel1 = (data & 0x10) === 0x10;
+            _this3.leftChannel2 = (data & 0x20) === 0x20;
+            _this3.leftChannel3 = (data & 0x40) === 0x40;
+            _this3.leftChannel4 = data > 0x7f;
+            _this3.channel1OutputLevelCache();
+            _this3.channel2OutputLevelCache();
+            _this3.channel3OutputLevelCache();
+            _this3.channel4OutputLevelCache();
           }
         };
         //NR52:
-        this.memoryHighWriter[0x26] = this.memoryWriter[0xFF26] = function (parentObj, address, data) {
-          parentObj.audioJIT();
-          if (!parentObj.soundMasterEnabled && data > 0x7F) {
-            parentObj.memory[0xFF26] = 0x80;
-            parentObj.soundMasterEnabled = true;
-            parentObj.initializeAudioStartState();
-          } else if (parentObj.soundMasterEnabled && data < 0x80) {
-            parentObj.memory[0xFF26] = 0;
-            parentObj.soundMasterEnabled = false;
+        this.memoryHighWriter[0x26] = this.memoryWriter[0xff26] = function (address, data) {
+          _this3.audioJIT();
+          if (!_this3.soundMasterEnabled && data > 0x7f) {
+            _this3.memory[0xff26] = 0x80;
+            _this3.soundMasterEnabled = true;
+            _this3.initializeAudioStartState();
+          } else if (_this3.soundMasterEnabled && data < 0x80) {
+            _this3.memory[0xff26] = 0;
+            _this3.soundMasterEnabled = false;
             //GBDev wiki says the registers are written with zeros on power off:
-            for (var index = 0xFF10; index < 0xFF26; index++) {
-              parentObj.memoryWriter[index](parentObj, index, 0);
+            for (var index = 0xff10; index < 0xff26; index++) {
+              _this3.memoryWriter[index].apply(_this3, [index, 0]);
             }
           }
         };
         //0xFF27 to 0xFF2F don't do anything...
-        this.memoryHighWriter[0x27] = this.memoryWriter[0xFF27] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x28] = this.memoryWriter[0xFF28] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x29] = this.memoryWriter[0xFF29] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2A] = this.memoryWriter[0xFF2A] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2B] = this.memoryWriter[0xFF2B] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2C] = this.memoryWriter[0xFF2C] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2D] = this.memoryWriter[0xFF2D] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2E] = this.memoryWriter[0xFF2E] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x2F] = this.memoryWriter[0xFF2F] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x27] = this.memoryWriter[0xff27] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x28] = this.memoryWriter[0xff28] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x29] = this.memoryWriter[0xff29] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2a] = this.memoryWriter[0xff2a] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2b] = this.memoryWriter[0xff2b] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2c] = this.memoryWriter[0xff2c] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2d] = this.memoryWriter[0xff2d] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2e] = this.memoryWriter[0xff2e] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x2f] = this.memoryWriter[0xff2f] = this.cartIgnoreWrite;
         //WAVE PCM RAM:
-        this.memoryHighWriter[0x30] = this.memoryWriter[0xFF30] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0, data);
+        this.memoryHighWriter[0x30] = this.memoryWriter[0xff30] = function (address, data) {
+          _this3.channel3WriteRAM(0, data);
         };
-        this.memoryHighWriter[0x31] = this.memoryWriter[0xFF31] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x1, data);
+        this.memoryHighWriter[0x31] = this.memoryWriter[0xff31] = function (address, data) {
+          _this3.channel3WriteRAM(0x1, data);
         };
-        this.memoryHighWriter[0x32] = this.memoryWriter[0xFF32] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x2, data);
+        this.memoryHighWriter[0x32] = this.memoryWriter[0xff32] = function (address, data) {
+          _this3.channel3WriteRAM(0x2, data);
         };
-        this.memoryHighWriter[0x33] = this.memoryWriter[0xFF33] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x3, data);
+        this.memoryHighWriter[0x33] = this.memoryWriter[0xff33] = function (address, data) {
+          _this3.channel3WriteRAM(0x3, data);
         };
-        this.memoryHighWriter[0x34] = this.memoryWriter[0xFF34] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x4, data);
+        this.memoryHighWriter[0x34] = this.memoryWriter[0xff34] = function (address, data) {
+          _this3.channel3WriteRAM(0x4, data);
         };
-        this.memoryHighWriter[0x35] = this.memoryWriter[0xFF35] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x5, data);
+        this.memoryHighWriter[0x35] = this.memoryWriter[0xff35] = function (address, data) {
+          _this3.channel3WriteRAM(0x5, data);
         };
-        this.memoryHighWriter[0x36] = this.memoryWriter[0xFF36] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x6, data);
+        this.memoryHighWriter[0x36] = this.memoryWriter[0xff36] = function (address, data) {
+          _this3.channel3WriteRAM(0x6, data);
         };
-        this.memoryHighWriter[0x37] = this.memoryWriter[0xFF37] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x7, data);
+        this.memoryHighWriter[0x37] = this.memoryWriter[0xff37] = function (address, data) {
+          _this3.channel3WriteRAM(0x7, data);
         };
-        this.memoryHighWriter[0x38] = this.memoryWriter[0xFF38] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x8, data);
+        this.memoryHighWriter[0x38] = this.memoryWriter[0xff38] = function (address, data) {
+          _this3.channel3WriteRAM(0x8, data);
         };
-        this.memoryHighWriter[0x39] = this.memoryWriter[0xFF39] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0x9, data);
+        this.memoryHighWriter[0x39] = this.memoryWriter[0xff39] = function (address, data) {
+          _this3.channel3WriteRAM(0x9, data);
         };
-        this.memoryHighWriter[0x3A] = this.memoryWriter[0xFF3A] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xA, data);
+        this.memoryHighWriter[0x3a] = this.memoryWriter[0xff3a] = function (address, data) {
+          _this3.channel3WriteRAM(0xa, data);
         };
-        this.memoryHighWriter[0x3B] = this.memoryWriter[0xFF3B] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xB, data);
+        this.memoryHighWriter[0x3b] = this.memoryWriter[0xff3b] = function (address, data) {
+          _this3.channel3WriteRAM(0xb, data);
         };
-        this.memoryHighWriter[0x3C] = this.memoryWriter[0xFF3C] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xC, data);
+        this.memoryHighWriter[0x3c] = this.memoryWriter[0xff3c] = function (address, data) {
+          _this3.channel3WriteRAM(0xc, data);
         };
-        this.memoryHighWriter[0x3D] = this.memoryWriter[0xFF3D] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xD, data);
+        this.memoryHighWriter[0x3d] = this.memoryWriter[0xff3d] = function (address, data) {
+          _this3.channel3WriteRAM(0xd, data);
         };
-        this.memoryHighWriter[0x3E] = this.memoryWriter[0xFF3E] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xE, data);
+        this.memoryHighWriter[0x3e] = this.memoryWriter[0xff3e] = function (address, data) {
+          _this3.channel3WriteRAM(0xe, data);
         };
-        this.memoryHighWriter[0x3F] = this.memoryWriter[0xFF3F] = function (parentObj, address, data) {
-          parentObj.channel3WriteRAM(0xF, data);
+        this.memoryHighWriter[0x3f] = this.memoryWriter[0xff3f] = function (address, data) {
+          _this3.channel3WriteRAM(0xf, data);
         };
         //SCY
-        this.memoryHighWriter[0x42] = this.memoryWriter[0xFF42] = function (parentObj, address, data) {
-          if (parentObj.backgroundY != data) {
-            parentObj.midScanLineJIT();
-            parentObj.backgroundY = data;
+        this.memoryHighWriter[0x42] = this.memoryWriter[0xff42] = function (address, data) {
+          if (_this3.backgroundY != data) {
+            _this3.midScanLineJIT();
+            _this3.backgroundY = data;
           }
         };
         //SCX
-        this.memoryHighWriter[0x43] = this.memoryWriter[0xFF43] = function (parentObj, address, data) {
-          if (parentObj.backgroundX != data) {
-            parentObj.midScanLineJIT();
-            parentObj.backgroundX = data;
+        this.memoryHighWriter[0x43] = this.memoryWriter[0xff43] = function (address, data) {
+          if (_this3.backgroundX != data) {
+            _this3.midScanLineJIT();
+            _this3.backgroundX = data;
           }
         };
         //LY
-        this.memoryHighWriter[0x44] = this.memoryWriter[0xFF44] = function (parentObj, address, data) {
+        this.memoryHighWriter[0x44] = this.memoryWriter[0xff44] = function (address, data) {
           //Read Only:
-          if (parentObj.LCDisOn) {
+          if (_this3.LCDisOn) {
             //Gambatte says to do this:
-            parentObj.modeSTAT = 2;
-            parentObj.midScanlineOffset = -1;
-            parentObj.totalLinesPassed = parentObj.currentX = parentObj.queuedScanLines = parentObj.lastUnrenderedLine = parentObj.LCDTicks = parentObj.STATTracker = parentObj.actualScanLine = parentObj.memory[0xFF44] = 0;
+            _this3.modeSTAT = 2;
+            _this3.midScanlineOffset = -1;
+            _this3.totalLinesPassed = _this3.currentX = _this3.queuedScanLines = _this3.lastUnrenderedLine = _this3.LCDTicks = _this3.STATTracker = _this3.actualScanLine = _this3.memory[0xff44] = 0;
           }
         };
         //LYC
-        this.memoryHighWriter[0x45] = this.memoryWriter[0xFF45] = function (parentObj, address, data) {
-          if (parentObj.memory[0xFF45] != data) {
-            parentObj.memory[0xFF45] = data;
-            if (parentObj.LCDisOn) {
-              parentObj.matchLYC(); //Get the compare of the first scan line.
+        this.memoryHighWriter[0x45] = this.memoryWriter[0xff45] = function (address, data) {
+          if (_this3.memory[0xff45] != data) {
+            _this3.memory[0xff45] = data;
+            if (_this3.LCDisOn) {
+              _this3.matchLYC(); //Get the compare of the first scan line.
             }
           }
         };
         //WY
-        this.memoryHighWriter[0x4A] = this.memoryWriter[0xFF4A] = function (parentObj, address, data) {
-          if (parentObj.windowY != data) {
-            parentObj.midScanLineJIT();
-            parentObj.windowY = data;
+        this.memoryHighWriter[0x4a] = this.memoryWriter[0xff4a] = function (address, data) {
+          if (_this3.windowY != data) {
+            _this3.midScanLineJIT();
+            _this3.windowY = data;
           }
         };
         //WX
-        this.memoryHighWriter[0x4B] = this.memoryWriter[0xFF4B] = function (parentObj, address, data) {
-          if (parentObj.memory[0xFF4B] != data) {
-            parentObj.midScanLineJIT();
-            parentObj.memory[0xFF4B] = data;
-            parentObj.windowX = data - 7;
+        this.memoryHighWriter[0x4b] = this.memoryWriter[0xff4b] = function (address, data) {
+          if (_this3.memory[0xff4b] != data) {
+            _this3.midScanLineJIT();
+            _this3.memory[0xff4b] = data;
+            _this3.windowX = data - 7;
           }
         };
-        this.memoryHighWriter[0x72] = this.memoryWriter[0xFF72] = function (parentObj, address, data) {
-          parentObj.memory[0xFF72] = data;
+        this.memoryHighWriter[0x72] = this.memoryWriter[0xff72] = function (address, data) {
+          _this3.memory[0xff72] = data;
         };
-        this.memoryHighWriter[0x73] = this.memoryWriter[0xFF73] = function (parentObj, address, data) {
-          parentObj.memory[0xFF73] = data;
+        this.memoryHighWriter[0x73] = this.memoryWriter[0xff73] = function (address, data) {
+          _this3.memory[0xff73] = data;
         };
-        this.memoryHighWriter[0x75] = this.memoryWriter[0xFF75] = function (parentObj, address, data) {
-          parentObj.memory[0xFF75] = data;
+        this.memoryHighWriter[0x75] = this.memoryWriter[0xff75] = function (address, data) {
+          _this3.memory[0xff75] = data;
         };
-        this.memoryHighWriter[0x76] = this.memoryWriter[0xFF76] = this.cartIgnoreWrite;
-        this.memoryHighWriter[0x77] = this.memoryWriter[0xFF77] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x76] = this.memoryWriter[0xff76] = this.cartIgnoreWrite;
+        this.memoryHighWriter[0x77] = this.memoryWriter[0xff77] = this.cartIgnoreWrite;
         //IE (Interrupt Enable)
-        this.memoryHighWriter[0xFF] = this.memoryWriter[0xFFFF] = function (parentObj, address, data) {
-          parentObj.interruptsEnabled = data;
-          parentObj.checkIRQMatching();
+        this.memoryHighWriter[0xff] = this.memoryWriter[0xffff] = function (address, data) {
+          _this3.interruptsEnabled = data;
+          _this3.checkIRQMatching();
         };
         this.recompileModelSpecificIOWriteHandling();
         this.recompileBootIOWriteHandling();
       };
       GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function () {
+        var _this4 = this;
+
         if (this.cartridgeSlot.cartridge.cGBC) {
           //GameBoy Color Specific I/O:
           //SC (Serial Transfer Control Register)
-          this.memoryHighWriter[0x2] = this.memoryWriter[0xFF02] = function (parentObj, address, data) {
+          this.memoryHighWriter[0x2] = this.memoryWriter[0xff02] = function (address, data) {
             if ((data & 0x1) === 0x1) {
               //Internal clock:
-              parentObj.memory[0xFF02] = data & 0x7F;
-              parentObj.serialTimer = (data & 0x2) === 0 ? 4096 : 128; //Set the Serial IRQ counter.
-              parentObj.serialShiftTimer = parentObj.serialShiftTimerAllocated = (data & 0x2) === 0 ? 512 : 16; //Set the transfer data shift counter.
+              _this4.memory[0xff02] = data & 0x7f;
+              _this4.serialTimer = (data & 0x2) === 0 ? 4096 : 128; //Set the Serial IRQ counter.
+              _this4.serialShiftTimer = _this4.serialShiftTimerAllocated = (data & 0x2) === 0 ? 512 : 16; //Set the transfer data shift counter.
             } else {
               //External clock:
-              parentObj.memory[0xFF02] = data;
-              parentObj.serialShiftTimer = parentObj.serialShiftTimerAllocated = parentObj.serialTimer = 0; //Zero the timers, since we're emulating as if nothing is connected.
+              _this4.memory[0xff02] = data;
+              _this4.serialShiftTimer = _this4.serialShiftTimerAllocated = _this4.serialTimer = 0; //Zero the timers, since we're emulating as if nothing is connected.
             }
           };
-          this.memoryHighWriter[0x40] = this.memoryWriter[0xFF40] = function (parentObj, address, data) {
-            if (parentObj.memory[0xFF40] != data) {
-              parentObj.midScanLineJIT();
-              var temp_var = data > 0x7F;
-              if (temp_var != parentObj.LCDisOn) {
+          this.memoryHighWriter[0x40] = this.memoryWriter[0xff40] = function (address, data) {
+            if (_this4.memory[0xff40] != data) {
+              _this4.midScanLineJIT();
+              var temp_var = data > 0x7f;
+              if (temp_var != _this4.LCDisOn) {
                 //When the display mode changes...
-                parentObj.LCDisOn = temp_var;
-                parentObj.memory[0xFF41] &= 0x78;
-                parentObj.midScanlineOffset = -1;
-                parentObj.totalLinesPassed = parentObj.currentX = parentObj.queuedScanLines = parentObj.lastUnrenderedLine = parentObj.STATTracker = parentObj.LCDTicks = parentObj.actualScanLine = parentObj.memory[0xFF44] = 0;
-                if (parentObj.LCDisOn) {
-                  parentObj.modeSTAT = 2;
-                  parentObj.matchLYC(); //Get the compare of the first scan line.
-                  parentObj.LCDCONTROL = parentObj.LINECONTROL;
+                _this4.LCDisOn = temp_var;
+                _this4.memory[0xff41] &= 0x78;
+                _this4.midScanlineOffset = -1;
+                _this4.totalLinesPassed = _this4.currentX = _this4.queuedScanLines = _this4.lastUnrenderedLine = _this4.STATTracker = _this4.LCDTicks = _this4.actualScanLine = _this4.memory[0xff44] = 0;
+                if (_this4.LCDisOn) {
+                  _this4.modeSTAT = 2;
+                  _this4.matchLYC(); //Get the compare of the first scan line.
+                  _this4.LCDCONTROL = _this4.LINECONTROL;
                 } else {
-                  parentObj.modeSTAT = 0;
-                  parentObj.LCDCONTROL = parentObj.DISPLAYOFFCONTROL;
-                  parentObj.lcd.DisplayShowOff();
+                  _this4.modeSTAT = 0;
+                  _this4.LCDCONTROL = _this4.DISPLAYOFFCONTROL;
+                  _this4.lcd.DisplayShowOff();
                 }
-                parentObj.interruptsRequested &= 0xFD;
+                _this4.interruptsRequested &= 0xfd;
               }
-              parentObj.gfxWindowCHRBankPosition = (data & 0x40) === 0x40 ? 0x400 : 0;
-              parentObj.gfxWindowDisplay = (data & 0x20) === 0x20;
-              parentObj.gfxBackgroundBankOffset = (data & 0x10) === 0x10 ? 0 : 0x80;
-              parentObj.gfxBackgroundCHRBankPosition = (data & 0x08) === 0x08 ? 0x400 : 0;
-              parentObj.gfxSpriteNormalHeight = (data & 0x04) === 0;
-              parentObj.gfxSpriteShow = (data & 0x02) === 0x02;
-              parentObj.BGPriorityEnabled = (data & 0x01) === 0x01;
-              parentObj.priorityFlaggingPathRebuild(); //Special case the priority flagging as an optimization.
-              parentObj.memory[0xFF40] = data;
+              _this4.gfxWindowCHRBankPosition = (data & 0x40) === 0x40 ? 0x400 : 0;
+              _this4.gfxWindowDisplay = (data & 0x20) === 0x20;
+              _this4.gfxBackgroundBankOffset = (data & 0x10) === 0x10 ? 0 : 0x80;
+              _this4.gfxBackgroundCHRBankPosition = (data & 0x08) === 0x08 ? 0x400 : 0;
+              _this4.gfxSpriteNormalHeight = (data & 0x04) === 0;
+              _this4.gfxSpriteShow = (data & 0x02) === 0x02;
+              _this4.BGPriorityEnabled = (data & 0x01) === 0x01;
+              _this4.priorityFlaggingPathRebuild(); //Special case the priority flagging as an optimization.
+              _this4.memory[0xff40] = data;
             }
           };
-          this.memoryHighWriter[0x41] = this.memoryWriter[0xFF41] = function (parentObj, address, data) {
-            parentObj.LYCMatchTriggerSTAT = (data & 0x40) === 0x40;
-            parentObj.mode2TriggerSTAT = (data & 0x20) === 0x20;
-            parentObj.mode1TriggerSTAT = (data & 0x10) === 0x10;
-            parentObj.mode0TriggerSTAT = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF41] = data & 0x78;
+          this.memoryHighWriter[0x41] = this.memoryWriter[0xff41] = function (address, data) {
+            _this4.LYCMatchTriggerSTAT = (data & 0x40) === 0x40;
+            _this4.mode2TriggerSTAT = (data & 0x20) === 0x20;
+            _this4.mode1TriggerSTAT = (data & 0x10) === 0x10;
+            _this4.mode0TriggerSTAT = (data & 0x08) === 0x08;
+            _this4.memory[0xff41] = data & 0x78;
           };
-          this.memoryHighWriter[0x46] = this.memoryWriter[0xFF46] = function (parentObj, address, data) {
-            parentObj.memory[0xFF46] = data;
-            if (data < 0xE0) {
+          this.memoryHighWriter[0x46] = this.memoryWriter[0xff46] = function (address, data) {
+            _this4.memory[0xff46] = data;
+            if (data < 0xe0) {
               data <<= 8;
-              address = 0xFE00;
-              var stat = parentObj.modeSTAT;
-              parentObj.modeSTAT = 0;
+              address = 0xfe00;
+              var stat = _this4.modeSTAT;
+              _this4.modeSTAT = 0;
               var newData = 0;
               do {
-                newData = parentObj.memoryReader[data](parentObj, data++);
-                if (newData != parentObj.memory[address]) {
+                newData = _this4.memoryReader[data].apply(_this4, [data++]);
+                if (newData != _this4.memory[address]) {
                   //JIT the graphics render queue:
-                  parentObj.modeSTAT = stat;
-                  parentObj.graphicsJIT();
-                  parentObj.modeSTAT = 0;
-                  parentObj.memory[address++] = newData;
+                  _this4.modeSTAT = stat;
+                  _this4.graphicsJIT();
+                  _this4.modeSTAT = 0;
+                  _this4.memory[address++] = newData;
                   break;
                 }
-              } while (++address < 0xFEA0);
-              if (address < 0xFEA0) {
+              } while (++address < 0xfea0);
+              if (address < 0xfea0) {
                 do {
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                } while (address < 0xFEA0);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                } while (address < 0xfea0);
               }
-              parentObj.modeSTAT = stat;
+              _this4.modeSTAT = stat;
             }
           };
           //KEY1
-          this.memoryHighWriter[0x4D] = this.memoryWriter[0xFF4D] = function (parentObj, address, data) {
-            parentObj.memory[0xFF4D] = data & 0x7F | parentObj.memory[0xFF4D] & 0x80;
+          this.memoryHighWriter[0x4d] = this.memoryWriter[0xff4d] = function (address, data) {
+            _this4.memory[0xff4d] = data & 0x7f | _this4.memory[0xff4d] & 0x80;
           };
-          this.memoryHighWriter[0x4F] = this.memoryWriter[0xFF4F] = function (parentObj, address, data) {
-            parentObj.currVRAMBank = data & 0x01;
-            if (parentObj.currVRAMBank > 0) {
-              parentObj.BGCHRCurrentBank = parentObj.BGCHRBank2;
+          this.memoryHighWriter[0x4f] = this.memoryWriter[0xff4f] = function (address, data) {
+            _this4.currVRAMBank = data & 0x01;
+            if (_this4.currVRAMBank > 0) {
+              _this4.BGCHRCurrentBank = _this4.BGCHRBank2;
             } else {
-              parentObj.BGCHRCurrentBank = parentObj.BGCHRBank1;
+              _this4.BGCHRCurrentBank = _this4.BGCHRBank1;
             }
             //Only writable by GBC.
           };
-          this.memoryHighWriter[0x51] = this.memoryWriter[0xFF51] = function (parentObj, address, data) {
-            if (!parentObj.hdmaRunning) {
-              parentObj.memory[0xFF51] = data;
+          this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = function (address, data) {
+            if (!_this4.hdmaRunning) {
+              _this4.memory[0xff51] = data;
             }
           };
-          this.memoryHighWriter[0x52] = this.memoryWriter[0xFF52] = function (parentObj, address, data) {
-            if (!parentObj.hdmaRunning) {
-              parentObj.memory[0xFF52] = data & 0xF0;
+          this.memoryHighWriter[0x52] = this.memoryWriter[0xff52] = function (address, data) {
+            if (!_this4.hdmaRunning) {
+              _this4.memory[0xff52] = data & 0xf0;
             }
           };
-          this.memoryHighWriter[0x53] = this.memoryWriter[0xFF53] = function (parentObj, address, data) {
-            if (!parentObj.hdmaRunning) {
-              parentObj.memory[0xFF53] = data & 0x1F;
+          this.memoryHighWriter[0x53] = this.memoryWriter[0xff53] = function (address, data) {
+            if (!_this4.hdmaRunning) {
+              _this4.memory[0xff53] = data & 0x1f;
             }
           };
-          this.memoryHighWriter[0x54] = this.memoryWriter[0xFF54] = function (parentObj, address, data) {
-            if (!parentObj.hdmaRunning) {
-              parentObj.memory[0xFF54] = data & 0xF0;
+          this.memoryHighWriter[0x54] = this.memoryWriter[0xff54] = function (address, data) {
+            if (!_this4.hdmaRunning) {
+              _this4.memory[0xff54] = data & 0xf0;
             }
           };
-          this.memoryHighWriter[0x55] = this.memoryWriter[0xFF55] = function (parentObj, address, data) {
-            if (!parentObj.hdmaRunning) {
+          this.memoryHighWriter[0x55] = this.memoryWriter[0xff55] = function (address, data) {
+            if (!_this4.hdmaRunning) {
               if ((data & 0x80) === 0) {
                 //DMA
-                parentObj.DMAWrite((data & 0x7F) + 1);
-                parentObj.memory[0xFF55] = 0xFF; //Transfer completed.
+                _this4.DMAWrite((data & 0x7f) + 1);
+                _this4.memory[0xff55] = 0xff; //Transfer completed.
               } else {
                 //H-Blank DMA
-                parentObj.hdmaRunning = true;
-                parentObj.memory[0xFF55] = data & 0x7F;
+                _this4.hdmaRunning = true;
+                _this4.memory[0xff55] = data & 0x7f;
               }
             } else if ((data & 0x80) === 0) {
               //Stop H-Blank DMA
-              parentObj.hdmaRunning = false;
-              parentObj.memory[0xFF55] |= 0x80;
+              _this4.hdmaRunning = false;
+              _this4.memory[0xff55] |= 0x80;
             } else {
-              parentObj.memory[0xFF55] = data & 0x7F;
+              _this4.memory[0xff55] = data & 0x7f;
             }
           };
-          this.memoryHighWriter[0x68] = this.memoryWriter[0xFF68] = function (parentObj, address, data) {
-            parentObj.memory[0xFF69] = parentObj.gbcBGRawPalette[data & 0x3F];
-            parentObj.memory[0xFF68] = data;
+          this.memoryHighWriter[0x68] = this.memoryWriter[0xff68] = function (address, data) {
+            _this4.memory[0xff69] = _this4.gbcBGRawPalette[data & 0x3f];
+            _this4.memory[0xff68] = data;
           };
-          this.memoryHighWriter[0x69] = this.memoryWriter[0xFF69] = function (parentObj, address, data) {
-            parentObj.updateGBCBGPalette(parentObj.memory[0xFF68] & 0x3F, data);
-            if (parentObj.memory[0xFF68] > 0x7F) {
+          this.memoryHighWriter[0x69] = this.memoryWriter[0xff69] = function (address, data) {
+            _this4.updateGBCBGPalette(_this4.memory[0xff68] & 0x3f, data);
+            if (_this4.memory[0xff68] > 0x7f) {
               // high bit = autoincrement
-              var next = parentObj.memory[0xFF68] + 1 & 0x3F;
-              parentObj.memory[0xFF68] = next | 0x80;
-              parentObj.memory[0xFF69] = parentObj.gbcBGRawPalette[next];
+              var next = _this4.memory[0xff68] + 1 & 0x3f;
+              _this4.memory[0xff68] = next | 0x80;
+              _this4.memory[0xff69] = _this4.gbcBGRawPalette[next];
             } else {
-              parentObj.memory[0xFF69] = data;
+              _this4.memory[0xff69] = data;
             }
           };
-          this.memoryHighWriter[0x6A] = this.memoryWriter[0xFF6A] = function (parentObj, address, data) {
-            parentObj.memory[0xFF6B] = parentObj.gbcOBJRawPalette[data & 0x3F];
-            parentObj.memory[0xFF6A] = data;
+          this.memoryHighWriter[0x6a] = this.memoryWriter[0xff6a] = function (address, data) {
+            _this4.memory[0xff6b] = _this4.gbcOBJRawPalette[data & 0x3f];
+            _this4.memory[0xff6a] = data;
           };
-          this.memoryHighWriter[0x6B] = this.memoryWriter[0xFF6B] = function (parentObj, address, data) {
-            parentObj.updateGBCOBJPalette(parentObj.memory[0xFF6A] & 0x3F, data);
-            if (parentObj.memory[0xFF6A] > 0x7F) {
+          this.memoryHighWriter[0x6b] = this.memoryWriter[0xff6b] = function (address, data) {
+            _this4.updateGBCOBJPalette(_this4.memory[0xff6a] & 0x3f, data);
+            if (_this4.memory[0xff6a] > 0x7f) {
               // high bit = autoincrement
-              var next = parentObj.memory[0xFF6A] + 1 & 0x3F;
-              parentObj.memory[0xFF6A] = next | 0x80;
-              parentObj.memory[0xFF6B] = parentObj.gbcOBJRawPalette[next];
+              var next = _this4.memory[0xff6a] + 1 & 0x3f;
+              _this4.memory[0xff6a] = next | 0x80;
+              _this4.memory[0xff6b] = _this4.gbcOBJRawPalette[next];
             } else {
-              parentObj.memory[0xFF6B] = data;
+              _this4.memory[0xff6b] = data;
             }
           };
           //SVBK
-          this.memoryHighWriter[0x70] = this.memoryWriter[0xFF70] = function (parentObj, address, data) {
-            var addressCheck = parentObj.memory[0xFF51] << 8 | parentObj.memory[0xFF52]; //Cannot change the RAM bank while WRAM is the source of a running HDMA.
-            if (!parentObj.hdmaRunning || addressCheck < 0xD000 || addressCheck >= 0xE000) {
-              parentObj.gbcRamBank = Math.max(data & 0x07, 1); //Bank range is from 1-7
-              parentObj.gbcRamBankPosition = (parentObj.gbcRamBank - 1 << 12) - 0xD000;
-              parentObj.gbcRamBankPositionECHO = parentObj.gbcRamBankPosition - 0x2000;
+          this.memoryHighWriter[0x70] = this.memoryWriter[0xff70] = function (address, data) {
+            var addressCheck = _this4.memory[0xff51] << 8 | _this4.memory[0xff52]; //Cannot change the RAM bank while WRAM is the source of a running HDMA.
+            if (!_this4.hdmaRunning || addressCheck < 0xd000 || addressCheck >= 0xe000) {
+              _this4.gbcRamBank = Math.max(data & 0x07, 1); //Bank range is from 1-7
+              _this4.gbcRamBankPosition = (_this4.gbcRamBank - 1 << 12) - 0xd000;
+              _this4.gbcRamBankPositionECHO = _this4.gbcRamBankPosition - 0x2000;
             }
-            parentObj.memory[0xFF70] = data; //Bit 6 cannot be written to.
+            _this4.memory[0xff70] = data; //Bit 6 cannot be written to.
           };
-          this.memoryHighWriter[0x74] = this.memoryWriter[0xFF74] = function (parentObj, address, data) {
-            parentObj.memory[0xFF74] = data;
+          this.memoryHighWriter[0x74] = this.memoryWriter[0xff74] = function (address, data) {
+            _this4.memory[0xff74] = data;
           };
         } else {
           //Fill in the GameBoy Color I/O registers as normal RAM for GameBoy compatibility:
           //SC (Serial Transfer Control Register)
-          this.memoryHighWriter[0x2] = this.memoryWriter[0xFF02] = function (parentObj, address, data) {
+          this.memoryHighWriter[0x2] = this.memoryWriter[0xff02] = function (address, data) {
             if ((data & 0x1) === 0x1) {
               //Internal clock:
-              parentObj.memory[0xFF02] = data & 0x7F;
-              parentObj.serialTimer = 4096; //Set the Serial IRQ counter.
-              parentObj.serialShiftTimer = parentObj.serialShiftTimerAllocated = 512; //Set the transfer data shift counter.
+              _this4.memory[0xff02] = data & 0x7f;
+              _this4.serialTimer = 4096; //Set the Serial IRQ counter.
+              _this4.serialShiftTimer = _this4.serialShiftTimerAllocated = 512; //Set the transfer data shift counter.
             } else {
               //External clock:
-              parentObj.memory[0xFF02] = data;
-              parentObj.serialShiftTimer = parentObj.serialShiftTimerAllocated = parentObj.serialTimer = 0; //Zero the timers, since we're emulating as if nothing is connected.
+              _this4.memory[0xff02] = data;
+              _this4.serialShiftTimer = _this4.serialShiftTimerAllocated = _this4.serialTimer = 0; //Zero the timers, since we're emulating as if nothing is connected.
             }
           };
-          this.memoryHighWriter[0x40] = this.memoryWriter[0xFF40] = function (parentObj, address, data) {
-            if (parentObj.memory[0xFF40] != data) {
-              parentObj.midScanLineJIT();
-              var temp_var = data > 0x7F;
-              if (temp_var != parentObj.LCDisOn) {
+          this.memoryHighWriter[0x40] = this.memoryWriter[0xff40] = function (address, data) {
+            if (_this4.memory[0xff40] != data) {
+              _this4.midScanLineJIT();
+              var temp_var = data > 0x7f;
+              if (temp_var != _this4.LCDisOn) {
                 //When the display mode changes...
-                parentObj.LCDisOn = temp_var;
-                parentObj.memory[0xFF41] &= 0x78;
-                parentObj.midScanlineOffset = -1;
-                parentObj.totalLinesPassed = parentObj.currentX = parentObj.queuedScanLines = parentObj.lastUnrenderedLine = parentObj.STATTracker = parentObj.LCDTicks = parentObj.actualScanLine = parentObj.memory[0xFF44] = 0;
-                if (parentObj.LCDisOn) {
-                  parentObj.modeSTAT = 2;
-                  parentObj.matchLYC(); //Get the compare of the first scan line.
-                  parentObj.LCDCONTROL = parentObj.LINECONTROL;
+                _this4.LCDisOn = temp_var;
+                _this4.memory[0xff41] &= 0x78;
+                _this4.midScanlineOffset = -1;
+                _this4.totalLinesPassed = _this4.currentX = _this4.queuedScanLines = _this4.lastUnrenderedLine = _this4.STATTracker = _this4.LCDTicks = _this4.actualScanLine = _this4.memory[0xff44] = 0;
+                if (_this4.LCDisOn) {
+                  _this4.modeSTAT = 2;
+                  _this4.matchLYC(); //Get the compare of the first scan line.
+                  _this4.LCDCONTROL = _this4.LINECONTROL;
                 } else {
-                  parentObj.modeSTAT = 0;
-                  parentObj.LCDCONTROL = parentObj.DISPLAYOFFCONTROL;
-                  parentObj.lcd.DisplayShowOff();
+                  _this4.modeSTAT = 0;
+                  _this4.LCDCONTROL = _this4.DISPLAYOFFCONTROL;
+                  _this4.lcd.DisplayShowOff();
                 }
-                parentObj.interruptsRequested &= 0xFD;
+                _this4.interruptsRequested &= 0xfd;
               }
-              parentObj.gfxWindowCHRBankPosition = (data & 0x40) === 0x40 ? 0x400 : 0;
-              parentObj.gfxWindowDisplay = (data & 0x20) === 0x20;
-              parentObj.gfxBackgroundBankOffset = (data & 0x10) === 0x10 ? 0 : 0x80;
-              parentObj.gfxBackgroundCHRBankPosition = (data & 0x08) === 0x08 ? 0x400 : 0;
-              parentObj.gfxSpriteNormalHeight = (data & 0x04) === 0;
-              parentObj.gfxSpriteShow = (data & 0x02) === 0x02;
-              parentObj.bgEnabled = (data & 0x01) === 0x01;
-              parentObj.memory[0xFF40] = data;
+              _this4.gfxWindowCHRBankPosition = (data & 0x40) === 0x40 ? 0x400 : 0;
+              _this4.gfxWindowDisplay = (data & 0x20) === 0x20;
+              _this4.gfxBackgroundBankOffset = (data & 0x10) === 0x10 ? 0 : 0x80;
+              _this4.gfxBackgroundCHRBankPosition = (data & 0x08) === 0x08 ? 0x400 : 0;
+              _this4.gfxSpriteNormalHeight = (data & 0x04) === 0;
+              _this4.gfxSpriteShow = (data & 0x02) === 0x02;
+              _this4.bgEnabled = (data & 0x01) === 0x01;
+              _this4.memory[0xff40] = data;
             }
           };
-          this.memoryHighWriter[0x41] = this.memoryWriter[0xFF41] = function (parentObj, address, data) {
-            parentObj.LYCMatchTriggerSTAT = (data & 0x40) === 0x40;
-            parentObj.mode2TriggerSTAT = (data & 0x20) === 0x20;
-            parentObj.mode1TriggerSTAT = (data & 0x10) === 0x10;
-            parentObj.mode0TriggerSTAT = (data & 0x08) === 0x08;
-            parentObj.memory[0xFF41] = data & 0x78;
-            if ((!parentObj.usedBootROM || !parentObj.usedGBCBootROM) && parentObj.LCDisOn && parentObj.modeSTAT < 2) {
-              parentObj.interruptsRequested |= 0x2;
-              parentObj.checkIRQMatching();
+          this.memoryHighWriter[0x41] = this.memoryWriter[0xff41] = function (address, data) {
+            _this4.LYCMatchTriggerSTAT = (data & 0x40) === 0x40;
+            _this4.mode2TriggerSTAT = (data & 0x20) === 0x20;
+            _this4.mode1TriggerSTAT = (data & 0x10) === 0x10;
+            _this4.mode0TriggerSTAT = (data & 0x08) === 0x08;
+            _this4.memory[0xff41] = data & 0x78;
+            if ((!_this4.usedBootROM || !_this4.usedGBCBootROM) && _this4.LCDisOn && _this4.modeSTAT < 2) {
+              _this4.interruptsRequested |= 0x2;
+              _this4.checkIRQMatching();
             }
           };
-          this.memoryHighWriter[0x46] = this.memoryWriter[0xFF46] = function (parentObj, address, data) {
-            parentObj.memory[0xFF46] = data;
-            if (data > 0x7F && data < 0xE0) {
+          this.memoryHighWriter[0x46] = this.memoryWriter[0xff46] = function (address, data) {
+            _this4.memory[0xff46] = data;
+            if (data > 0x7f && data < 0xe0) {
               //DMG cannot DMA from the ROM banks.
               data <<= 8;
-              address = 0xFE00;
-              var stat = parentObj.modeSTAT;
-              parentObj.modeSTAT = 0;
+              address = 0xfe00;
+              var stat = _this4.modeSTAT;
+              _this4.modeSTAT = 0;
               var newData = 0;
               do {
-                newData = parentObj.memoryReader[data](parentObj, data++);
-                if (newData != parentObj.memory[address]) {
+                newData = _this4.memoryReader[data].apply(_this4, [data++]);
+                if (newData != _this4.memory[address]) {
                   //JIT the graphics render queue:
-                  parentObj.modeSTAT = stat;
-                  parentObj.graphicsJIT();
-                  parentObj.modeSTAT = 0;
-                  parentObj.memory[address++] = newData;
+                  _this4.modeSTAT = stat;
+                  _this4.graphicsJIT();
+                  _this4.modeSTAT = 0;
+                  _this4.memory[address++] = newData;
                   break;
                 }
-              } while (++address < 0xFEA0);
-              if (address < 0xFEA0) {
+              } while (++address < 0xfea0);
+              if (address < 0xfea0) {
                 do {
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                  parentObj.memory[address++] = parentObj.memoryReader[data](parentObj, data++);
-                } while (address < 0xFEA0);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                  _this4.memory[address++] = _this4.memoryReader[data].apply(_this4, [data++]);
+                } while (address < 0xfea0);
               }
-              parentObj.modeSTAT = stat;
+              _this4.modeSTAT = stat;
             }
           };
-          this.memoryHighWriter[0x47] = this.memoryWriter[0xFF47] = function (parentObj, address, data) {
-            if (parentObj.memory[0xFF47] != data) {
-              parentObj.midScanLineJIT();
-              parentObj.updateGBBGPalette(data);
-              parentObj.memory[0xFF47] = data;
+          this.memoryHighWriter[0x47] = this.memoryWriter[0xff47] = function (address, data) {
+            if (_this4.memory[0xff47] != data) {
+              _this4.midScanLineJIT();
+              _this4.updateGBBGPalette(data);
+              _this4.memory[0xff47] = data;
             }
           };
-          this.memoryHighWriter[0x48] = this.memoryWriter[0xFF48] = function (parentObj, address, data) {
-            if (parentObj.memory[0xFF48] != data) {
-              parentObj.midScanLineJIT();
-              parentObj.updateGBOBJPalette(0, data);
-              parentObj.memory[0xFF48] = data;
+          this.memoryHighWriter[0x48] = this.memoryWriter[0xff48] = function (address, data) {
+            if (_this4.memory[0xff48] != data) {
+              _this4.midScanLineJIT();
+              _this4.updateGBOBJPalette(0, data);
+              _this4.memory[0xff48] = data;
             }
           };
-          this.memoryHighWriter[0x49] = this.memoryWriter[0xFF49] = function (parentObj, address, data) {
-            if (parentObj.memory[0xFF49] != data) {
-              parentObj.midScanLineJIT();
-              parentObj.updateGBOBJPalette(4, data);
-              parentObj.memory[0xFF49] = data;
+          this.memoryHighWriter[0x49] = this.memoryWriter[0xff49] = function (address, data) {
+            if (_this4.memory[0xff49] != data) {
+              _this4.midScanLineJIT();
+              _this4.updateGBOBJPalette(4, data);
+              _this4.memory[0xff49] = data;
             }
           };
-          this.memoryHighWriter[0x4D] = this.memoryWriter[0xFF4D] = function (parentObj, address, data) {
-            parentObj.memory[0xFF4D] = data;
+          this.memoryHighWriter[0x4d] = this.memoryWriter[0xff4d] = function (address, data) {
+            _this4.memory[0xff4d] = data;
           };
-          this.memoryHighWriter[0x4F] = this.memoryWriter[0xFF4F] = this.cartIgnoreWrite; //Not writable in DMG mode.
-          this.memoryHighWriter[0x55] = this.memoryWriter[0xFF55] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x68] = this.memoryWriter[0xFF68] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x69] = this.memoryWriter[0xFF69] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x6A] = this.memoryWriter[0xFF6A] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x6B] = this.memoryWriter[0xFF6B] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x6C] = this.memoryWriter[0xFF6C] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x70] = this.memoryWriter[0xFF70] = this.cartIgnoreWrite;
-          this.memoryHighWriter[0x74] = this.memoryWriter[0xFF74] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x4f] = this.memoryWriter[0xff4f] = this.cartIgnoreWrite; //Not writable in DMG mode.
+          this.memoryHighWriter[0x55] = this.memoryWriter[0xff55] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x68] = this.memoryWriter[0xff68] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x69] = this.memoryWriter[0xff69] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x6a] = this.memoryWriter[0xff6a] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x6b] = this.memoryWriter[0xff6b] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x6c] = this.memoryWriter[0xff6c] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x70] = this.memoryWriter[0xff70] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x74] = this.memoryWriter[0xff74] = this.cartIgnoreWrite;
         }
       };
       GameBoyCore.prototype.recompileBootIOWriteHandling = function () {
+        var _this5 = this;
+
         //Boot I/O Registers:
         if (this.inBootstrap) {
-          this.memoryHighWriter[0x50] = this.memoryWriter[0xFF50] = function (parentObj, address, data) {
+          this.memoryHighWriter[0x50] = this.memoryWriter[0xff50] = function (address, data) {
             console.log("Boot ROM reads blocked: Bootstrap process has ended.", 0);
-            parentObj.inBootstrap = false;
-            parentObj.disableBootROM(); //Fill in the boot ROM ranges with ROM  bank 0 ROM ranges
-            parentObj.memory[0xFF50] = data; //Bits are sustained in memory?
+            _this5.inBootstrap = false;
+            _this5.disableBootROM(); //Fill in the boot ROM ranges with ROM  bank 0 ROM ranges
+            _this5.memory[0xff50] = data; //Bits are sustained in memory?
           };
           if (this.cartridgeSlot.cartridge.cGBC) {
-            this.memoryHighWriter[0x6C] = this.memoryWriter[0xFF6C] = function (parentObj, address, data) {
-              if (parentObj.inBootstrap) {
-                parentObj.cartridgeSlot.cartridge.cGBC = (data & 0x1) === 0;
+            this.memoryHighWriter[0x6c] = this.memoryWriter[0xff6c] = function (address, data) {
+              if (_this5.inBootstrap) {
+                _this5.cartridgeSlot.cartridge.cGBC = (data & 0x1) === 0;
                 //Exception to the GBC identifying code:
-                if (parentObj.cartridgeSlot.cartridge.name + parentObj.cartridgeSlot.cartridge.gameCode + parentObj.cartridgeSlot.cartridge.colorCompatibilityByte === "Game and Watch 50") {
-                  parentObj.cartridgeSlot.cartridge.cGBC = true;
-                  console.log("Created a boot exception for Game and Watch Gallery 2 (GBC ID byte is wrong on the cartridge).", 1);
+                if (_this5.cartridgeSlot.cartridge.name + _this5.cartridgeSlot.cartridge.gameCode + _this5.cartridgeSlot.cartridge.colorCompatibilityByte === "Game and Watch 50") {
+                  _this5.cartridgeSlot.cartridge.cGBC = true;
+                  console.log("Created a boot exception for Game and Watch Gallery 2 (GBC ID byte is wrong on the cartridge).");
                 }
-                console.log("Booted to GBC Mode: " + parentObj.cartridgeSlot.cartridge.cGBC, 0);
+                console.log("Booted to GBC Mode: " + _this5.cartridgeSlot.cartridge.cGBC);
               }
-              parentObj.memory[0xFF6C] = data;
+              _this5.memory[0xff6c] = data;
             };
           }
         } else {
           //Lockout the ROMs from accessing the BOOT ROM control register:
-          this.memoryHighWriter[0x50] = this.memoryWriter[0xFF50] = this.cartIgnoreWrite;
+          this.memoryHighWriter[0x50] = this.memoryWriter[0xff50] = this.cartIgnoreWrite;
         }
       };
 
@@ -22713,6 +22490,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         if (fullscreen.isActive) {
           $canvas.addClass("fullscreen");
         } else {
+          PointerLock.exitPointerLock();
           $canvas.removeClass("fullscreen");
         }
       });

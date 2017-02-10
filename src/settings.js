@@ -11,7 +11,6 @@ export default {
   enableMBC1Override: false, // Override to allow for MBC1 instead of ROM only (compatibility for broken 3rd-party cartridges).
   alwaysAllowRWtoBanks: false, // Override MBC RAM disabling and always allow reading and writing to the banks.
   forceGBBootRom: false, // Use the GameBoy boot ROM instead of the GameBoy Color boot ROM.
-  enabledChannels: [ // User controlled channel enables.
-    true, true, true, true
-  ]
+  // User controlled channel enables.
+  enabledChannels: [true, true, true, true]
 };

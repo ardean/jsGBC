@@ -19,11 +19,19 @@ export default class GameBoy {
     this.core.stopEmulator &= 1;
     this.core.firstIteration = new Date().getTime();
     this.core.iterations = 0;
-    this.interval = setInterval(() => {
-      if (!document.hidden && !document.msHidden && !document.mozHidden && !document.webkitHidden) {
-        this.core.run();
-      }
-    }, settings.runInterval);
+    this.interval = setInterval(
+      () => {
+        if (
+          !document.hidden &&
+            !document.msHidden &&
+            !document.mozHidden &&
+            !document.webkitHidden
+        ) {
+          this.core.run();
+        }
+      },
+      settings.runInterval
+    );
   }
 
   turnOff() {
@@ -75,13 +83,19 @@ export default class GameBoy {
   saveSRAM() {
     var sram = this.core.saveSRAMState();
     if (sram.length > 0) {
-      this.setLocalStorageValue("B64_SRAM_" + this.core.name, arrayToBase64(sram));
+      this.setLocalStorageValue(
+        "B64_SRAM_" + this.core.name,
+        arrayToBase64(sram)
+      );
     }
   }
 
   saveRTC() {
     if (this.core.cTIMER) {
-      this.setLocalStorageValue("RTC_" + this.core.name, this.core.saveRTCState());
+      this.setLocalStorageValue(
+        "RTC_" + this.core.name,
+        this.core.saveRTCState()
+      );
     }
   }
 

@@ -6,35 +6,55 @@ export default class AudioServer {
     this.channelsAllocated = Math.max(channels, 1);
     this.sampleRate = Math.abs(sampleRate);
     this.bufferSize = this.samplesPerCallback * this.channelsAllocated;
-    this.minBufferSize = minBufferSize >= this.bufferSize && minBufferSize < maxBufferSize ? (minBufferSize & (-this.channelsAllocated)) : this.bufferSize;
-    this.maxBufferSize = (Math.floor(maxBufferSize) > this.minBufferSize + this.channelsAllocated) ? (maxBufferSize & (-this.channelsAllocated)) : (this.minBufferSize * this.channelsAllocated);
+    this.minBufferSize = minBufferSize >= this.bufferSize &&
+      minBufferSize < maxBufferSize
+      ? minBufferSize & -this.channelsAllocated
+      : this.bufferSize;
+    this.maxBufferSize = Math.floor(maxBufferSize) >
+      this.minBufferSize + this.channelsAllocated
+      ? maxBufferSize & -this.channelsAllocated
+      : this.minBufferSize * this.channelsAllocated;
     this.setVolume(volume);
     this.initializeAudio();
   }
 
   writeAudio(buffer) {
-    for (let bufferCounter = 0; bufferCounter < buffer.length && this.audioBufferSize < this.maxBufferSize;) {
-      this.audioContextSampleBuffer[this.audioBufferSize++] = buffer[bufferCounter++];
+    for (
+      let bufferCounter = 0;
+      bufferCounter < buffer.length &&
+        this.audioBufferSize < this.maxBufferSize;
+
+    ) {
+      this.audioContextSampleBuffer[this.audioBufferSize++] = buffer[
+        bufferCounter++
+      ];
     }
   }
 
   remainingBuffer() {
-    return (
-      Math.floor(
-        (
-          this.resampledSamplesLeft() * this.resampleControl.ratioWeight
-        ) / this.channelsAllocated
-      ) * this.channelsAllocated
-    ) + this.audioBufferSize;
+    return Math.floor(
+      this.resampledSamplesLeft() *
+        this.resampleControl.ratioWeight /
+        this.channelsAllocated
+    ) *
+      this.channelsAllocated +
+      this.audioBufferSize;
   }
 
   initializeAudio() {
     this.audioContext = this.audioContext || new AudioContext();
 
     if (!this.audioNode) {
-      this.audioNode = this.audioContext.createScriptProcessor(this.samplesPerCallback, 0, this.channelsAllocated);
+      this.audioNode = this.audioContext.createScriptProcessor(
+        this.samplesPerCallback,
+        0,
+        this.channelsAllocated
+      );
 
-      this.audioNode.addEventListener("audioprocess", this.processAudio.bind(this));
+      this.audioNode.addEventListener(
+        "audioprocess",
+        this.processAudio.bind(this)
+      );
       this.audioNode.connect(this.audioContext.destination);
       this.resetCallbackAPIAudioBuffer(this.audioContext.sampleRate);
     }
@@ -51,9 +71,21 @@ export default class AudioServer {
     this.refillResampledBuffer();
 
     let index = 0;
-    for (; index < this.samplesPerCallback && this.resampleBufferStart !== this.resampleBufferEnd; ++index) {
-      for (bufferCount = 0; bufferCount < this.channelsAllocated; ++bufferCount) {
-        buffers[bufferCount][index] = this.resampledBuffer[this.resampleBufferStart++] * this.volume;
+    for (
+      ;
+      index < this.samplesPerCallback &&
+        this.resampleBufferStart !== this.resampleBufferEnd;
+      ++index
+    ) {
+      for (
+        bufferCount = 0;
+        bufferCount < this.channelsAllocated;
+        ++bufferCount
+      ) {
+        buffers[bufferCount][index] = this.resampledBuffer[
+          this.resampleBufferStart++
+        ] *
+          this.volume;
       }
       if (this.resampleBufferStart === this.resampleBufferSize) {
         this.resampleBufferStart = 0;
@@ -61,7 +93,11 @@ export default class AudioServer {
     }
 
     while (index < this.samplesPerCallback) {
-      for (bufferCount = 0; bufferCount < this.channelsAllocated; ++bufferCount) {
+      for (
+        bufferCount = 0;
+        bufferCount < this.channelsAllocated;
+        ++bufferCount
+      ) {
         buffers[bufferCount][index] = 0;
       }
       ++index;
@@ -80,10 +116,12 @@ export default class AudioServer {
 
   refillResampledBuffer() {
     if (this.audioBufferSize > 0) {
-      const resampleLength = this.resampleControl.resampler(this.getBufferSamples());
+      const resampleLength = this.resampleControl.resampler(
+        this.getBufferSamples()
+      );
       const resampledResult = this.resampleControl.outputBuffer;
 
-      for (let i = 0; i < resampleLength;) {
+      for (let i = 0; i < resampleLength; ) {
         this.resampledBuffer[this.resampleBufferEnd++] = resampledResult[i++];
 
         if (this.resampleBufferEnd === this.resampleBufferSize) {
@@ -105,7 +143,8 @@ export default class AudioServer {
   initializeResampler(sampleRate) {
     this.audioContextSampleBuffer = new Float32Array(this.maxBufferSize);
     this.resampleBufferSize = Math.max(
-      this.maxBufferSize * Math.ceil(sampleRate / this.sampleRate) + this.channelsAllocated,
+      this.maxBufferSize * Math.ceil(sampleRate / this.sampleRate) +
+        this.channelsAllocated,
       this.bufferSize
     );
 
@@ -119,9 +158,11 @@ export default class AudioServer {
   }
 
   resampledSamplesLeft() {
-    return (
-      this.resampleBufferStart <= this.resampleBufferEnd ? 0 : this.resampleBufferSize
-    ) + this.resampleBufferEnd - this.resampleBufferStart;
+    return (this.resampleBufferStart <= this.resampleBufferEnd
+      ? 0
+      : this.resampleBufferSize) +
+      this.resampleBufferEnd -
+      this.resampleBufferStart;
   }
 
   getBufferSamples() {
