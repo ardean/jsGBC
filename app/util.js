@@ -10,8 +10,18 @@ function isLinux() {
   return process.platform === "linux";
 }
 
+function isProduction() {
+  return process.env.ELECTRON_ENV !== "development";
+}
+
+function isDevelopment() {
+  return process.env.ELECTRON_ENV === "development";
+}
+
 module.exports = {
   isOSX,
   isWindows,
-  isLinux
+  isLinux,
+  isProduction,
+  isDevelopment
 };

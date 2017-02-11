@@ -1,12 +1,14 @@
-import { GameBoy, ControllerProfile } from "../src/index.js";
+import { GameBoy, GamepadProfile } from "../src/index.js";
 import $ from "jquery";
 import notifier from "./notifier.js";
 import Fullscreen from "jsfullscreen";
 import PointerLock from "jspointerlock";
 import gamepad from "jsgamepad";
-import controllerProfileMap from "./controller-profiles.js";
+import gamepadProfileMap from "./gamepad-profiles.js";
+import softwareButtons from "./software-buttons.js";
+import initElectron from "./electron.js";
 
-let currentControllerProfile;
+let currentGamepadProfile;
 const $canvas = $(".screen");
 const canvas = $canvas.get(0);
 const gameboy = new GameBoy(canvas);
@@ -16,15 +18,19 @@ const $loading = $(".loading");
 $loading.hide();
 notifier.appendTo(document.body);
 
+initElectron(gameboy);
+
+softwareButtons.bind(gameboy);
+
 $(document)
-  .on("keydown", function (e) {
+  .on("keydown", function(e) {
     const action = keyboardProfile.getAction(e.keyCode);
     if (action) {
       gameboyHandlePressAction(action);
       e.preventDefault();
     }
   })
-  .on("keyup", function (e) {
+  .on("keyup", function(e) {
     const action = keyboardProfile.getAction(e.keyCode);
     if (action) {
       gameboyHandleReleaseAction(action);
@@ -32,28 +38,27 @@ $(document)
     }
   });
 
-$canvas
-  .on("dblclick", () => {
-    toggleFullscreen();
-  });
-
-const controllerProfiles = Object.keys(controllerProfileMap).map((profileName) => {
-  const profile = controllerProfileMap[profileName];
-  return new ControllerProfile(profileName, profile);
+$canvas.on("dblclick", () => {
+  toggleFullscreen();
 });
 
-const $controllerProfileSelector = $(".controller-profile-selector");
-let controllerProfileHtml = "";
-controllerProfiles.forEach((controllerProfile) => {
-  controllerProfileHtml += `<option value="${controllerProfile._id}">${controllerProfile.name}</option>\n`;
+const gamepadProfiles = Object.keys(gamepadProfileMap).map(profileName => {
+  const profile = gamepadProfileMap[profileName];
+  return new GamepadProfile(profileName, profile);
 });
-$controllerProfileSelector.html(controllerProfileHtml);
 
-const firstChild = $controllerProfileSelector.children().get(0);
-setControllerProfile(firstChild);
-$controllerProfileSelector.on("change", controllerChange);
+const $gamepadProfileSelector = $(".gamepad-profile-selector");
+let gamepadProfileHtml = "";
+gamepadProfiles.forEach(gamepadProfile => {
+  gamepadProfileHtml += `<option value="${gamepadProfile._id}">${gamepadProfile.name}</option>\n`;
+});
+$gamepadProfileSelector.html(gamepadProfileHtml);
 
-const keyboardProfile = new ControllerProfile("Keyboard", {
+const firstChild = $gamepadProfileSelector.children().get(0);
+setGamepadProfile(firstChild);
+$gamepadProfileSelector.on("change", gamepadChange);
+
+const keyboardProfile = new GamepadProfile("Keyboard", {
   13: "start",
   16: "select",
   37: "left",
@@ -73,43 +78,45 @@ fullscreen.on("change", () => {
   }
 });
 
-gamepad.on("buttonPressed", function ({ buttonIndex, button, gamepad }) {
-  const action = currentControllerProfile.getAction(buttonIndex);
+gamepad.on("buttonPressed", function({ buttonIndex, button, gamepad }) {
+  const action = currentGamepadProfile.getAction(buttonIndex);
   gameboyHandlePressAction(action, button);
 });
 
-gamepad.on("buttonChanged", function ({ buttonIndex, button, gamepad }) {
-  const action = currentControllerProfile.getAction(buttonIndex);
+gamepad.on("buttonChanged", function({ buttonIndex, button, gamepad }) {
+  const action = currentGamepadProfile.getAction(buttonIndex);
   if (action === "speed") {
     gameboy.setSpeed(getSpeedValue(button));
   }
 });
 
-gamepad.on("buttonReleased", function ({ buttonIndex, button, gamepad }) {
-  const action = currentControllerProfile.getAction(buttonIndex);
+gamepad.on("buttonReleased", function({ buttonIndex, button, gamepad }) {
+  const action = currentGamepadProfile.getAction(buttonIndex);
   gameboyHandleReleaseAction(action);
 });
 
 gamepad.watch();
 
-function controllerChange(e) {
+function gamepadChange(e) {
   const selectedOption = e.target.options[e.target.selectedIndex];
-  setControllerProfile(selectedOption);
+  setGamepadProfile(selectedOption);
 }
 
-function setControllerProfile(item) {
-  const controllerProfile = controllerProfiles.find((controllerProfile) => {
-    return item.value === controllerProfile._id;
+function setGamepadProfile(item) {
+  if (!item) return;
+
+  const gamepadProfile = gamepadProfiles.find(gamepadProfile => {
+    return item.value === gamepadProfile._id;
   });
 
-  if (controllerProfile) {
-    currentControllerProfile = controllerProfile;
+  if (gamepadProfile) {
+    currentGamepadProfile = gamepadProfile;
   } else {
-    console.warn("Controller Profile not found!");
+    console.warn("Gamepad Profile not found!");
   }
 }
 
-$(".upload-state").on("change", function () {
+$(".upload-state").on("change", function() {
   if (this.files.length > 0) {
     const file = this.files[0];
     const binaryHandle = new FileReader();
@@ -127,11 +134,12 @@ $(".download-state").on("click", () => {
   saveData(gameboy.core.saveState(), gameboy.core.name + ".s0");
 });
 
-$(".rom").on("change", function () {
+$(".rom").on("change", function() {
+  console.log("change????");
   if (this.files.length > 0) {
     var file = this.files[0];
     var binaryHandle = new FileReader();
-    binaryHandle.onload = function () {
+    binaryHandle.onload = function() {
       if (this.readyState === 2) {
         gameboy.injectRom(this.result);
         gameboy.restart();
@@ -141,16 +149,16 @@ $(".rom").on("change", function () {
   }
 });
 
-window.addEventListener("unload", function () {
+window.addEventListener("unload", function() {
   // gameboy.autoSave();
 });
 
-var saveData = (function () {
+var saveData = (function() {
   var a = document.createElement("a");
   a.style.display = "none";
   document.body.appendChild(a);
 
-  return function (data, fileName) {
+  return function(data, fileName) {
     var json = JSON.stringify(data);
     var blob = new Blob([json], {
       type: "octet/stream"
@@ -161,7 +169,7 @@ var saveData = (function () {
     a.click();
     window.URL.revokeObjectURL(url);
   };
-}());
+})();
 
 function toggleFullscreen() {
   if (fullscreen.isActive) {
@@ -174,7 +182,7 @@ function toggleFullscreen() {
 }
 
 function getSpeedValue(button) {
-  return (button.value * 2) + 1;
+  return button.value * 2 + 1;
 }
 
 function gameboyHandlePressAction(action, button) {

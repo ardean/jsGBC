@@ -4,4 +4,5 @@ jspm_packages
 jsgbc-darwin-x64
 *.log
 /dist/mac
-/build
+/old
+/build/gbc.*

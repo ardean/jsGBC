@@ -1,5 +1,5 @@
 export default {
-  "Xbox One Controller": {
+  Standard: {
     0: "b",
     1: "a",
     4: "load",
@@ -12,7 +12,7 @@ export default {
     14: "left",
     15: "right"
   },
-  "GameCube Controller": {
+  GameCube: {
     1: "speed",
     2: "a",
     3: "b",

@@ -21,7 +21,7 @@
     "jsgbc"
   ],
   "scripts": {
-    "start": "electron ./",
+    "start": "ELECTRON_ENV=development electron ./",
     "pack": "build --dir",
     "dist": "build",
     "build": "npm run cleanup && npm run build-src && npm run build-src-min && npm run build-docs",

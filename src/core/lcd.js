@@ -17,7 +17,8 @@ export default class LCD {
     this.onscreenHeight = this.height;
     this.offscreenWidth = 160;
     this.offscreenHeight = 144;
-    this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
+    this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 3;
+    this.offscreenRGBACount = this.offscreenWidth * this.offscreenHeight * 4;
 
     this.resizePathClear = true;
 
@@ -43,19 +44,27 @@ export default class LCD {
     this.onscreenContext.webkitImageSmoothingEnabled = false;
     this.onscreenContext.imageSmoothingEnabled = false;
 
-    this.canvasBuffer = this.offscreenContext.createImageData(this.offscreenWidth, this.offscreenHeight);
+    this.canvasBuffer = this.offscreenContext.createImageData(
+      this.offscreenWidth,
+      this.offscreenHeight
+    );
 
-    let index = this.offscreenRGBCount;
+    let index = this.offscreenRGBACount;
     while (index > 0) {
       index -= 4;
-      this.canvasBuffer.data[index] = 0xF8;
-      this.canvasBuffer.data[index + 1] = 0xF8;
-      this.canvasBuffer.data[index + 2] = 0xF8;
-      this.canvasBuffer.data[index + 3] = 0xFF;
+      this.canvasBuffer.data[index] = 0xf8;
+      this.canvasBuffer.data[index + 1] = 0xf8;
+      this.canvasBuffer.data[index + 2] = 0xf8;
+      this.canvasBuffer.data[index + 3] = 0xff; // opacity
     }
 
     this.graphicsBlit();
-    if (!this.swizzledFrame) this.swizzledFrame = util.getTypedArray(69120, 0xFF, "uint8");
+    if (!this.swizzledFrame)
+      this.swizzledFrame = util.getTypedArray(
+        this.offscreenRGBCount,
+        0xff,
+        "uint8"
+      );
 
     //Test the draw system and browser vblank latching:
     this.drewFrame = true; //Copy the latest graphics to buffer.
@@ -63,18 +72,18 @@ export default class LCD {
   }
 
   recomputeDimension() {
-    //Cache some dimension info:
+    // Cache some dimension info:
     this.onscreenWidth = this.width;
     this.onscreenHeight = this.height;
     this.offscreenWidth = 160;
     this.offscreenHeight = 144;
-    this.offscreenRGBCount = this.offscreenWidth * this.offscreenHeight * 4;
+    this.offscreenRGBACount = this.offscreenWidth * this.offscreenHeight * 4;
   }
 
   graphicsBlit() {
     if (
       this.offscreenWidth === this.onscreenWidth &&
-      this.offscreenHeight === this.onscreenHeight
+        this.offscreenHeight === this.onscreenHeight
     ) {
       this.onscreenContext.putImageData(this.canvasBuffer, 0, 0);
     } else {
@@ -96,9 +105,9 @@ export default class LCD {
   }
 
   dispatchDraw() {
-    if (this.offscreenRGBCount > 0) {
+    if (this.offscreenRGBACount > 0) {
       //We actually updated the graphics internally, so copy out:
-      if (this.offscreenRGBCount === 92160) {
+      if (this.offscreenRGBACount === 92160) {
         this.processDraw(this.swizzledFrame);
       } else {
         // this.resizeFrameBuffer();
@@ -107,7 +116,7 @@ export default class LCD {
   }
 
   resizeFrameBuffer() {
-    //Resize in javascript with resize.js:
+    // Resize in javascript with resize.js:
     if (this.resizePathClear) {
       this.resizePathClear = false;
       this.resizer.resize(this.swizzledFrame);
@@ -115,14 +124,17 @@ export default class LCD {
   }
 
   processDraw(frameBuffer) {
-    var canvasRGBALength = this.offscreenRGBCount;
-    var canvasData = this.canvasBuffer.data;
-    var bufferIndex = 0;
-    for (var canvasIndex = 0; canvasIndex < canvasRGBALength; ++canvasIndex) {
+    const canvasData = this.canvasBuffer.data;
+    let bufferIndex = 0;
+    let canvasIndex = 0;
+
+    while (canvasIndex < this.offscreenRGBACount) {
       canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
       canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
       canvasData[canvasIndex++] = frameBuffer[bufferIndex++];
+      ++canvasIndex;
     }
+
     this.graphicsBlit();
     this.drewFrame = false;
   }
@@ -135,13 +147,15 @@ export default class LCD {
 
   swizzleFrameBuffer() {
     //Convert our dirty 24-bit (24-bit, with internal render flags above it) framebuffer to an 8-bit buffer with separate indices for the RGB channels:
-    var frameBuffer = this.gameboy.frameBuffer;
-    var swizzledFrame = this.swizzledFrame;
-    var bufferIndex = 0;
-    for (var canvasIndex = 0; canvasIndex < 69120;) {
-      swizzledFrame[canvasIndex++] = (frameBuffer[bufferIndex] >> 16) & 0xFF; //Red
-      swizzledFrame[canvasIndex++] = (frameBuffer[bufferIndex] >> 8) & 0xFF; //Green
-      swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex++] & 0xFF; //Blue
+    const frameBuffer = this.gameboy.frameBuffer;
+    const swizzledFrame = this.swizzledFrame;
+    let bufferIndex = 0;
+    let canvasIndex = 0;
+    while (canvasIndex < this.offscreenRGBCount) {
+      swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 16 & 0xff; // red
+      swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] >> 8 & 0xff; // green
+      swizzledFrame[canvasIndex++] = frameBuffer[bufferIndex] & 0xff; // blue
+      ++bufferIndex;
     }
   }
 
@@ -155,14 +169,14 @@ export default class LCD {
   }
 
   clearFrameBuffer() {
-    var bufferIndex = 0;
-    var frameBuffer = this.swizzledFrame;
-    if (this.cartridgeSlot.cartridge.cGBC || this.colorizedGBPalettes) {
-      while (bufferIndex < 69120) {
+    const frameBuffer = this.swizzledFrame;
+    let bufferIndex = 0;
+    if (this.cartridgeSlot.cartridge.useGBCMode || this.colorizedGBPalettes) {
+      while (bufferIndex < this.offscreenRGBCount) {
         frameBuffer[bufferIndex++] = 248;
       }
     } else {
-      while (bufferIndex < 69120) {
+      while (bufferIndex < this.offscreenRGBCount) {
         frameBuffer[bufferIndex++] = 239;
         frameBuffer[bufferIndex++] = 255;
         frameBuffer[bufferIndex++] = 222;

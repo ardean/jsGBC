@@ -1,5 +1,5 @@
 import GameBoy from "./gameboy.js";
-import ControllerProfile from "./controller-profile.js";
+import GamepadProfile from "./gamepad-profile.js";
 
-export { GameBoy, ControllerProfile };
+export { GameBoy, GamepadProfile };
 export default GameBoy;

@@ -4,5 +4,12 @@
   copyright: "Copyright © 2017 ardean",
   mac: {
     category: "public.app-category.games"
-  }
+  },
+  fileAssociations: [{
+    ext: "gbc",
+    name: "GameBoy Color ROM"
+  }, {
+    ext: "gb",
+    name: "GameBoy ROM"
+  }]
 }

@@ -1,6 +1,6 @@
 import EventEmitter from "events";
 
-export default class ControllerProfile extends EventEmitter {
+export default class GamepadProfile extends EventEmitter {
   constructor(name, keyMap) {
     super();
 

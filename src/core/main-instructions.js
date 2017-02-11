@@ -122,17 +122,17 @@ export default [
   //STOP
   //#0x10:
   function() {
-    if (this.cartridgeSlot.cartridge.cGBC) {
+    if (this.cartridgeSlot.cartridge.useGBCMode) {
       if ((this.memory[0xff4d] & 0x01) === 0x01) {
         //Speed change requested.
         if (this.memory[0xff4d] > 0x7f) {
           //Go back to single speed mode.
-          console.log("Going into single clock speed mode.", 0);
+          console.log("Going into single clock speed mode.");
           this.doubleSpeedShifter = 0;
           this.memory[0xff4d] &= 0x7f; //Clear the double speed mode flag.
         } else {
           //Go to double speed mode.
-          console.log("Going into double clock speed mode.", 0);
+          console.log("Going into double clock speed mode.");
           this.doubleSpeedShifter = 1;
           this.memory[0xff4d] |= 0x80; //Set the double speed mode flag.
         }
@@ -880,7 +880,7 @@ export default [
   function() {
     //See if there's already an IRQ match:
     if ((this.interruptsEnabled & this.interruptsRequested & 0x1f) > 0) {
-      if (!this.cartridgeSlot.cartridge.cGBC && !this.usedBootROM) {
+      if (!this.cartridgeSlot.cartridge.useGBCMode && !this.usedBootROM) {
         //HALT bug in the DMG CPU model (Program Counter fails to increment for one instruction after HALT):
         this.skipPCIncrement = true;
       } else {
