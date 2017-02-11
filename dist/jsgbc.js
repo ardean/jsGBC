@@ -2747,6 +2747,8 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
 
           this.resizePathClear = true;
 
+          this.canvas.height = this.height;
+          this.canvas.width = this.width;
           this.onscreenContext = this.canvas.getContext("2d");
 
           this.offscreenCanvas = document.createElement("canvas");

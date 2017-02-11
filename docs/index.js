@@ -12631,6 +12631,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
           this.resizePathClear = true;
 
+          this.canvas.height = this.height;
+          this.canvas.width = this.width;
           this.onscreenContext = this.canvas.getContext("2d");
 
           this.offscreenCanvas = document.createElement("canvas");
@@ -22513,7 +22515,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
 
       currentGamepadProfile = void 0;
-      $canvas = $(".screen");
+      $canvas = $(".gbc-lcd");
       canvas = $canvas.get(0);
       gameboy = new GameBoy$1(canvas);
       fullscreen = new Fullscreen(canvas);

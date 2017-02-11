@@ -9,7 +9,7 @@ import softwareButtons from "./software-buttons.js";
 import initElectron from "./electron.js";
 
 let currentGamepadProfile;
-const $canvas = $(".screen");
+const $canvas = $(".gbc-lcd");
 const canvas = $canvas.get(0);
 const gameboy = new GameBoy(canvas);
 const fullscreen = new Fullscreen(canvas);

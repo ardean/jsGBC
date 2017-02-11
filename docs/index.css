@@ -1,5 +1,11 @@
 html, body {
   height: 100%;
+  width: 400px;
+  height: 709px;
+  min-width: 400px;
+  min-height: 709px;
+  max-width: 400px;
+  max-height: 709px;
 }
 
 body {
@@ -40,8 +46,9 @@ body {
   background-color: #000;
   border-radius: 22px 22px 0 0;
   margin: 0 20px;
-  padding: 20px 0;
   margin-top: 22px;
+  padding-top: 40px;
+  padding-bottom: 20px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -63,8 +70,13 @@ body {
 }
 
 .gbc-screen {
-  width: 222.222222222222222px;
-  height: 200px;
+  width: 233.33;
+  height: 210px;
+}
+
+.gbc-lcd {
+  width: 233.33;
+  height: 210px;
 }
 
 .gbc-middle {
@@ -180,11 +192,6 @@ body {
   margin: 0 80px;
   margin-top: -4px;
 }
-
-
-/*.screen {
-  background-color: aqua;
-}*/
 
 .loading {
   position: fixed;
