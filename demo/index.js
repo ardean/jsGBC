@@ -9,12 +9,12 @@ import softwareButtons from "./software-buttons.js";
 import initElectron from "./electron.js";
 
 let currentGamepadProfile;
-const $canvas = $(".gbc-lcd");
-const canvas = $canvas.get(0);
-const gameboy = new GameBoy(canvas);
-const fullscreen = new Fullscreen(canvas);
-const pointerLock = new PointerLock(canvas);
-const $lcd = $(".gbc-lcd");
+const $screen = $(".gbc-screen");
+const $lcd = $screen.find(".gbc-lcd");
+const lcd = $lcd.get(0);
+const gameboy = new GameBoy(lcd);
+const fullscreen = new Fullscreen($screen);
+const pointerLock = new PointerLock($screen);
 const $loading = $(".gbc-loading");
 $loading.hide();
 $lcd.show();
@@ -41,7 +41,7 @@ $(document)
     }
   });
 
-$canvas.on("dblclick", () => {
+$screen.on("dblclick", () => {
   toggleFullscreen();
 });
 
@@ -74,10 +74,10 @@ const keyboardProfile = new GamepadProfile("Keyboard", {
 
 fullscreen.on("change", () => {
   if (fullscreen.isActive) {
-    $canvas.addClass("fullscreen");
+    $screen.addClass("fullscreen");
   } else {
     PointerLock.exitPointerLock();
-    $canvas.removeClass("fullscreen");
+    $screen.removeClass("fullscreen");
   }
 });
 

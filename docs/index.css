@@ -207,7 +207,7 @@ body {
 .fullscreen {
   position: fixed;
   top: 0;
-  left: 0;
+  left: calc((100vw - 111.11vh) / 2);
   right: 0;
   bottom: 0;
   height: 100vh;

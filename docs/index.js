@@ -12129,7 +12129,7 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, currentGamepadProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $lcd, $loading, gamepadProfiles, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, currentGamepadProfile, $screen, $lcd, lcd, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -22515,12 +22515,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       };
 
       currentGamepadProfile = void 0;
-      $canvas = $(".gbc-lcd");
-      canvas = $canvas.get(0);
-      gameboy = new GameBoy$1(canvas);
-      fullscreen = new Fullscreen(canvas);
-      pointerLock = new PointerLock(canvas);
-      $lcd = $(".gbc-lcd");
+      $screen = $(".gbc-screen");
+      $lcd = $screen.find(".gbc-lcd");
+      lcd = $lcd.get(0);
+      gameboy = new GameBoy$1(lcd);
+      fullscreen = new Fullscreen($screen);
+      pointerLock = new PointerLock($screen);
       $loading = $(".gbc-loading");
 
       $loading.hide();
@@ -22546,7 +22546,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       });
 
-      $canvas.on("dblclick", function () {
+      $screen.on("dblclick", function () {
         toggleFullscreen();
       });
 
@@ -22581,10 +22581,10 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
       fullscreen.on("change", function () {
         if (fullscreen.isActive) {
-          $canvas.addClass("fullscreen");
+          $screen.addClass("fullscreen");
         } else {
           PointerLock.exitPointerLock();
-          $canvas.removeClass("fullscreen");
+          $screen.removeClass("fullscreen");
         }
       });
 
