@@ -683,7 +683,7 @@ GameBoyCore.prototype.returnFromState = function(returnedFrom) {
   this.initializeReferencesFromSaveState();
   this.memoryReadJumpCompile();
   this.memoryWriteJumpCompile();
-  this.initLCD();
+  this.lcd.init();
   this.initSound();
   this.noiseSampleTable = this.channel4BitRange === 0x7fff
     ? this.LSFR15Table
@@ -4022,7 +4022,9 @@ GameBoyCore.prototype.memoryReadJumpCompile = function() {
     } else if (index < 0xfea0) {
       this.memoryReader[index] = this.memoryReadOAM;
     } else if (
-      this.cartridgeSlot.cartridge.useGBCMode && index >= 0xfea0 && index < 0xff00
+      this.cartridgeSlot.cartridge.useGBCMode &&
+        index >= 0xfea0 &&
+        index < 0xff00
     ) {
       this.memoryReader[index] = this.memoryReadNormal;
     } else if (index >= 0xff00) {

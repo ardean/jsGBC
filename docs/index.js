@@ -17381,7 +17381,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.initializeReferencesFromSaveState();
         this.memoryReadJumpCompile();
         this.memoryWriteJumpCompile();
-        this.initLCD();
+        this.lcd.init();
         this.initSound();
         this.noiseSampleTable = this.channel4BitRange === 0x7fff ? this.LSFR15Table : this.LSFR7Table;
         this.channel4VolumeShifter = this.channel4BitRange === 0x7fff ? 15 : 7;
