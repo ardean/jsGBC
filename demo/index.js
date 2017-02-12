@@ -8,7 +8,6 @@ import gamepadProfileMap from "./gamepad-profiles.js";
 import softwareButtons from "./software-buttons.js";
 import initElectron from "./electron.js";
 
-let currentGamepadProfile;
 const $screen = $(".gbc-screen");
 const $lcd = $screen.find(".gbc-lcd");
 const lcd = $lcd.get(0);
@@ -50,6 +49,8 @@ const gamepadProfiles = Object.keys(gamepadProfileMap).map(profileName => {
   return new GamepadProfile(profileName, profile);
 });
 
+let currentGamepadProfile = gamepadProfiles[0];
+
 const $gamepadProfileSelector = $(".gamepad-profile-selector");
 let gamepadProfileHtml = "";
 gamepadProfiles.forEach(gamepadProfile => {
@@ -58,18 +59,25 @@ gamepadProfiles.forEach(gamepadProfile => {
 $gamepadProfileSelector.html(gamepadProfileHtml);
 
 const firstChild = $gamepadProfileSelector.children().get(0);
-setGamepadProfile(firstChild);
 $gamepadProfileSelector.on("change", gamepadChange);
 
 const keyboardProfile = new GamepadProfile("Keyboard", {
   13: "start",
   16: "select",
-  37: "left",
   38: "up",
+  87: "up",
   39: "right",
+  68: "right",
   40: "down",
-  88: "a",
-  90: "b"
+  83: "down",
+  37: "left",
+  65: "left",
+  76: "a",
+  86: "a",
+  88: "b",
+  75: "b",
+  49: "save",
+  48: "load"
 });
 
 fullscreen.on("change", () => {
@@ -185,7 +193,8 @@ function toggleFullscreen() {
 }
 
 function getSpeedValue(button) {
-  return button.value * 2 + 1;
+  return (button && typeof button.value === "number" ? button.value : 1) * 2 +
+    1;
 }
 
 function gameboyHandlePressAction(action, button) {
@@ -194,9 +203,7 @@ function gameboyHandlePressAction(action, button) {
   } else if (action === "load") {
     openAndNotifyState();
   } else if (action === "speed") {
-    if (button) {
-      gameboy.setSpeed(getSpeedValue(button));
-    }
+    gameboy.setSpeed(getSpeedValue(button));
   } else if (action === "fullscreen") {
     toggleFullscreen();
   } else {
@@ -214,14 +221,14 @@ function gameboyHandleReleaseAction(action) {
 
 function saveAndNotifyState() {
   const filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
-  // gameboy.saveState(filename);
+  gameboy.saveState(filename);
 
   notifier.notify("Save " + filename);
 }
 
 function openAndNotifyState() {
   const filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
-  // gameboy.openState(filename, canvas);
+  gameboy.openState(filename);
 
   notifier.notify("Loaded " + filename);
 }

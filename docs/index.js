@@ -12129,7 +12129,7 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, currentGamepadProfile, $screen, $lcd, lcd, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, $screen, $lcd, lcd, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, currentGamepadProfile, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -12430,7 +12430,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   }
 
   function getSpeedValue(button) {
-    return button.value * 2 + 1;
+    return (button && typeof button.value === "number" ? button.value : 1) * 2 + 1;
   }
 
   function gameboyHandlePressAction(action, button) {
@@ -12439,9 +12439,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     } else if (action === "load") {
       openAndNotifyState();
     } else if (action === "speed") {
-      if (button) {
-        gameboy.setSpeed(getSpeedValue(button));
-      }
+      gameboy.setSpeed(getSpeedValue(button));
     } else if (action === "fullscreen") {
       toggleFullscreen();
     } else {
@@ -12459,14 +12457,14 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
   function saveAndNotifyState() {
     var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
-    // gameboy.saveState(filename);
+    gameboy.saveState(filename);
 
     notifier.notify("Save " + filename);
   }
 
   function openAndNotifyState() {
     var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
-    // gameboy.openState(filename, canvas);
+    gameboy.openState(filename);
 
     notifier.notify("Loaded " + filename);
   }
@@ -22514,7 +22512,6 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
 
-      currentGamepadProfile = void 0;
       $screen = $(".gbc-screen");
       $lcd = $screen.find(".gbc-lcd");
       lcd = $lcd.get(0);
@@ -22554,6 +22551,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         var profile = gamepadProfileMap[profileName];
         return new GamepadProfile(profileName, profile);
       });
+      currentGamepadProfile = gamepadProfiles[0];
       $gamepadProfileSelector = $(".gamepad-profile-selector");
       gamepadProfileHtml = "";
 
@@ -22564,18 +22562,25 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
       firstChild = $gamepadProfileSelector.children().get(0);
 
-      setGamepadProfile(firstChild);
       $gamepadProfileSelector.on("change", gamepadChange);
 
       keyboardProfile = new GamepadProfile("Keyboard", {
         13: "start",
         16: "select",
-        37: "left",
         38: "up",
+        87: "up",
         39: "right",
+        68: "right",
         40: "down",
-        88: "a",
-        90: "b"
+        83: "down",
+        37: "left",
+        65: "left",
+        76: "a",
+        86: "a",
+        88: "b",
+        75: "b",
+        49: "save",
+        48: "load"
       });
 
 
