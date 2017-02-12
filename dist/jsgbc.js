@@ -7659,6 +7659,7 @@ $__System.register('a', ['f', '10'], function (_export, _context) {
         this.checkIRQMatching();
       };
       GameBoyCore.prototype.init = function () {
+        this.stateManager.init();
         this.initMemory(); // Write the startup memory.
         this.lcd.init(); // Initialize the graphics.
         this.initSound(); //Sound object initialization.
