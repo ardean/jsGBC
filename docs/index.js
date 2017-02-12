@@ -12129,10 +12129,15 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, $screen, $lcd, lcd, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, currentGamepadProfile, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, _possibleConstructorReturn, _inherits, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, dutyLookup, initialState, StateManager, GameBoy$1, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, $screen, $lcd, lcd, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, currentGamepadProfile, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
+
+    this.cartridgeSlot = new CartridgeSlot(this);
+    this.lcd = new LCD(canvas, options, this);
+    this.stateManager = new StateManager(this);
+    this.stateManager.init();
 
     //GB BOOT ROM
     //Add 256 byte boot rom here if you are going to use it.
@@ -12163,84 +12168,30 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.SpriteGBLayerRender = this.SpriteGBLayerRender.bind(this);
     this.SpriteGBCLayerRender = this.SpriteGBCLayerRender.bind(this);
 
-    //CPU Registers and Flags:
-    this.registerA = 0x01; //Register A (Accumulator)
-    this.FZero = true; //Register F  - Result was zero
-    this.FSubtract = false; //Register F  - Subtraction was executed
-    this.FHalfCarry = true; //Register F  - Half carry or half borrow
-    this.FCarry = true; //Register F  - Carry or borrow
-    this.registerB = 0x00; //Register B
-    this.registerC = 0x13; //Register C
-    this.registerD = 0x00; //Register D
-    this.registerE = 0xd8; //Register E
-    this.registersHL = 0x014d; //Registers H and L combined
-    this.stackPointer = 0xfffe; //Stack Pointer
-    this.programCounter = 0x0100; //Program Counter
-    //Some CPU Emulation State Variables:
     this.CPUCyclesTotal = 0; //Relative CPU clocking to speed set, rounded appropriately.
     this.CPUCyclesTotalBase = 0; //Relative CPU clocking to speed set base.
     this.CPUCyclesTotalCurrent = 0; //Relative CPU clocking to speed set, the directly used value.
     this.CPUCyclesTotalRoundoff = 0; //Clocking per iteration rounding catch.
     this.baseCPUCyclesPerIteration = 0; //CPU clocks per iteration at 1x speed.
-    this.remainingClocks = 0; //HALT clocking overrun carry over.
-    this.inBootstrap = true; //Whether we're in the GBC boot ROM.
-    this.usedBootROM = false; //Updated upon ROM loading...
     this.usedGBCBootROM = false; //Did we boot to the GBC boot ROM?
-    this.halt = false; //Has the CPU been suspended until the next interrupt?
-    this.skipPCIncrement = false; //Did we trip the DMG Halt bug?
     this.stopEmulator = 3; //Has the emulation been paused or a frame has ended?
-    this.IME = true; //Are interrupts enabled?
     this.IRQLineMatched = 0; //CPU IRQ assertion.
-    this.interruptsRequested = 0; //IF Register
-    this.interruptsEnabled = 0; //IE Register
-    this.hdmaRunning = false; //HDMA Transfer Flag - GBC only
-    this.CPUTicks = 0; //The number of clock cycles emulated.
-    this.doubleSpeedShifter = 0; //GBC double speed clocking shifter.
     this.JoyPad = 0xff; //Joypad State (two four-bit states actually)
-    this.CPUStopped = false; //CPU STOP status.
     //Main RAM, MBC RAM, GBC Main RAM, VRAM, etc.
     this.memoryReader = []; //Array of functions mapped to read back memory
     this.memoryWriter = []; //Array of functions mapped to write to memory
     this.memoryHighReader = []; //Array of functions mapped to read back 0xFFXX memory
     this.memoryHighWriter = []; //Array of functions mapped to write to 0xFFXX memory
-    this.memory = []; //Main Core Memory
-    this.VRAM = []; //Extra VRAM bank for GBC.
-    this.GBCMemory = []; //GBC main RAM Banks
-    this.useGBCMode = false; //GameBoy Color detection.
-    this.gbcRamBank = 1; //Currently Switched GameBoy Color ram bank
-    this.gbcRamBankPosition = -0xd000; //GBC RAM offset from address start.
-    this.gbcRamBankPositionECHO = -0xf000; //GBC RAM (ECHO mirroring) offset from address start.
-    this.ROMBank1offs = 0; //Offset of the ROM bank switching.
-    this.currentROMBank = 0; //The parsed current ROM bank selection.
     this.fromSaveState = false; //A boolean to see if this was loaded in as a save state.
     this.savedStateFileName = ""; //When loaded in as a save state, this will not be empty.
-    this.STATTracker = 0; //Tracker for STAT triggering.
-    this.modeSTAT = 0; //The scan line mode (for lines 1-144 it's 2-3-0, for 145-154 it's 1)
     this.spriteCount = 252; //Mode 3 extra clocking counter (Depends on how many sprites are on the current line.).
-    this.LYCMatchTriggerSTAT = false; //Should we trigger an interrupt if LY==LYC?
-    this.mode2TriggerSTAT = false; //Should we trigger an interrupt if in mode 2?
-    this.mode1TriggerSTAT = false; //Should we trigger an interrupt if in mode 1?
-    this.mode0TriggerSTAT = false; //Should we trigger an interrupt if in mode 0?
-    this.LCDisOn = false; //Is the emulated LCD controller on?
     this.LINECONTROL = []; //Array of functions to handle each scan line we do (onscreen + offscreen)
     this.DISPLAYOFFCONTROL = [function () {
       //Array of line 0 function to handle the LCD controller when it's off (Do nothing!).
     }];
     this.LCDCONTROL = null; //Pointer to either LINECONTROL or DISPLAYOFFCONTROL.
     this.initializeLCDController(); //Compile the LCD controller functions.
-    //RTC (Real Time Clock for MBC3):
-    this.RTCisLatched = false;
-    this.latchedSeconds = 0; //RTC latched seconds.
-    this.latchedMinutes = 0; //RTC latched minutes.
-    this.latchedHours = 0; //RTC latched hours.
-    this.latchedLDays = 0; //RTC latched lower 8-bits of the day counter.
-    this.latchedHDays = 0; //RTC latched high-bit of the day counter.
-    this.RTCSeconds = 0; //RTC seconds counter.
-    this.RTCMinutes = 0; //RTC minutes counter.
-    this.RTCHours = 0; //RTC hours counter.
-    this.RTCDays = 0; //RTC days counter.
-    this.RTCDayOverFlow = false; //Did the RTC overflow and wrap the day counter?
-    this.RTCHALT = false; //Is the RTC allowed to clock up?
+
     //Gyro:
     this.highX = 127;
     this.lowX = 127;
@@ -12249,52 +12200,11 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     //Sound variables:
     this.audioServer = null; //XAudioJS handle
     this.numSamplesTotal = 0; //Length of the sound buffers.
-    this.dutyLookup = [
-    //Map the duty values given to ones we can work with.
-    [false, false, false, false, false, false, false, true], [true, false, false, false, false, false, false, true], [true, false, false, false, false, true, true, true], [false, true, true, true, true, true, true, false]];
     this.bufferContainAmount = 0; //Buffer maintenance metric.
     this.LSFR15Table = null;
     this.LSFR7Table = null;
     this.noiseSampleTable = null;
     this.initializeAudioStartState();
-    this.soundMasterEnabled = false; //As its name implies
-    this.channel3PCM = null; //Channel 3 adjusted sample buffer.
-    //Vin Shit:
-    this.VinLeftChannelMasterVolume = 8; //Computed post-mixing volume.
-    this.VinRightChannelMasterVolume = 8; //Computed post-mixing volume.
-    //Channel paths enabled:
-    this.leftChannel1 = false;
-    this.leftChannel2 = false;
-    this.leftChannel3 = false;
-    this.leftChannel4 = false;
-    this.rightChannel1 = false;
-    this.rightChannel2 = false;
-    this.rightChannel3 = false;
-    this.rightChannel4 = false;
-    this.audioClocksUntilNextEvent = 1;
-    this.audioClocksUntilNextEventCounter = 1;
-    //Channel output level caches:
-    this.channel1currentSampleLeft = 0;
-    this.channel1currentSampleRight = 0;
-    this.channel2currentSampleLeft = 0;
-    this.channel2currentSampleRight = 0;
-    this.channel3currentSampleLeft = 0;
-    this.channel3currentSampleRight = 0;
-    this.channel4currentSampleLeft = 0;
-    this.channel4currentSampleRight = 0;
-    this.channel1currentSampleLeftSecondary = 0;
-    this.channel1currentSampleRightSecondary = 0;
-    this.channel2currentSampleLeftSecondary = 0;
-    this.channel2currentSampleRightSecondary = 0;
-    this.channel3currentSampleLeftSecondary = 0;
-    this.channel3currentSampleRightSecondary = 0;
-    this.channel4currentSampleLeftSecondary = 0;
-    this.channel4currentSampleRightSecondary = 0;
-    this.channel1currentSampleLeftTrimary = 0;
-    this.channel1currentSampleRightTrimary = 0;
-    this.channel2currentSampleLeftTrimary = 0;
-    this.channel2currentSampleRightTrimary = 0;
-    this.mixerOutputCache = 0;
     //Pre-multipliers to cache some calculations:
     this.emulatorSpeed = 1;
     this.initializeTiming();
@@ -12306,47 +12216,15 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.rollover = 0; //Used to keep alignment on the number of samples to output (Realign from counter alias).
     //Timing Variables
     this.emulatorTicks = 0; //Times for how many instructions to execute before ending the loop.
-    this.DIVTicks = 56; //DIV Ticks Counter (Invisible lower 8-bit)
-    this.LCDTicks = 60; //Counter for how many instructions have been executed on a scanline so far.
-    this.timerTicks = 0; //Counter for the TIMA timer.
-    this.TIMAEnabled = false; //Is TIMA enabled?
-    this.TACClocker = 1024; //Timer Max Ticks
-    this.serialTimer = 0; //Serial IRQ Timer
-    this.serialShiftTimer = 0; //Serial Transfer Shift Timer
-    this.serialShiftTimerAllocated = 0; //Serial Transfer Shift Timer Refill
-    this.IRQEnableDelay = 0; //Are the interrupts on queue to be enabled?
-    var dateVar = new Date();
-    this.lastIteration = dateVar.getTime(); //The last time we iterated the main loop.
-    dateVar = new Date();
-    this.firstIteration = dateVar.getTime();
+    this.firstIteration = new Date().getTime();
     this.iterations = 0;
-    this.actualScanLine = 0; //Actual scan line...
-    this.lastUnrenderedLine = 0; //Last rendered scan line...
-    this.queuedScanLines = 0;
     this.totalLinesPassed = 0;
-    this.haltPostClocks = 0; //Post-Halt clocking.
     ////Graphics Variables
-    this.currVRAMBank = 0; //Current VRAM bank for GBC.
-    this.backgroundX = 0; //Register SCX (X-Scroll)
-    this.backgroundY = 0; //Register SCY (Y-Scroll)
-    this.gfxWindowDisplay = false; //Is the windows enabled?
-    this.gfxSpriteShow = false; //Are sprites enabled?
-    this.gfxSpriteNormalHeight = true; //Are we doing 8x8 or 8x16 sprites?
-    this.bgEnabled = true; //Is the BG enabled?
-    this.BGPriorityEnabled = true; //Can we flag the BG for priority over sprites?
-    this.gfxWindowCHRBankPosition = 0; //The current bank of the character map the window uses.
-    this.gfxBackgroundCHRBankPosition = 0; //The current bank of the character map the BG uses.
-    this.gfxBackgroundBankOffset = 0x80; //Fast mapping of the tile numbering/
-    this.windowY = 0; //Current Y offset of the window.
-    this.windowX = 0; //Current X offset of the window.
-    this.drewBlank = 0; //To prevent the repeating of drawing a blank screen.
     this.drewFrame = false; //Throttle how many draws we can do to once per iteration.
     this.midScanlineOffset = -1; //mid-scanline rendering offset.
     this.pixelEnd = 0; //track the x-coord limit for line rendering (mid-scanline usage).
     this.currentX = 0; //The x-coord we left off at for mid-scanline rendering.
     //BG Tile Pointer Caches:
-    this.BGCHRBank1 = null;
-    this.BGCHRBank2 = null;
     this.BGCHRCurrentBank = null;
     //Tile Data Cache:
     this.tileCache = null;
@@ -12354,28 +12232,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     this.colors = [0xefffde, 0xadd794, 0x529273, 0x183442]; //"Classic" GameBoy palette colors.
     this.OBJPalette = null;
     this.BGPalette = null;
-    this.gbcOBJRawPalette = null;
-    this.gbcBGRawPalette = null;
-    this.gbOBJPalette = null;
-    this.gbBGPalette = null;
-    this.gbcOBJPalette = null;
-    this.gbcBGPalette = null;
-    this.gbBGColorizedPalette = null;
-    this.gbOBJColorizedPalette = null;
-    this.cachedBGPaletteConversion = null;
-    this.cachedOBJPaletteConversion = null;
     this.updateGBBGPalette = this.updateGBRegularBGPalette;
     this.updateGBOBJPalette = this.updateGBRegularOBJPalette;
-    this.colorizedGBPalettes = false;
     this.BGLayerRender = null; //Reference to the BG rendering function.
     this.WindowLayerRender = null; //Reference to the window rendering function.
     this.SpriteLayerRender = null; //Reference to the OAM rendering function.
-    this.frameBuffer = []; //The internal frame-buffer.
     this.pixelStart = 0; //Temp variable for holding the current working framebuffer offset.
     //Variables used for scaling in JS:
-
-    this.cartridgeSlot = new CartridgeSlot(this);
-    this.lcd = new LCD(canvas, options, this);
 
     //Initialize the white noise cache tables ahead of time:
     this.intializeWhiteNoise();
@@ -12435,9 +12298,9 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
 
   function gameboyHandlePressAction(action, button) {
     if (action === "save") {
-      saveAndNotifyState();
+      saveState$1();
     } else if (action === "load") {
-      openAndNotifyState();
+      loadState();
     } else if (action === "speed") {
       gameboy.setSpeed(getSpeedValue(button));
     } else if (action === "fullscreen") {
@@ -12455,18 +12318,14 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
     }
   }
 
-  function saveAndNotifyState() {
+  function saveState$1() {
     var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
     gameboy.saveState(filename);
-
-    notifier.notify("Save " + filename);
   }
 
-  function openAndNotifyState() {
+  function loadState() {
     var filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
     gameboy.openState(filename);
-
-    notifier.notify("Loaded " + filename);
   }
   return {
     setters: [function (_) {
@@ -12500,6 +12359,30 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           return Constructor;
         };
       }();
+
+      _possibleConstructorReturn = function (self, call) {
+        if (!self) {
+          throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+        }
+
+        return call && (typeof call === "object" || typeof call === "function") ? call : self;
+      };
+
+      _inherits = function (subClass, superClass) {
+        if (typeof superClass !== "function" && superClass !== null) {
+          throw new TypeError("Super expression must either be null or a function, not " + typeof superClass);
+        }
+
+        subClass.prototype = Object.create(superClass && superClass.prototype, {
+          constructor: {
+            value: subClass,
+            enumerable: false,
+            writable: true,
+            configurable: true
+          }
+        });
+        if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
+      };
 
       settings = {
         soundOn: true, // Turn on sound.
@@ -12866,7 +12749,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           this.cTAMA5 = false; //Does the cartridge use TAMA5? (Tamagotchi Cartridge)
           this.cHuC3 = false; //Does the cartridge use HuC3 (Hudson Soft / modified MBC3)?
           this.cHuC1 = false; //Does the cartridge use HuC1 (Hudson Soft / modified MBC1)?
-          this.cTIMER = false; //Does the cartridge have an RTC?
+          this.hasRTC = false; //Does the cartridge have an RTC?
 
           this.ROMBanks = [
           // 1 Bank = 16 KBytes = 256 Kbits
@@ -12926,13 +12809,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             } else {
               //Don't load in the boot ROM:
               for (; romIndex < 0x4000; ++romIndex) {
-                this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xFF; // Load in the game ROM.
+                this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff; // Load in the game ROM.
               }
             }
 
             //Finish the decoding of the ROM binary:
             for (; romIndex < romLength; ++romIndex) {
-              this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xFF;
+              this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff;
             }
 
             this.ROMBankEdge = Math.floor(this.ROM.length / 0x4000);
@@ -13089,13 +12972,13 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
                 break;
               case 0x0f:
                 this.cMBC3 = true;
-                this.cTIMER = true;
+                this.hasRTC = true;
                 this.cBATT = true;
                 this.typeName = "MBC3 + TIMER + BATT";
                 break;
               case 0x10:
                 this.cMBC3 = true;
-                this.cTIMER = true;
+                this.hasRTC = true;
                 this.cBATT = true;
                 this.cSRAM = true;
                 this.typeName = "MBC3 + TIMER + BATT + SRAM";
@@ -13201,7 +13084,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
               }
             }
 
-            this.gameboy.returnFromRTCState();
+            this.gameboy.loadRTCState();
           }
         }]);
 
@@ -17165,6 +17048,423 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       ];
       PostBootRegisterState = [// Dump of the post-BOOT I/O register state (From gambatte):
       0x0F, 0x00, 0x7C, 0xFF, 0x00, 0x00, 0x00, 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x80, 0xBF, 0xF3, 0xFF, 0xBF, 0xFF, 0x3F, 0x00, 0xFF, 0xBF, 0x7F, 0xFF, 0x9F, 0xFF, 0xBF, 0xFF, 0xFF, 0x00, 0x00, 0xBF, 0x77, 0xF3, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x91, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7E, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC0, 0xFF, 0xC1, 0x00, 0xFE, 0xFF, 0xFF, 0xFF, 0xF8, 0xFF, 0x00, 0x00, 0x00, 0x8F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 0x45, 0xEC, 0x52, 0xFA, 0x08, 0xB7, 0x07, 0x5D, 0x01, 0xFD, 0xC0, 0xFF, 0x08, 0xFC, 0x00, 0xE5, 0x0B, 0xF8, 0xC2, 0xCE, 0xF4, 0xF9, 0x0F, 0x7F, 0x45, 0x6D, 0x3D, 0xFE, 0x46, 0x97, 0x33, 0x5E, 0x08, 0xEF, 0xF1, 0xFF, 0x86, 0x83, 0x24, 0x74, 0x12, 0xFC, 0x00, 0x9F, 0xB4, 0xB7, 0x06, 0xD5, 0xD0, 0x7A, 0x00, 0x9E, 0x04, 0x5F, 0x41, 0x2F, 0x1D, 0x77, 0x36, 0x75, 0x81, 0xAA, 0x70, 0x3A, 0x98, 0xD1, 0x71, 0x02, 0x4D, 0x01, 0xC1, 0xFF, 0x0D, 0x00, 0xD3, 0x05, 0xF9, 0x00, 0x0B, 0x00];
+      dutyLookup = [
+      //Map the duty values given to ones we can work with.
+      [false, false, false, false, false, false, false, true], [true, false, false, false, false, false, false, true], [true, false, false, false, false, true, true, true], [false, true, true, true, true, true, true, false]];
+      initialState = [true, // Whether we're in the GBC boot ROM.
+      //CPU Registers and Flags:
+      0x01, // Register A (Accumulator)
+      true, // Register F  - Result was zero
+      false, // Register F  - Subtraction was executed
+      true, // Register F  - Half carry or half borrow
+      true, // Register F  - Carry or borrow
+      0x00, // Register B
+      0x13, // Register C
+      0x00, // Register D
+      0xd8, // Register E
+      0x014d, // Registers H and L combined
+      0xfffe, // Stack Pointer
+      0x0100, // Program Counter
+      //Some CPU Emulation State Variables:
+      false, // Has the CPU been suspended until the next interrupt?
+      true, // Are interrupts enabled?
+      false, // HDMA Transfer Flag - GBC only
+      0, // The number of clock cycles emulated.
+      0, // GBC double speed clocking shifter.
+      [], // Main Core Memory
+      [], // Extra VRAM bank for GBC.
+      0, // Current VRAM bank for GBC.
+      [], // GBC main RAM Banks
+      false, // GameBoy Color detection.
+      1, // Currently Switched GameBoy Color ram bank
+      -0xd000, // GBC RAM offset from address start.
+      0, // Offset of the ROM bank switching.
+      0, // The parsed current ROM bank selection.
+      0, // The scan line mode (for lines 1-144 it's 2-3-0, for 145-154 it's 1)
+      false, // Should we trigger an interrupt if LY==LYC?
+      false, // Should we trigger an interrupt if in mode 2?
+      false, // Should we trigger an interrupt if in mode 1?
+      false, // Should we trigger an interrupt if in mode 0?
+      false, // Is the emulated LCD controller on?
+      0, // The current bank of the character map the window uses.
+      false, // Is the windows enabled?
+      false, // Are sprites enabled?
+      true, // Are we doing 8x8 or 8x16 sprites?
+      0, // The current bank of the character map the background uses.
+      0x80, // Fast mapping of the tile numbering/
+      false, // Is TIMA enabled?
+      56, // DIV Ticks Counter (Invisible lower 8-bit)
+      60, // Counter for how many instructions have been executed on a scanline so far.
+      0, // Counter for the TIMA timer.
+      1024, // Timer Max Ticks
+      0, // Serial IRQ Timer
+      0, // Serial Transfer Shift Timer
+      0, // Serial Transfer Shift Timer Refill
+      0, // Are the interrupts on queue to be enabled?
+      new Date().getTime(), // The last time we iterated the main loop.
+      0, // To prevent the repeating of drawing a blank screen.
+      [], // The internal frame-buffer.
+      true, // Is the BG enabled?
+      true, // Can we flag the BG for priority over sprites?
+      0x2000, // channel1FrequencyTracker
+      0x200, // channel1FrequencyCounter
+      0, // channel1totalLength
+      0, // channel1envelopeVolume
+      false, // channel1envelopeType
+      0, // channel1envelopeSweeps
+      0, // channel1envelopeSweepsLast
+      true, // channel1consecutive
+      0, // channel1frequency
+      false, // channel1SweepFault
+      0, // channel1ShadowFrequency
+      1, // channel1timeSweep
+      0, // channel1lastTimeSweep
+      false, // channel1Swept
+      0, // channel1frequencySweepDivider
+      false, // channel1decreaseSweep
+      0x2000, // channel2FrequencyTracker
+      0x200, // channel2FrequencyCounter
+      0, // channel2totalLength
+      0, // channel2envelopeVolume
+      false, // channel2envelopeType
+      0, // channel2envelopeSweeps
+      0, // channel2envelopeSweepsLast
+      true, // channel2consecutive
+      0, // channel2frequency
+      false, // channel3canPlay
+      0, // channel3totalLength
+      4, // channel3patternType
+      0, // channel3frequency
+      true, // channel3consecutive
+      null, // Channel 3 adjusted sample buffer.
+      8, // channel4FrequencyPeriod
+      0, // channel4lastSampleLookup
+      0, // channel4totalLength
+      0, // channel4envelopeVolume
+      0, // channel4currentVolume
+      false, // channel4envelopeType
+      0, // channel4envelopeSweeps
+      0, // channel4envelopeSweepsLast
+      true, // channel4consecutive
+      0x7fff, // channel4BitRange
+      false, // As its name implies
+      // Vin Shit:
+      8, // Computed post-mixing volume.
+      8, // Computed post-mixing volume.
+      // Channel paths enabled:
+      false, // leftChannel1
+      false, // leftChannel2
+      false, // leftChannel3
+      false, // leftChannel4
+      false, // rightChannel1
+      false, // rightChannel2
+      false, // rightChannel3
+      false, // rightChannel4
+      // Channel output level caches:
+      0, // channel1currentSampleLeft
+      0, // channel1currentSampleRight
+      0, // channel2currentSampleLeft
+      0, // channel2currentSampleRight
+      0, // channel3currentSampleLeft
+      0, // channel3currentSampleRight
+      0, // channel4currentSampleLeft
+      0, // channel4currentSampleRight
+      0, // channel1currentSampleLeftSecondary
+      0, // channel1currentSampleRightSecondary
+      0, // channel2currentSampleLeftSecondary
+      0, // channel2currentSampleRightSecondary
+      0, // channel3currentSampleLeftSecondary
+      0, // channel3currentSampleRightSecondary
+      0, // channel4currentSampleLeftSecondary
+      0, // channel4currentSampleRightSecondary
+      0, // channel1currentSampleLeftTrimary
+      0, // channel1currentSampleRightTrimary
+      0, // channel2currentSampleLeftTrimary
+      0, // channel2currentSampleRightTrimary
+      0, // mixerOutputCache
+      0, // channel1DutyTracker
+      dutyLookup[2], // channel1CachedDuty
+      0, // channel2DutyTracker
+      dutyLookup[2], // channel2CachedDuty
+      false, // channel1Enabled
+      false, // channel2Enabled
+      false, // channel3Enabled
+      false, // channel4Enabled
+      0x2000, // sequencerClocks
+      0, // sequencePosition
+      0x800, // channel3Counter
+      8, // channel4Counter
+      0, // cachedChannel3Sample
+      0, // cachedChannel4Sample
+      0x800, // channel3FrequencyPeriod
+      0, // channel3lastSampleLookup
+      144, // Actual scan line...
+      0, // Last rendered scan line...
+      0, // queuedScanLines
+      // RTC (Real Time Clock for MBC3):
+      false, // RTCisLatched
+      0, // RTC latched seconds.
+      0, // RTC latched minutes.
+      0, // RTC latched hours.
+      0, // RTC latched lower 8-bits of the day counter.
+      0, // RTC latched high-bit of the day counter.
+      0, // RTC seconds counter.
+      0, // RTC minutes counter.
+      0, // RTC hours counter.
+      0, // RTC days counter.
+      false, // Did the RTC overflow and wrap the day counter?
+      false, // Is the RTC allowed to clock up?
+      false, // Updated upon ROM loading...
+      false, // Did we trip the DMG Halt bug?
+      0, // Tracker for STAT triggering.
+      -0xf000, // GBC RAM (ECHO mirroring) offset from address start.
+      0, // Current Y offset of the window.
+      0, // Current X offset of the window.
+      null, // gbcOBJRawPalette
+      null, // gbcBGRawPalette
+      null, // gbOBJPalette
+      null, // gbBGPalette
+      null, // gbcOBJPalette
+      null, // gbcBGPalette
+      null, // gbBGColorizedPalette
+      null, // gbOBJColorizedPalette
+      null, // cachedBGPaletteConversion
+      null, // cachedOBJPaletteConversion
+      // BG Tile Pointer Caches:
+      null, // BGCHRBank1
+      null, // BGCHRBank2
+      0, // Post-Halt clocking.
+      0, // IF Register
+      0, // IE Register
+      0, // HALT clocking overrun carry over.
+      false, // colorizedGBPalettes
+      0, // Register SCY (Y-Scroll)
+      0, // Register SCX (X-Scroll)
+      false, // CPU STOP status.
+      1, // audioClocksUntilNextEvent
+      1 // audioClocksUntilNextEventCounter
+      ];
+
+      StateManager = function () {
+        function StateManager(gameboy) {
+          _classCallCheck(this, StateManager);
+
+          this.gameboy = gameboy;
+        }
+
+        _createClass(StateManager, [{
+          key: "init",
+          value: function init() {
+            this.load(initialState);
+          }
+        }, {
+          key: "save",
+          value: function save() {
+            var gameboy = this.gameboy;
+            return [gameboy.inBootstrap, gameboy.registerA, gameboy.FZero, gameboy.FSubtract, gameboy.FHalfCarry, gameboy.FCarry, gameboy.registerB, gameboy.registerC, gameboy.registerD, gameboy.registerE, gameboy.registersHL, gameboy.stackPointer, gameboy.programCounter, gameboy.halt, gameboy.IME, gameboy.hdmaRunning, gameboy.CPUTicks, gameboy.doubleSpeedShifter, util.fromTypedArray(gameboy.memory), util.fromTypedArray(gameboy.VRAM), gameboy.currVRAMBank, util.fromTypedArray(gameboy.GBCMemory), gameboy.useGBCMode, gameboy.gbcRamBank, gameboy.gbcRamBankPosition, gameboy.ROMBank1offs, gameboy.currentROMBank, gameboy.modeSTAT, gameboy.LYCMatchTriggerSTAT, gameboy.mode2TriggerSTAT, gameboy.mode1TriggerSTAT, gameboy.mode0TriggerSTAT, gameboy.LCDisOn, gameboy.gfxWindowCHRBankPosition, gameboy.gfxWindowDisplay, gameboy.gfxSpriteShow, gameboy.gfxSpriteNormalHeight, gameboy.gfxBackgroundCHRBankPosition, gameboy.gfxBackgroundBankOffset, gameboy.TIMAEnabled, gameboy.DIVTicks, gameboy.LCDTicks, gameboy.timerTicks, gameboy.TACClocker, gameboy.serialTimer, gameboy.serialShiftTimer, gameboy.serialShiftTimerAllocated, gameboy.IRQEnableDelay, gameboy.lastIteration, gameboy.drewBlank, util.fromTypedArray(gameboy.frameBuffer), gameboy.bgEnabled, gameboy.BGPriorityEnabled, gameboy.channel1FrequencyTracker, gameboy.channel1FrequencyCounter, gameboy.channel1totalLength, gameboy.channel1envelopeVolume, gameboy.channel1envelopeType, gameboy.channel1envelopeSweeps, gameboy.channel1envelopeSweepsLast, gameboy.channel1consecutive, gameboy.channel1frequency, gameboy.channel1SweepFault, gameboy.channel1ShadowFrequency, gameboy.channel1timeSweep, gameboy.channel1lastTimeSweep, gameboy.channel1Swept, gameboy.channel1frequencySweepDivider, gameboy.channel1decreaseSweep, gameboy.channel2FrequencyTracker, gameboy.channel2FrequencyCounter, gameboy.channel2totalLength, gameboy.channel2envelopeVolume, gameboy.channel2envelopeType, gameboy.channel2envelopeSweeps, gameboy.channel2envelopeSweepsLast, gameboy.channel2consecutive, gameboy.channel2frequency, gameboy.channel3canPlay, gameboy.channel3totalLength, gameboy.channel3patternType, gameboy.channel3frequency, gameboy.channel3consecutive, util.fromTypedArray(gameboy.channel3PCM), gameboy.channel4FrequencyPeriod, gameboy.channel4lastSampleLookup, gameboy.channel4totalLength, gameboy.channel4envelopeVolume, gameboy.channel4currentVolume, gameboy.channel4envelopeType, gameboy.channel4envelopeSweeps, gameboy.channel4envelopeSweepsLast, gameboy.channel4consecutive, gameboy.channel4BitRange, gameboy.soundMasterEnabled, gameboy.VinLeftChannelMasterVolume, gameboy.VinRightChannelMasterVolume, gameboy.leftChannel1, gameboy.leftChannel2, gameboy.leftChannel3, gameboy.leftChannel4, gameboy.rightChannel1, gameboy.rightChannel2, gameboy.rightChannel3, gameboy.rightChannel4, gameboy.channel1currentSampleLeft, gameboy.channel1currentSampleRight, gameboy.channel2currentSampleLeft, gameboy.channel2currentSampleRight, gameboy.channel3currentSampleLeft, gameboy.channel3currentSampleRight, gameboy.channel4currentSampleLeft, gameboy.channel4currentSampleRight, gameboy.channel1currentSampleLeftSecondary, gameboy.channel1currentSampleRightSecondary, gameboy.channel2currentSampleLeftSecondary, gameboy.channel2currentSampleRightSecondary, gameboy.channel3currentSampleLeftSecondary, gameboy.channel3currentSampleRightSecondary, gameboy.channel4currentSampleLeftSecondary, gameboy.channel4currentSampleRightSecondary, gameboy.channel1currentSampleLeftTrimary, gameboy.channel1currentSampleRightTrimary, gameboy.channel2currentSampleLeftTrimary, gameboy.channel2currentSampleRightTrimary, gameboy.mixerOutputCache, gameboy.channel1DutyTracker, gameboy.channel1CachedDuty, gameboy.channel2DutyTracker, gameboy.channel2CachedDuty, gameboy.channel1Enabled, gameboy.channel2Enabled, gameboy.channel3Enabled, gameboy.channel4Enabled, gameboy.sequencerClocks, gameboy.sequencePosition, gameboy.channel3Counter, gameboy.channel4Counter, gameboy.cachedChannel3Sample, gameboy.cachedChannel4Sample, gameboy.channel3FrequencyPeriod, gameboy.channel3lastSampleLookup, gameboy.actualScanLine, gameboy.lastUnrenderedLine, gameboy.queuedScanLines, gameboy.RTCisLatched, gameboy.latchedSeconds, gameboy.latchedMinutes, gameboy.latchedHours, gameboy.latchedLDays, gameboy.latchedHDays, gameboy.RTCSeconds, gameboy.RTCMinutes, gameboy.RTCHours, gameboy.RTCDays, gameboy.RTCDayOverFlow, gameboy.RTCHALT, gameboy.usedBootROM, gameboy.skipPCIncrement, gameboy.STATTracker, gameboy.gbcRamBankPositionECHO, gameboy.windowY, gameboy.windowX, util.fromTypedArray(gameboy.gbcOBJRawPalette), util.fromTypedArray(gameboy.gbcBGRawPalette), util.fromTypedArray(gameboy.gbOBJPalette), util.fromTypedArray(gameboy.gbBGPalette), util.fromTypedArray(gameboy.gbcOBJPalette), util.fromTypedArray(gameboy.gbcBGPalette), util.fromTypedArray(gameboy.gbBGColorizedPalette), util.fromTypedArray(gameboy.gbOBJColorizedPalette), util.fromTypedArray(gameboy.cachedBGPaletteConversion), util.fromTypedArray(gameboy.cachedOBJPaletteConversion), util.fromTypedArray(gameboy.BGCHRBank1), util.fromTypedArray(gameboy.BGCHRBank2), gameboy.haltPostClocks, gameboy.interruptsRequested, gameboy.interruptsEnabled, gameboy.remainingClocks, gameboy.colorizedGBPalettes, gameboy.backgroundY, gameboy.backgroundX, gameboy.CPUStopped, gameboy.audioClocksUntilNextEvent, gameboy.audioClocksUntilNextEventCounter];
+          }
+        }, {
+          key: "load",
+          value: function load(state) {
+            var index = 0;
+            state = state.concat();
+
+            var gameboy = this.gameboy;
+            gameboy.inBootstrap = state[index++];
+            gameboy.registerA = state[index++];
+            gameboy.FZero = state[index++];
+            gameboy.FSubtract = state[index++];
+            gameboy.FHalfCarry = state[index++];
+            gameboy.FCarry = state[index++];
+            gameboy.registerB = state[index++];
+            gameboy.registerC = state[index++];
+            gameboy.registerD = state[index++];
+            gameboy.registerE = state[index++];
+            gameboy.registersHL = state[index++];
+            gameboy.stackPointer = state[index++];
+            gameboy.programCounter = state[index++];
+            gameboy.halt = state[index++];
+            gameboy.IME = state[index++];
+            gameboy.hdmaRunning = state[index++];
+            gameboy.CPUTicks = state[index++];
+            gameboy.doubleSpeedShifter = state[index++];
+            gameboy.memory = util.toTypedArray(state[index++], "uint8");
+            gameboy.VRAM = util.toTypedArray(state[index++], "uint8");
+            gameboy.currVRAMBank = state[index++];
+            gameboy.GBCMemory = util.toTypedArray(state[index++], "uint8");
+            gameboy.useGBCMode = state[index++];
+            gameboy.gbcRamBank = state[index++];
+            gameboy.gbcRamBankPosition = state[index++];
+            gameboy.ROMBank1offs = state[index++];
+            gameboy.currentROMBank = state[index++];
+            gameboy.modeSTAT = state[index++];
+            gameboy.LYCMatchTriggerSTAT = state[index++];
+            gameboy.mode2TriggerSTAT = state[index++];
+            gameboy.mode1TriggerSTAT = state[index++];
+            gameboy.mode0TriggerSTAT = state[index++];
+            gameboy.LCDisOn = state[index++];
+            gameboy.gfxWindowCHRBankPosition = state[index++];
+            gameboy.gfxWindowDisplay = state[index++];
+            gameboy.gfxSpriteShow = state[index++];
+            gameboy.gfxSpriteNormalHeight = state[index++];
+            gameboy.gfxBackgroundCHRBankPosition = state[index++];
+            gameboy.gfxBackgroundBankOffset = state[index++];
+            gameboy.TIMAEnabled = state[index++];
+            gameboy.DIVTicks = state[index++];
+            gameboy.LCDTicks = state[index++];
+            gameboy.timerTicks = state[index++];
+            gameboy.TACClocker = state[index++];
+            gameboy.serialTimer = state[index++];
+            gameboy.serialShiftTimer = state[index++];
+            gameboy.serialShiftTimerAllocated = state[index++];
+            gameboy.IRQEnableDelay = state[index++];
+            gameboy.lastIteration = state[index++];
+            gameboy.drewBlank = state[index++];
+            gameboy.frameBuffer = util.toTypedArray(state[index++], "int32");
+            gameboy.bgEnabled = state[index++];
+            gameboy.BGPriorityEnabled = state[index++];
+            gameboy.channel1FrequencyTracker = state[index++];
+            gameboy.channel1FrequencyCounter = state[index++];
+            gameboy.channel1totalLength = state[index++];
+            gameboy.channel1envelopeVolume = state[index++];
+            gameboy.channel1envelopeType = state[index++];
+            gameboy.channel1envelopeSweeps = state[index++];
+            gameboy.channel1envelopeSweepsLast = state[index++];
+            gameboy.channel1consecutive = state[index++];
+            gameboy.channel1frequency = state[index++];
+            gameboy.channel1SweepFault = state[index++];
+            gameboy.channel1ShadowFrequency = state[index++];
+            gameboy.channel1timeSweep = state[index++];
+            gameboy.channel1lastTimeSweep = state[index++];
+            gameboy.channel1Swept = state[index++];
+            gameboy.channel1frequencySweepDivider = state[index++];
+            gameboy.channel1decreaseSweep = state[index++];
+            gameboy.channel2FrequencyTracker = state[index++];
+            gameboy.channel2FrequencyCounter = state[index++];
+            gameboy.channel2totalLength = state[index++];
+            gameboy.channel2envelopeVolume = state[index++];
+            gameboy.channel2envelopeType = state[index++];
+            gameboy.channel2envelopeSweeps = state[index++];
+            gameboy.channel2envelopeSweepsLast = state[index++];
+            gameboy.channel2consecutive = state[index++];
+            gameboy.channel2frequency = state[index++];
+            gameboy.channel3canPlay = state[index++];
+            gameboy.channel3totalLength = state[index++];
+            gameboy.channel3patternType = state[index++];
+            gameboy.channel3frequency = state[index++];
+            gameboy.channel3consecutive = state[index++];
+            gameboy.channel3PCM = util.toTypedArray(state[index++], "int8");
+            gameboy.channel4FrequencyPeriod = state[index++];
+            gameboy.channel4lastSampleLookup = state[index++];
+            gameboy.channel4totalLength = state[index++];
+            gameboy.channel4envelopeVolume = state[index++];
+            gameboy.channel4currentVolume = state[index++];
+            gameboy.channel4envelopeType = state[index++];
+            gameboy.channel4envelopeSweeps = state[index++];
+            gameboy.channel4envelopeSweepsLast = state[index++];
+            gameboy.channel4consecutive = state[index++];
+            gameboy.channel4BitRange = state[index++];
+            gameboy.soundMasterEnabled = state[index++];
+            gameboy.VinLeftChannelMasterVolume = state[index++];
+            gameboy.VinRightChannelMasterVolume = state[index++];
+            gameboy.leftChannel1 = state[index++];
+            gameboy.leftChannel2 = state[index++];
+            gameboy.leftChannel3 = state[index++];
+            gameboy.leftChannel4 = state[index++];
+            gameboy.rightChannel1 = state[index++];
+            gameboy.rightChannel2 = state[index++];
+            gameboy.rightChannel3 = state[index++];
+            gameboy.rightChannel4 = state[index++];
+            gameboy.channel1currentSampleLeft = state[index++];
+            gameboy.channel1currentSampleRight = state[index++];
+            gameboy.channel2currentSampleLeft = state[index++];
+            gameboy.channel2currentSampleRight = state[index++];
+            gameboy.channel3currentSampleLeft = state[index++];
+            gameboy.channel3currentSampleRight = state[index++];
+            gameboy.channel4currentSampleLeft = state[index++];
+            gameboy.channel4currentSampleRight = state[index++];
+            gameboy.channel1currentSampleLeftSecondary = state[index++];
+            gameboy.channel1currentSampleRightSecondary = state[index++];
+            gameboy.channel2currentSampleLeftSecondary = state[index++];
+            gameboy.channel2currentSampleRightSecondary = state[index++];
+            gameboy.channel3currentSampleLeftSecondary = state[index++];
+            gameboy.channel3currentSampleRightSecondary = state[index++];
+            gameboy.channel4currentSampleLeftSecondary = state[index++];
+            gameboy.channel4currentSampleRightSecondary = state[index++];
+            gameboy.channel1currentSampleLeftTrimary = state[index++];
+            gameboy.channel1currentSampleRightTrimary = state[index++];
+            gameboy.channel2currentSampleLeftTrimary = state[index++];
+            gameboy.channel2currentSampleRightTrimary = state[index++];
+            gameboy.mixerOutputCache = state[index++];
+            gameboy.channel1DutyTracker = state[index++];
+            gameboy.channel1CachedDuty = state[index++];
+            gameboy.channel2DutyTracker = state[index++];
+            gameboy.channel2CachedDuty = state[index++];
+            gameboy.channel1Enabled = state[index++];
+            gameboy.channel2Enabled = state[index++];
+            gameboy.channel3Enabled = state[index++];
+            gameboy.channel4Enabled = state[index++];
+            gameboy.sequencerClocks = state[index++];
+            gameboy.sequencePosition = state[index++];
+            gameboy.channel3Counter = state[index++];
+            gameboy.channel4Counter = state[index++];
+            gameboy.cachedChannel3Sample = state[index++];
+            gameboy.cachedChannel4Sample = state[index++];
+            gameboy.channel3FrequencyPeriod = state[index++];
+            gameboy.channel3lastSampleLookup = state[index++];
+            gameboy.actualScanLine = state[index++];
+            gameboy.lastUnrenderedLine = state[index++];
+            gameboy.queuedScanLines = state[index++];
+            gameboy.RTCisLatched = state[index++];
+            gameboy.latchedSeconds = state[index++];
+            gameboy.latchedMinutes = state[index++];
+            gameboy.latchedHours = state[index++];
+            gameboy.latchedLDays = state[index++];
+            gameboy.latchedHDays = state[index++];
+            gameboy.RTCSeconds = state[index++];
+            gameboy.RTCMinutes = state[index++];
+            gameboy.RTCHours = state[index++];
+            gameboy.RTCDays = state[index++];
+            gameboy.RTCDayOverFlow = state[index++];
+            gameboy.RTCHALT = state[index++];
+            gameboy.usedBootROM = state[index++];
+            gameboy.skipPCIncrement = state[index++];
+            gameboy.STATTracker = state[index++];
+            gameboy.gbcRamBankPositionECHO = state[index++];
+            gameboy.windowY = state[index++];
+            gameboy.windowX = state[index++];
+            gameboy.gbcOBJRawPalette = util.toTypedArray(state[index++], "uint8");
+            gameboy.gbcBGRawPalette = util.toTypedArray(state[index++], "uint8");
+            gameboy.gbOBJPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.gbBGPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.gbcOBJPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.gbcBGPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.gbBGColorizedPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.gbOBJColorizedPalette = util.toTypedArray(state[index++], "int32");
+            gameboy.cachedBGPaletteConversion = util.toTypedArray(state[index++], "int32");
+            gameboy.cachedOBJPaletteConversion = util.toTypedArray(state[index++], "int32");
+            gameboy.BGCHRBank1 = util.toTypedArray(state[index++], "uint8");
+            gameboy.BGCHRBank2 = util.toTypedArray(state[index++], "uint8");
+            gameboy.haltPostClocks = state[index++];
+            gameboy.interruptsRequested = state[index++];
+            gameboy.interruptsEnabled = state[index++];
+            gameboy.checkIRQMatching();
+            gameboy.remainingClocks = state[index++];
+            gameboy.colorizedGBPalettes = state[index++];
+            gameboy.backgroundY = state[index++];
+            gameboy.backgroundX = state[index++];
+            gameboy.CPUStopped = state[index++];
+            gameboy.audioClocksUntilNextEvent = state[index++];
+            gameboy.audioClocksUntilNextEventCounter = state[index];
+            gameboy.fromSaveState = true;
+            gameboy.TickTable = util.toTypedArray(gameboy.TickTable, "uint8");
+            gameboy.SecondaryTickTable = util.toTypedArray(gameboy.SecondaryTickTable, "uint8");
+          }
+        }]);
+
+        return StateManager;
+      }();
+
       GameBoyCore.prototype.saveSRAMState = function () {
         if (!this.cartridgeSlot.cartridge.cBATT || this.cartridgeSlot.cartridge.MBCRam.length === 0) {
           //No battery backup...
@@ -17175,7 +17475,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.saveRTCState = function () {
-        if (!this.cartridgeSlot.cartridge.cTIMER) {
+        if (!this.cartridgeSlot.cartridge.hasRTC) {
           //No battery backup...
           return [];
         } else {
@@ -17184,200 +17484,11 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.saveState = function () {
-        return [this.inBootstrap, this.registerA, this.FZero, this.FSubtract, this.FHalfCarry, this.FCarry, this.registerB, this.registerC, this.registerD, this.registerE, this.registersHL, this.stackPointer, this.programCounter, this.halt, this.IME, this.hdmaRunning, this.CPUTicks, this.doubleSpeedShifter, util.fromTypedArray(this.memory), util.fromTypedArray(this.VRAM), this.currVRAMBank, util.fromTypedArray(this.GBCMemory), this.useGBCMode, this.gbcRamBank, this.gbcRamBankPosition, this.ROMBank1offs, this.currentROMBank, this.modeSTAT, this.LYCMatchTriggerSTAT, this.mode2TriggerSTAT, this.mode1TriggerSTAT, this.mode0TriggerSTAT, this.LCDisOn, this.gfxWindowCHRBankPosition, this.gfxWindowDisplay, this.gfxSpriteShow, this.gfxSpriteNormalHeight, this.gfxBackgroundCHRBankPosition, this.gfxBackgroundBankOffset, this.TIMAEnabled, this.DIVTicks, this.LCDTicks, this.timerTicks, this.TACClocker, this.serialTimer, this.serialShiftTimer, this.serialShiftTimerAllocated, this.IRQEnableDelay, this.lastIteration, this.drewBlank, util.fromTypedArray(this.frameBuffer), this.bgEnabled, this.BGPriorityEnabled, this.channel1FrequencyTracker, this.channel1FrequencyCounter, this.channel1totalLength, this.channel1envelopeVolume, this.channel1envelopeType, this.channel1envelopeSweeps, this.channel1envelopeSweepsLast, this.channel1consecutive, this.channel1frequency, this.channel1SweepFault, this.channel1ShadowFrequency, this.channel1timeSweep, this.channel1lastTimeSweep, this.channel1Swept, this.channel1frequencySweepDivider, this.channel1decreaseSweep, this.channel2FrequencyTracker, this.channel2FrequencyCounter, this.channel2totalLength, this.channel2envelopeVolume, this.channel2envelopeType, this.channel2envelopeSweeps, this.channel2envelopeSweepsLast, this.channel2consecutive, this.channel2frequency, this.channel3canPlay, this.channel3totalLength, this.channel3patternType, this.channel3frequency, this.channel3consecutive, util.fromTypedArray(this.channel3PCM), this.channel4FrequencyPeriod, this.channel4lastSampleLookup, this.channel4totalLength, this.channel4envelopeVolume, this.channel4currentVolume, this.channel4envelopeType, this.channel4envelopeSweeps, this.channel4envelopeSweepsLast, this.channel4consecutive, this.channel4BitRange, this.soundMasterEnabled, this.VinLeftChannelMasterVolume, this.VinRightChannelMasterVolume, this.leftChannel1, this.leftChannel2, this.leftChannel3, this.leftChannel4, this.rightChannel1, this.rightChannel2, this.rightChannel3, this.rightChannel4, this.channel1currentSampleLeft, this.channel1currentSampleRight, this.channel2currentSampleLeft, this.channel2currentSampleRight, this.channel3currentSampleLeft, this.channel3currentSampleRight, this.channel4currentSampleLeft, this.channel4currentSampleRight, this.channel1currentSampleLeftSecondary, this.channel1currentSampleRightSecondary, this.channel2currentSampleLeftSecondary, this.channel2currentSampleRightSecondary, this.channel3currentSampleLeftSecondary, this.channel3currentSampleRightSecondary, this.channel4currentSampleLeftSecondary, this.channel4currentSampleRightSecondary, this.channel1currentSampleLeftTrimary, this.channel1currentSampleRightTrimary, this.channel2currentSampleLeftTrimary, this.channel2currentSampleRightTrimary, this.mixerOutputCache, this.channel1DutyTracker, this.channel1CachedDuty, this.channel2DutyTracker, this.channel2CachedDuty, this.channel1Enabled, this.channel2Enabled, this.channel3Enabled, this.channel4Enabled, this.sequencerClocks, this.sequencePosition, this.channel3Counter, this.channel4Counter, this.cachedChannel3Sample, this.cachedChannel4Sample, this.channel3FrequencyPeriod, this.channel3lastSampleLookup, this.actualScanLine, this.lastUnrenderedLine, this.queuedScanLines, this.RTCisLatched, this.latchedSeconds, this.latchedMinutes, this.latchedHours, this.latchedLDays, this.latchedHDays, this.RTCSeconds, this.RTCMinutes, this.RTCHours, this.RTCDays, this.RTCDayOverFlow, this.RTCHALT, this.usedBootROM, this.skipPCIncrement, this.STATTracker, this.gbcRamBankPositionECHO, this.windowY, this.windowX, util.fromTypedArray(this.gbcOBJRawPalette), util.fromTypedArray(this.gbcBGRawPalette), util.fromTypedArray(this.gbOBJPalette), util.fromTypedArray(this.gbBGPalette), util.fromTypedArray(this.gbcOBJPalette), util.fromTypedArray(this.gbcBGPalette), util.fromTypedArray(this.gbBGColorizedPalette), util.fromTypedArray(this.gbOBJColorizedPalette), util.fromTypedArray(this.cachedBGPaletteConversion), util.fromTypedArray(this.cachedOBJPaletteConversion), util.fromTypedArray(this.BGCHRBank1), util.fromTypedArray(this.BGCHRBank2), this.haltPostClocks, this.interruptsRequested, this.interruptsEnabled, this.remainingClocks, this.colorizedGBPalettes, this.backgroundY, this.backgroundX, this.CPUStopped, this.audioClocksUntilNextEvent, this.audioClocksUntilNextEventCounter];
+        return this.stateManager.save();
       };
-      GameBoyCore.prototype.returnFromState = function (returnedFrom) {
-        var index = 0;
-        var state = returnedFrom.slice(0);
-        this.inBootstrap = state[index++];
-        this.registerA = state[index++];
-        this.FZero = state[index++];
-        this.FSubtract = state[index++];
-        this.FHalfCarry = state[index++];
-        this.FCarry = state[index++];
-        this.registerB = state[index++];
-        this.registerC = state[index++];
-        this.registerD = state[index++];
-        this.registerE = state[index++];
-        this.registersHL = state[index++];
-        this.stackPointer = state[index++];
-        this.programCounter = state[index++];
-        this.halt = state[index++];
-        this.IME = state[index++];
-        this.hdmaRunning = state[index++];
-        this.CPUTicks = state[index++];
-        this.doubleSpeedShifter = state[index++];
-        this.memory = util.toTypedArray(state[index++], "uint8");
-        this.VRAM = util.toTypedArray(state[index++], "uint8");
-        this.currVRAMBank = state[index++];
-        this.GBCMemory = util.toTypedArray(state[index++], "uint8");
-        this.useGBCMode = state[index++];
-        this.gbcRamBank = state[index++];
-        this.gbcRamBankPosition = state[index++];
-        this.ROMBank1offs = state[index++];
-        this.currentROMBank = state[index++];
-        this.modeSTAT = state[index++];
-        this.LYCMatchTriggerSTAT = state[index++];
-        this.mode2TriggerSTAT = state[index++];
-        this.mode1TriggerSTAT = state[index++];
-        this.mode0TriggerSTAT = state[index++];
-        this.LCDisOn = state[index++];
-        this.gfxWindowCHRBankPosition = state[index++];
-        this.gfxWindowDisplay = state[index++];
-        this.gfxSpriteShow = state[index++];
-        this.gfxSpriteNormalHeight = state[index++];
-        this.gfxBackgroundCHRBankPosition = state[index++];
-        this.gfxBackgroundBankOffset = state[index++];
-        this.TIMAEnabled = state[index++];
-        this.DIVTicks = state[index++];
-        this.LCDTicks = state[index++];
-        this.timerTicks = state[index++];
-        this.TACClocker = state[index++];
-        this.serialTimer = state[index++];
-        this.serialShiftTimer = state[index++];
-        this.serialShiftTimerAllocated = state[index++];
-        this.IRQEnableDelay = state[index++];
-        this.lastIteration = state[index++];
-        this.drewBlank = state[index++];
-        this.frameBuffer = util.toTypedArray(state[index++], "int32");
-        this.bgEnabled = state[index++];
-        this.BGPriorityEnabled = state[index++];
-        this.channel1FrequencyTracker = state[index++];
-        this.channel1FrequencyCounter = state[index++];
-        this.channel1totalLength = state[index++];
-        this.channel1envelopeVolume = state[index++];
-        this.channel1envelopeType = state[index++];
-        this.channel1envelopeSweeps = state[index++];
-        this.channel1envelopeSweepsLast = state[index++];
-        this.channel1consecutive = state[index++];
-        this.channel1frequency = state[index++];
-        this.channel1SweepFault = state[index++];
-        this.channel1ShadowFrequency = state[index++];
-        this.channel1timeSweep = state[index++];
-        this.channel1lastTimeSweep = state[index++];
-        this.channel1Swept = state[index++];
-        this.channel1frequencySweepDivider = state[index++];
-        this.channel1decreaseSweep = state[index++];
-        this.channel2FrequencyTracker = state[index++];
-        this.channel2FrequencyCounter = state[index++];
-        this.channel2totalLength = state[index++];
-        this.channel2envelopeVolume = state[index++];
-        this.channel2envelopeType = state[index++];
-        this.channel2envelopeSweeps = state[index++];
-        this.channel2envelopeSweepsLast = state[index++];
-        this.channel2consecutive = state[index++];
-        this.channel2frequency = state[index++];
-        this.channel3canPlay = state[index++];
-        this.channel3totalLength = state[index++];
-        this.channel3patternType = state[index++];
-        this.channel3frequency = state[index++];
-        this.channel3consecutive = state[index++];
-        this.channel3PCM = util.toTypedArray(state[index++], "int8");
-        this.channel4FrequencyPeriod = state[index++];
-        this.channel4lastSampleLookup = state[index++];
-        this.channel4totalLength = state[index++];
-        this.channel4envelopeVolume = state[index++];
-        this.channel4currentVolume = state[index++];
-        this.channel4envelopeType = state[index++];
-        this.channel4envelopeSweeps = state[index++];
-        this.channel4envelopeSweepsLast = state[index++];
-        this.channel4consecutive = state[index++];
-        this.channel4BitRange = state[index++];
-        this.soundMasterEnabled = state[index++];
-        this.VinLeftChannelMasterVolume = state[index++];
-        this.VinRightChannelMasterVolume = state[index++];
-        this.leftChannel1 = state[index++];
-        this.leftChannel2 = state[index++];
-        this.leftChannel3 = state[index++];
-        this.leftChannel4 = state[index++];
-        this.rightChannel1 = state[index++];
-        this.rightChannel2 = state[index++];
-        this.rightChannel3 = state[index++];
-        this.rightChannel4 = state[index++];
-        this.channel1currentSampleLeft = state[index++];
-        this.channel1currentSampleRight = state[index++];
-        this.channel2currentSampleLeft = state[index++];
-        this.channel2currentSampleRight = state[index++];
-        this.channel3currentSampleLeft = state[index++];
-        this.channel3currentSampleRight = state[index++];
-        this.channel4currentSampleLeft = state[index++];
-        this.channel4currentSampleRight = state[index++];
-        this.channel1currentSampleLeftSecondary = state[index++];
-        this.channel1currentSampleRightSecondary = state[index++];
-        this.channel2currentSampleLeftSecondary = state[index++];
-        this.channel2currentSampleRightSecondary = state[index++];
-        this.channel3currentSampleLeftSecondary = state[index++];
-        this.channel3currentSampleRightSecondary = state[index++];
-        this.channel4currentSampleLeftSecondary = state[index++];
-        this.channel4currentSampleRightSecondary = state[index++];
-        this.channel1currentSampleLeftTrimary = state[index++];
-        this.channel1currentSampleRightTrimary = state[index++];
-        this.channel2currentSampleLeftTrimary = state[index++];
-        this.channel2currentSampleRightTrimary = state[index++];
-        this.mixerOutputCache = state[index++];
-        this.channel1DutyTracker = state[index++];
-        this.channel1CachedDuty = state[index++];
-        this.channel2DutyTracker = state[index++];
-        this.channel2CachedDuty = state[index++];
-        this.channel1Enabled = state[index++];
-        this.channel2Enabled = state[index++];
-        this.channel3Enabled = state[index++];
-        this.channel4Enabled = state[index++];
-        this.sequencerClocks = state[index++];
-        this.sequencePosition = state[index++];
-        this.channel3Counter = state[index++];
-        this.channel4Counter = state[index++];
-        this.cachedChannel3Sample = state[index++];
-        this.cachedChannel4Sample = state[index++];
-        this.channel3FrequencyPeriod = state[index++];
-        this.channel3lastSampleLookup = state[index++];
-        this.actualScanLine = state[index++];
-        this.lastUnrenderedLine = state[index++];
-        this.queuedScanLines = state[index++];
-        this.RTCisLatched = state[index++];
-        this.latchedSeconds = state[index++];
-        this.latchedMinutes = state[index++];
-        this.latchedHours = state[index++];
-        this.latchedLDays = state[index++];
-        this.latchedHDays = state[index++];
-        this.RTCSeconds = state[index++];
-        this.RTCMinutes = state[index++];
-        this.RTCHours = state[index++];
-        this.RTCDays = state[index++];
-        this.RTCDayOverFlow = state[index++];
-        this.RTCHALT = state[index++];
-        this.usedBootROM = state[index++];
-        this.skipPCIncrement = state[index++];
-        this.STATTracker = state[index++];
-        this.gbcRamBankPositionECHO = state[index++];
-        this.windowY = state[index++];
-        this.windowX = state[index++];
-        this.gbcOBJRawPalette = util.toTypedArray(state[index++], "uint8");
-        this.gbcBGRawPalette = util.toTypedArray(state[index++], "uint8");
-        this.gbOBJPalette = util.toTypedArray(state[index++], "int32");
-        this.gbBGPalette = util.toTypedArray(state[index++], "int32");
-        this.gbcOBJPalette = util.toTypedArray(state[index++], "int32");
-        this.gbcBGPalette = util.toTypedArray(state[index++], "int32");
-        this.gbBGColorizedPalette = util.toTypedArray(state[index++], "int32");
-        this.gbOBJColorizedPalette = util.toTypedArray(state[index++], "int32");
-        this.cachedBGPaletteConversion = util.toTypedArray(state[index++], "int32");
-        this.cachedOBJPaletteConversion = util.toTypedArray(state[index++], "int32");
-        this.BGCHRBank1 = util.toTypedArray(state[index++], "uint8");
-        this.BGCHRBank2 = util.toTypedArray(state[index++], "uint8");
-        this.haltPostClocks = state[index++];
-        this.interruptsRequested = state[index++];
-        this.interruptsEnabled = state[index++];
-        this.checkIRQMatching();
-        this.remainingClocks = state[index++];
-        this.colorizedGBPalettes = state[index++];
-        this.backgroundY = state[index++];
-        this.backgroundX = state[index++];
-        this.CPUStopped = state[index++];
-        this.audioClocksUntilNextEvent = state[index++];
-        this.audioClocksUntilNextEventCounter = state[index];
-        this.fromSaveState = true;
-        this.TickTable = util.toTypedArray(this.TickTable, "uint8");
-        this.SecondaryTickTable = util.toTypedArray(this.SecondaryTickTable, "uint8");
+      GameBoyCore.prototype.loadState = function (state) {
+        this.stateManager.load(state);
+
         this.initializeReferencesFromSaveState();
         this.memoryReadJumpCompile();
         this.memoryWriteJumpCompile();
@@ -17386,8 +17497,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.noiseSampleTable = this.channel4BitRange === 0x7fff ? this.LSFR15Table : this.LSFR7Table;
         this.channel4VolumeShifter = this.channel4BitRange === 0x7fff ? 15 : 7;
       };
-      GameBoyCore.prototype.returnFromRTCState = function () {
-        if (typeof this.openRTC === "function" && this.cartridgeSlot.cartridge.cTIMER) {
+      GameBoyCore.prototype.loadRTCState = function () {
+        if (typeof this.openRTC === "function" && this.cartridgeSlot.cartridge.hasRTC) {
           var rtcData = this.openRTC(this.cartridgeSlot.cartridge.name);
           var index = 0;
 
@@ -17525,7 +17636,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.LCDisOn = true;
         this.channel1FrequencyTracker = 0x2000;
         this.channel1DutyTracker = 0;
-        this.channel1CachedDuty = this.dutyLookup[2];
+        this.channel1CachedDuty = dutyLookup[2];
         this.channel1totalLength = 0;
         this.channel1envelopeVolume = 0;
         this.channel1envelopeType = false;
@@ -17542,7 +17653,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel1decreaseSweep = false;
         this.channel2FrequencyTracker = 0x2000;
         this.channel2DutyTracker = 0;
-        this.channel2CachedDuty = this.dutyLookup[2];
+        this.channel2CachedDuty = dutyLookup[2];
         this.channel2totalLength = 0;
         this.channel2envelopeVolume = 0;
         this.channel2envelopeType = false;
@@ -17797,7 +17908,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       GameBoyCore.prototype.initializeAudioStartState = function () {
         this.channel1FrequencyTracker = 0x2000;
         this.channel1DutyTracker = 0;
-        this.channel1CachedDuty = this.dutyLookup[2];
+        this.channel1CachedDuty = dutyLookup[2];
         this.channel1totalLength = 0;
         this.channel1envelopeVolume = 0;
         this.channel1envelopeType = false;
@@ -17814,7 +17925,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         this.channel1decreaseSweep = false;
         this.channel2FrequencyTracker = 0x2000;
         this.channel2DutyTracker = 0;
-        this.channel2CachedDuty = this.dutyLookup[2];
+        this.channel2CachedDuty = dutyLookup[2];
         this.channel2totalLength = 0;
         this.channel2envelopeVolume = 0;
         this.channel2envelopeType = false;
@@ -18773,11 +18884,11 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.clockUpdate = function () {
-        if (this.cartridgeSlot.cartridge.cTIMER) {
+        if (this.cartridgeSlot.cartridge.hasRTC) {
           var newTime = new Date().getTime();
           var timeElapsed = newTime - this.lastIteration; //Get the numnber of milliseconds since this last executed.
           this.lastIteration = newTime;
-          if (this.cartridgeSlot.cartridge.cTIMER && !this.RTCHALT) {
+          if (this.cartridgeSlot.cartridge.hasRTC && !this.RTCHALT) {
             //Update the MBC3 RTC:
             this.RTCSeconds += timeElapsed / 1000;
             while (this.RTCSeconds >= 60) {
@@ -21068,7 +21179,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             } else {
               data &= 0x3f;
             }
-            _this3.channel1CachedDuty = _this3.dutyLookup[data >> 6];
+            _this3.channel1CachedDuty = dutyLookup[data >> 6];
             _this3.channel1totalLength = 0x40 - (data & 0x3f);
             _this3.memory[0xff11] = data;
             _this3.channel1EnableCheck();
@@ -21154,7 +21265,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             } else {
               data &= 0x3f;
             }
-            _this3.channel2CachedDuty = _this3.dutyLookup[data >> 6];
+            _this3.channel2CachedDuty = dutyLookup[data >> 6];
             _this3.channel2totalLength = 0x40 - (data & 0x3f);
             _this3.memory[0xff16] = data;
             _this3.channel2EnableCheck();
@@ -21863,21 +21974,26 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }
       };
 
-      GameBoy$1 = function () {
+      GameBoy$1 = function (_EventEmitter) {
+        _inherits(GameBoy, _EventEmitter);
+
         function GameBoy(canvas) {
           _classCallCheck(this, GameBoy);
 
-          this.core = new GameBoyCore(canvas);
-          this.core.openMBC = this.openSRAM.bind(this);
-          this.core.openRTC = this.openRTC.bind(this);
+          var _this = _possibleConstructorReturn(this, (GameBoy.__proto__ || Object.getPrototypeOf(GameBoy)).call(this));
 
-          this.isOn = false;
+          _this.core = new GameBoyCore(canvas);
+          _this.core.openMBC = _this.openSRAM.bind(_this);
+          _this.core.openRTC = _this.openRTC.bind(_this);
+
+          _this.isOn = false;
+          return _this;
         }
 
         _createClass(GameBoy, [{
           key: "turnOn",
           value: function turnOn() {
-            var _this = this;
+            var _this2 = this;
 
             if (this.isOn) return;
             this.isOn = true;
@@ -21888,7 +22004,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             this.core.iterations = 0;
             this.interval = setInterval(function () {
               if (!document.hidden && !document.msHidden && !document.mozHidden && !document.webkitHidden) {
-                _this.core.run();
+                _this2.core.run();
               }
             }, settings.runInterval);
           }
@@ -21957,7 +22073,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }, {
           key: "saveRTC",
           value: function saveRTC() {
-            if (this.core.cTIMER) {
+            if (this.core.hasRTC) {
               this.setLocalStorageValue("RTC_" + this.core.name, this.core.saveRTCState());
             }
           }
@@ -21985,6 +22101,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
           key: "saveState",
           value: function saveState(filename) {
             this.setLocalStorageValue(filename, this.core.saveState());
+            this.emit("stateSaved", { filename: filename });
           }
         }, {
           key: "openState",
@@ -21992,7 +22109,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             var value = this.findLocalStorageValue(filename);
             if (value) {
               this.core.savedStateFileName = filename;
-              this.core.returnFromState(value);
+              this.core.loadState(value);
+              this.emit("stateLoaded", { filename: filename });
             }
           }
         }, {
@@ -22010,31 +22128,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         }]);
 
         return GameBoy;
-      }();
-
-      _possibleConstructorReturn = function (self, call) {
-        if (!self) {
-          throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-        }
-
-        return call && (typeof call === "object" || typeof call === "function") ? call : self;
-      };
-
-      _inherits = function (subClass, superClass) {
-        if (typeof superClass !== "function" && superClass !== null) {
-          throw new TypeError("Super expression must either be null or a function, not " + typeof superClass);
-        }
-
-        subClass.prototype = Object.create(superClass && superClass.prototype, {
-          constructor: {
-            value: subClass,
-            enumerable: false,
-            writable: true,
-            configurable: true
-          }
-        });
-        if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
-      };
+      }(EventEmitter);
 
       GamepadProfile = function (_EventEmitter) {
         _inherits(GamepadProfile, _EventEmitter);
@@ -22523,6 +22617,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       $loading.hide();
       $lcd.show();
 
+      gameboy.on("stateLoaded", function (e) {
+        notifier.notify("Loaded " + e.filename);
+      }).on("stateSaved", function (e) {
+        notifier.notify("Saved  " + e.filename);
+      });
+
       notifier.appendTo(document.body);
 
       initElectron(gameboy);
@@ -22580,7 +22680,8 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
         88: "b",
         75: "b",
         49: "save",
-        48: "load"
+        48: "load",
+        80: "speed"
       });
 
 
@@ -22632,7 +22733,7 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
             binaryHandle.onload = function () {
               if (_this.readyState === 2) {
                 gameboy.core.savedStateFileName = file.name;
-                gameboy.core.returnFromState(JSON.parse(_this.result));
+                gameboy.core.loadState(JSON.parse(_this.result));
               }
             };
             binaryHandle.readAsBinaryString(file);
@@ -22645,7 +22746,6 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       });
 
       $(".rom").on("change", function () {
-        console.log("change????");
         if (this.files.length > 0) {
           var file = this.files[0];
           var binaryHandle = new FileReader();

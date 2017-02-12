@@ -26,7 +26,7 @@ export default class Cartridge {
     this.cTAMA5 = false; //Does the cartridge use TAMA5? (Tamagotchi Cartridge)
     this.cHuC3 = false; //Does the cartridge use HuC3 (Hudson Soft / modified MBC3)?
     this.cHuC1 = false; //Does the cartridge use HuC1 (Hudson Soft / modified MBC1)?
-    this.cTIMER = false; //Does the cartridge have an RTC?
+    this.hasRTC = false; //Does the cartridge have an RTC?
 
     this.ROMBanks = [
       // 1 Bank = 16 KBytes = 256 Kbits
@@ -97,13 +97,14 @@ export default class Cartridge {
       for (; romIndex < 0x4000; ++romIndex) {
         this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(
           romIndex
-        ) & 0xFF; // Load in the game ROM.
+        ) &
+          0xff; // Load in the game ROM.
       }
     }
 
     //Finish the decoding of the ROM binary:
     for (; romIndex < romLength; ++romIndex) {
-      this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xFF;
+      this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff;
     }
 
     this.ROMBankEdge = Math.floor(this.ROM.length / 0x4000);
@@ -202,7 +203,8 @@ export default class Cartridge {
     }
 
     const oldLicenseCode = this.rom.getByte(0x14b);
-    const newLicenseCode = this.rom.getByte(0x144) & 0xff00 | this.rom.getByte(0x145) & 0xff;
+    const newLicenseCode = this.rom.getByte(0x144) & 0xff00 |
+      this.rom.getByte(0x145) & 0xff;
     if (oldLicenseCode !== 0x33) {
       this.isNewLicenseCode = false;
       this.licenseCode = oldLicenseCode;
@@ -269,13 +271,13 @@ export default class Cartridge {
         break;
       case 0x0f:
         this.cMBC3 = true;
-        this.cTIMER = true;
+        this.hasRTC = true;
         this.cBATT = true;
         this.typeName = "MBC3 + TIMER + BATT";
         break;
       case 0x10:
         this.cMBC3 = true;
-        this.cTIMER = true;
+        this.hasRTC = true;
         this.cBATT = true;
         this.cSRAM = true;
         this.typeName = "MBC3 + TIMER + BATT + SRAM";
@@ -382,6 +384,6 @@ export default class Cartridge {
       }
     }
 
-    this.gameboy.returnFromRTCState();
+    this.gameboy.loadRTCState();
   }
 }

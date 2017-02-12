@@ -1,9 +1,12 @@
 import { Buffer } from "buffer";
 import settings from "./settings.js";
 import GameBoyCore from "./core/index.js";
+import EventEmitter from "events";
 
-export default class GameBoy {
+export default class GameBoy extends EventEmitter {
   constructor(canvas) {
+    super();
+
     this.core = new GameBoyCore(canvas);
     this.core.openMBC = this.openSRAM.bind(this);
     this.core.openRTC = this.openRTC.bind(this);
@@ -91,7 +94,7 @@ export default class GameBoy {
   }
 
   saveRTC() {
-    if (this.core.cTIMER) {
+    if (this.core.hasRTC) {
       this.setLocalStorageValue(
         "RTC_" + this.core.name,
         this.core.saveRTCState()
@@ -119,13 +122,15 @@ export default class GameBoy {
 
   saveState(filename) {
     this.setLocalStorageValue(filename, this.core.saveState());
+    this.emit("stateSaved", { filename });
   }
 
   openState(filename) {
     const value = this.findLocalStorageValue(filename);
     if (value) {
       this.core.savedStateFileName = filename;
-      this.core.returnFromState(value);
+      this.core.loadState(value);
+      this.emit("stateLoaded", { filename });
     }
   }
 

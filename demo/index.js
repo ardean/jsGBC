@@ -18,6 +18,14 @@ const $loading = $(".gbc-loading");
 $loading.hide();
 $lcd.show();
 
+gameboy
+  .on("stateLoaded", e => {
+    notifier.notify("Loaded " + e.filename);
+  })
+  .on("stateSaved", e => {
+    notifier.notify("Saved  " + e.filename);
+  });
+
 notifier.appendTo(document.body);
 
 initElectron(gameboy);
@@ -77,7 +85,8 @@ const keyboardProfile = new GamepadProfile("Keyboard", {
   88: "b",
   75: "b",
   49: "save",
-  48: "load"
+  48: "load",
+  80: "speed"
 });
 
 fullscreen.on("change", () => {
@@ -134,7 +143,7 @@ $(".upload-state").on("change", function() {
     binaryHandle.onload = () => {
       if (this.readyState === 2) {
         gameboy.core.savedStateFileName = file.name;
-        gameboy.core.returnFromState(JSON.parse(this.result));
+        gameboy.core.loadState(JSON.parse(this.result));
       }
     };
     binaryHandle.readAsBinaryString(file);
@@ -146,7 +155,6 @@ $(".download-state").on("click", () => {
 });
 
 $(".rom").on("change", function() {
-  console.log("change????");
   if (this.files.length > 0) {
     var file = this.files[0];
     var binaryHandle = new FileReader();
@@ -199,9 +207,9 @@ function getSpeedValue(button) {
 
 function gameboyHandlePressAction(action, button) {
   if (action === "save") {
-    saveAndNotifyState();
+    saveState();
   } else if (action === "load") {
-    openAndNotifyState();
+    loadState();
   } else if (action === "speed") {
     gameboy.setSpeed(getSpeedValue(button));
   } else if (action === "fullscreen") {
@@ -219,16 +227,12 @@ function gameboyHandleReleaseAction(action) {
   }
 }
 
-function saveAndNotifyState() {
+function saveState() {
   const filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
   gameboy.saveState(filename);
-
-  notifier.notify("Save " + filename);
 }
 
-function openAndNotifyState() {
+function loadState() {
   const filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
   gameboy.openState(filename);
-
-  notifier.notify("Loaded " + filename);
 }
