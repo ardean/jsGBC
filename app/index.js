@@ -1,28 +1,52 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
-const path = require("path");
-const url = require("url");
-const fs = require("fs");
-const { log } = require("util");
-const { isOSX, isWindows, isProduction } = require("./util");
-const createMenuTemplate = require("./menu");
 const OpenROMDialog = require("./open-rom-dialog");
+const { isOSX, isProduction } = require("./util");
+const WindowServer = require("./window-server");
+const createMenuTemplate = require("./menu");
+const { log } = require("util");
+const path = require("path");
+const fs = require("fs");
+
+let romPathToLoad = process.argv[1] || null;
 
 const openROMDialog = new OpenROMDialog(openROM);
+const mainWindowServer = new WindowServer(
+  path.join(__dirname, "../index.html"),
+  {
+    width: 400,
+    height: 709,
+    frame: false,
+    titleBarStyle: "hidden",
+    resizable: false,
+    transparent: true
+  }
+);
 
-let mainWindow;
-let romPathToLoad = process.argv[1] || null;
+mainWindowServer
+  .on("clientReady", () => {
+    if (isProduction()) {
+      openROM(romPathToLoad);
+    }
+  })
+  .on("closed", () => {
+    romPathToLoad = null;
+  });
 
 app
   .on("open-file", (e, filePath) => {
     e.preventDefault();
     romPathToLoad = filePath;
+
+    if (mainWindowServer && mainWindowServer.isClientReady) {
+      openROM(romPathToLoad);
+    }
   })
   .on("ready", () => {
-    createWindow();
+    mainWindowServer.open();
 
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
-        createMenuTemplate(mainWindow, {
+        createMenuTemplate(mainWindowServer, {
           openROMDialog: openROMDialog
         })
       )
@@ -34,46 +58,15 @@ app
     }
   })
   .on("activate", () => {
-    if (mainWindow === null) {
-      createWindow();
-    }
+    mainWindowServer.open();
   });
-
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 400,
-    height: 709,
-    frame: false,
-    titleBarStyle: "hidden",
-    resizable: false,
-    transparent: true
-  });
-
-  const indexUrl = url.format({
-    pathname: path.join(__dirname, "../index.html"),
-    protocol: "file:",
-    slashes: true
-  });
-
-  ipcMain.on("ready", () => {
-    if (isProduction()) {
-      openROM(romPathToLoad);
-    }
-  });
-
-  mainWindow.loadURL(indexUrl);
-  mainWindow.on("closed", () => {
-    romPathToLoad = null;
-    mainWindow = null;
-  });
-}
 
 function openROM(romPath) {
   if (!romPath) return;
 
   try {
     const fileContent = fs.readFileSync(romPath);
-    mainWindow.webContents.send("open-rom", fileContent);
+    mainWindowServer.sendToClient("open-rom", fileContent);
   } catch (e) {
     log(e);
   }

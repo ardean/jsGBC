@@ -14,8 +14,11 @@ const canvas = $canvas.get(0);
 const gameboy = new GameBoy(canvas);
 const fullscreen = new Fullscreen(canvas);
 const pointerLock = new PointerLock(canvas);
-const $loading = $(".loading");
+const $lcd = $(".gbc-lcd");
+const $loading = $(".gbc-loading");
 $loading.hide();
+$lcd.show();
+
 notifier.appendTo(document.body);
 
 initElectron(gameboy);

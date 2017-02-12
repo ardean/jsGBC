@@ -1,7 +1,7 @@
 const { app, shell } = require("electron");
 const { isOSX } = require("./util");
 
-module.exports = function(mainWindow, options) {
+module.exports = function(mainWindowServer, options) {
   const gamepadMappingMenu = [
     {
       label: "Standard",

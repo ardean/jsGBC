@@ -12129,7 +12129,7 @@ $__System.registerDynamic('11', [], true, function ($__require, exports, module)
 $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
   "use strict";
 
-  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, currentGamepadProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $loading, gamepadProfiles, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
+  var Buffer, EventEmitter, $, _classCallCheck, _createClass, settings, util, LCD, ROM, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, GameBoy$1, _possibleConstructorReturn, _inherits, GamepadProfile, Notifier, notifier, Fullscreen, PointerLock, requestAnimationFrame, Gamepad, gamepad, gamepadProfileMap, SoftwareButtons, softwareButtons, initElectron, currentGamepadProfile, $canvas, canvas, gameboy, fullscreen, pointerLock, $lcd, $loading, gamepadProfiles, $gamepadProfileSelector, gamepadProfileHtml, firstChild, keyboardProfile, saveData;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
@@ -22520,9 +22520,12 @@ $__System.register('a', ['10', '11', 'b'], function (_export, _context) {
       gameboy = new GameBoy$1(canvas);
       fullscreen = new Fullscreen(canvas);
       pointerLock = new PointerLock(canvas);
-      $loading = $(".loading");
+      $lcd = $(".gbc-lcd");
+      $loading = $(".gbc-loading");
 
       $loading.hide();
+      $lcd.show();
+
       notifier.appendTo(document.body);
 
       initElectron(gameboy);
