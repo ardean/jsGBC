@@ -27,7 +27,7 @@
     "build": "npm run cleanup && npm run build-src && npm run build-src-min && npm run build-docs",
     "build-src": "jspm build src/index.js dist/jsgbc.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\"",
     "build-src-min": "jspm build src/index.js dist/jsgbc.min.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\" --minify --skip-source-maps",
-    "build-docs": "jspm build demo/index.js docs/index.js && cpy *.{html,css} docs/ && npm run build-docs-dist",
+    "build-docs": "jspm build demo/index.js docs/index.js && cpy *.{html,css} docs/ && cpy images/**/*.png docs/images && npm run build-docs-dist",
     "build-docs-dist": "cpy dist/jsgbc.min.js docs/",
     "cleanup": "del-cli dist"
   },
