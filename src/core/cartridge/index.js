@@ -1,32 +1,33 @@
-import util from "./util";
-import settings from "../settings";
-import ROM from "./rom";
+import util from "../util.js";
+import settings from "../../settings.js";
+import ROM from "./rom.js";
+import MBC3 from "./mbc3.js";
 
 export default class Cartridge {
   constructor(rom, gameboy) {
     this.rom = new ROM(rom); // TODO: not here
     this.gameboy = gameboy;
 
-    this.MBCRam = []; //Switchable RAM (Used by games for more RAM) for the main memory range 0xA000 - 0xC000.
-    this.MBC1Mode = false; //MBC1 Type (4/32, 16/8)
+    this.MBCRam = []; // Switchable RAM (Used by games for more RAM) for the main memory range 0xA000 - 0xC000.
+    this.MBC1Mode = false; // MBC1 Type (4/32, 16/8)
     this.MBCRAMBanksEnabled = false; //MBC RAM Access Control.
-    this.currentMBCRAMBank = 0; //MBC Currently Indexed RAM Bank
-    this.currentMBCRAMBankPosition = -0xa000; //MBC Position Adder;
+    this.currentMBCRAMBank = 0; // MBC Currently Indexed RAM Bank
+    this.currentMBCRAMBankPosition = -0xa000; // MBC Position Adder;
 
-    this.cMBC1 = false; //Does the cartridge use MBC1?
-    this.cMBC2 = false; //Does the cartridge use MBC2?
-    this.cMBC3 = false; //Does the cartridge use MBC3?
-    this.cMBC5 = false; //Does the cartridge use MBC5?
-    this.cMBC7 = false; //Does the cartridge use MBC7?
-    this.hasSRAM = false; //Does the cartridge use save RAM?
-    this.cMMMO1 = false; //...
+    this.cMBC1 = false; // Does the cartridge use MBC1?
+    this.cMBC2 = false; // Does the cartridge use MBC2?
+    this.hasMBC3 = false; // Does the cartridge use MBC3?
+    this.cMBC5 = false; // Does the cartridge use MBC5?
+    this.cMBC7 = false; // Does the cartridge use MBC7?
+    this.hasSRAM = false; // Does the cartridge use save RAM?
+    this.cMMMO1 = false; // ...
     this.hasBattery = false;
-    this.cRUMBLE = false; //Does the cartridge use the RUMBLE addressing (modified MBC5)?
-    this.cCamera = false; //Is the cartridge actually a GameBoy Camera?
-    this.cTAMA5 = false; //Does the cartridge use TAMA5? (Tamagotchi Cartridge)
-    this.cHuC3 = false; //Does the cartridge use HuC3 (Hudson Soft / modified MBC3)?
-    this.cHuC1 = false; //Does the cartridge use HuC1 (Hudson Soft / modified MBC1)?
-    this.hasRTC = false; //Does the cartridge have an RTC?
+    this.cRUMBLE = false; // Does the cartridge use the RUMBLE addressing (modified MBC5)?
+    this.cCamera = false; // Is the cartridge actually a GameBoy Camera?
+    this.cTAMA5 = false; // Does the cartridge use TAMA5? (Tamagotchi Cartridge)
+    this.cHuC3 = false; // Does the cartridge use HuC3 (Hudson Soft / modified MBC3)?
+    this.cHuC1 = false; // Does the cartridge use HuC1 (Hudson Soft / modified MBC1)?
+    this.hasRTC = false; // Does the cartridge have an RTC?
 
     this.ROMBanks = [
       // 1 Bank = 16 KBytes = 256 Kbits
@@ -50,6 +51,34 @@ export default class Cartridge {
     this.loadRom();
   }
 
+  saveSRAMState() {
+    if (!this.hasBattery || this.MBCRam.length === 0) return; // No battery backup...
+
+    // return the MBC RAM for backup...
+    return util.fromTypedArray(this.MBCRam);
+  }
+
+  saveRTCState() {
+    if (!this.hasRTC) return; // No battery backup...
+
+    // return the MBC RAM for backup...
+    return [
+      this.lastTime,
+      this.RTCisLatched,
+      this.latchedSeconds,
+      this.latchedMinutes,
+      this.latchedHours,
+      this.latchedLDays,
+      this.latchedHDays,
+      this.RTCSeconds,
+      this.RTCMinutes,
+      this.RTCHours,
+      this.RTCDays,
+      this.RTCDayOverFlow,
+      this.RTCHALT
+    ];
+  }
+
   loadRom() {
     // TODO: move to gameboy core
     // Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
@@ -62,7 +91,7 @@ export default class Cartridge {
 
     this.ROM = util.getTypedArray(romLength, 0, "uint8");
 
-    var romIndex = 0;
+    let romIndex = 0;
     if (this.gameboy.usedBootROM) {
       // if (!settings.forceGBBootRom) {
       //   //Patch in the GBC boot ROM into the memory map:
@@ -135,8 +164,8 @@ export default class Cartridge {
       console.log("Cartridge Type Name: " + this.typeName);
     }
 
-    this.romSize = this.ROM[0x148];
-    this.ramSize = this.ROM[0x149];
+    this.romSize = this.rom.getByte(0x148);
+    this.ramSize = this.rom.getByte(0x149);
 
     // ROM and RAM banks
     this.numROMBanks = this.ROMBanks[this.romSize];
@@ -173,13 +202,12 @@ export default class Cartridge {
         case 0x32: //Exception to the GBC identifying code:
           if (
             !settings.gbHasPriority &&
-              this.romName + this.romGameCode + this.colorCompatibilityByte ===
+              this.name + this.gameCode + this.colorCompatibilityByte ===
                 "Game and Watch 50"
           ) {
             this.useGBCMode = true;
             console.log(
-              "Created a boot exception for Game and Watch Gallery 2 (GBC ID byte is wrong on the cartridge).",
-              1
+              "Created a boot exception for Game and Watch Gallery 2 (GBC ID byte is wrong on the cartridge)."
             );
           } else {
             this.useGBCMode = false;
@@ -272,29 +300,29 @@ export default class Cartridge {
         this.typeName = "MMMO1 + SRAM + Battery";
         break;
       case 0x0f:
-        this.cMBC3 = true;
+        this.hasMBC3 = true;
         this.hasRTC = true;
         this.hasBattery = true;
         this.typeName = "MBC3 + RTC + Battery";
         break;
       case 0x10:
-        this.cMBC3 = true;
+        this.hasMBC3 = true;
         this.hasRTC = true;
         this.hasBattery = true;
         this.hasSRAM = true;
         this.typeName = "MBC3 + RTC + Battery + SRAM";
         break;
       case 0x11:
-        this.cMBC3 = true;
+        this.hasMBC3 = true;
         this.typeName = "MBC3";
         break;
       case 0x12:
-        this.cMBC3 = true;
+        this.hasMBC3 = true;
         this.hasSRAM = true;
         this.typeName = "MBC3 + SRAM";
         break;
       case 0x13:
-        this.cMBC3 = true;
+        this.hasMBC3 = true;
         this.hasSRAM = true;
         this.hasBattery = true;
         this.typeName = "MBC3 + SRAM + Battery";
@@ -357,13 +385,17 @@ export default class Cartridge {
         // TODO error
         break;
     }
+
+    if (this.hasMBC3) {
+      this.mbc3 = new MBC3(this);
+    }
   }
 
   setupRAM() {
     //Setup the auxilliary/switchable RAM:
     if (this.cMBC2) {
       this.numRAMBanks = 1 / 16;
-    } else if (this.cMBC1 || this.cRUMBLE || this.cMBC3 || this.cHuC3) {
+    } else if (this.cMBC1 || this.cRUMBLE || this.hasMBC3 || this.cHuC3) {
       this.numRAMBanks = 4;
     } else if (this.cMBC5) {
       this.numRAMBanks = 16;
@@ -389,5 +421,36 @@ export default class Cartridge {
     }
 
     this.gameboy.loadRTCState();
+  }
+
+  updateClock() {
+    // TODO: export as RTC
+    if (this.hasRTC) {
+      const currentTime = new Date().getTime();
+      const elapsedTime = currentTime - this.lastTime;
+      this.lastTime = currentTime;
+
+      if (this.hasRTC && !this.RTCHALT) {
+        //Update the MBC3 RTC:
+        this.RTCSeconds += elapsedTime / 1000;
+        while (this.RTCSeconds >= 60) {
+          // System can stutter, so the seconds difference can get large, thus the "while".
+          this.RTCSeconds -= 60;
+          ++this.RTCMinutes;
+          if (this.RTCMinutes >= 60) {
+            this.RTCMinutes -= 60;
+            ++this.RTCHours;
+            if (this.RTCHours >= 24) {
+              this.RTCHours -= 24;
+              ++this.RTCDays;
+              if (this.RTCDays >= 512) {
+                this.RTCDays -= 512;
+                this.RTCDayOverFlow = true;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

@@ -1,7 +1,7 @@
 import LCD from "./lcd.js";
 import util from "./util.js";
 import settings from "../settings.js";
-import Cartridge from "./cartridge.js";
+import Cartridge from "./cartridge/index.js";
 import CartridgeSlot from "./cartridge-slot.js";
 import AudioServer from "../audio-server.js";
 import mainInstructions from "./main-instructions.js";
@@ -110,49 +110,24 @@ function GameBoyCore(canvas, options) {
   //Tile Data Cache:
   this.tileCache = null;
   //Palettes:
-  this.colors = [0xefffde, 0xadd794, 0x529273, 0x183442]; //"Classic" GameBoy palette colors.
+  this.colors = [0xefffde, 0xadd794, 0x529273, 0x183442]; // "Classic" GameBoy palette colors.
   this.OBJPalette = null;
   this.BGPalette = null;
   this.updateGBBGPalette = this.updateGBRegularBGPalette;
   this.updateGBOBJPalette = this.updateGBRegularOBJPalette;
-  this.BGLayerRender = null; //Reference to the BG rendering function.
-  this.WindowLayerRender = null; //Reference to the window rendering function.
-  this.SpriteLayerRender = null; //Reference to the OAM rendering function.
-  this.pixelStart = 0; //Temp variable for holding the current working framebuffer offset.
-  //Variables used for scaling in JS:
+  this.BGLayerRender = null; // Reference to the BG rendering function.
+  this.WindowLayerRender = null; // Reference to the window rendering function.
+  this.SpriteLayerRender = null; // Reference to the OAM rendering function.
+  this.pixelStart = 0; // Temp variable for holding the current working framebuffer offset.
 
   //Initialize the white noise cache tables ahead of time:
   this.intializeWhiteNoise();
 }
 GameBoyCore.prototype.saveSRAMState = function() {
-  if (
-    !this.cartridgeSlot.cartridge.hasBattery ||
-      this.cartridgeSlot.cartridge.MBCRam.length === 0
-  )
-    return; //No battery backup...
-
-  // return the MBC RAM for backup...
-  return util.fromTypedArray(this.cartridgeSlot.cartridge.MBCRam);
+  return this.cartridgeSlot.cartridge.saveSRAMState();
 };
 GameBoyCore.prototype.saveRTCState = function() {
-  if (!this.cartridgeSlot.cartridge.hasRTC) return; // No battery backup...
-
-  // return the MBC RAM for backup...
-  return [
-    this.lastIteration,
-    this.RTCisLatched,
-    this.latchedSeconds,
-    this.latchedMinutes,
-    this.latchedHours,
-    this.latchedLDays,
-    this.latchedHDays,
-    this.RTCSeconds,
-    this.RTCMinutes,
-    this.RTCHours,
-    this.RTCDays,
-    this.RTCDayOverFlow,
-    this.RTCHALT
-  ];
+  return this.cartridgeSlot.cartridge.saveRTCState();
 };
 GameBoyCore.prototype.saveState = function() {
   return this.stateManager.save();
@@ -178,19 +153,19 @@ GameBoyCore.prototype.loadRTCState = function() {
     var rtcData = this.loadRTCState(this.cartridgeSlot.cartridge.name);
     var index = 0;
 
-    this.lastIteration = rtcData[index++];
-    this.RTCisLatched = rtcData[index++];
-    this.latchedSeconds = rtcData[index++];
-    this.latchedMinutes = rtcData[index++];
-    this.latchedHours = rtcData[index++];
-    this.latchedLDays = rtcData[index++];
-    this.latchedHDays = rtcData[index++];
-    this.RTCSeconds = rtcData[index++];
-    this.RTCMinutes = rtcData[index++];
-    this.RTCHours = rtcData[index++];
-    this.RTCDays = rtcData[index++];
-    this.RTCDayOverFlow = rtcData[index++];
-    this.RTCHALT = rtcData[index];
+    this.cartridgeSlot.cartridge.lastTime = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCisLatched = rtcData[index++];
+    this.cartridgeSlot.cartridge.latchedSeconds = rtcData[index++];
+    this.cartridgeSlot.cartridge.latchedMinutes = rtcData[index++];
+    this.cartridgeSlot.cartridge.latchedHours = rtcData[index++];
+    this.cartridgeSlot.cartridge.latchedLDays = rtcData[index++];
+    this.cartridgeSlot.cartridge.latchedHDays = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCSeconds = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCMinutes = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCHours = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCDays = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCDayOverFlow = rtcData[index++];
+    this.cartridgeSlot.cartridge.RTCHALT = rtcData[index];
   }
 };
 GameBoyCore.prototype.start = function(rom) {
@@ -199,6 +174,11 @@ GameBoyCore.prototype.start = function(rom) {
   const cartridge = new Cartridge(rom, this);
   this.cartridgeSlot.insertCartridge(cartridge);
   this.cartridgeSlot.readCartridge();
+  if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.mbc3) {
+    this.cartridgeSlot.cartridge.mbc3.on("write", () => {
+      this.onMBC3Write && this.onMBC3Write();
+    });
+  }
 
   if (!this.usedBootROM) {
     this.inBootstrap = false;
@@ -1214,7 +1194,7 @@ GameBoyCore.prototype.run = function() {
       if (!this.CPUStopped) {
         this.stopEmulator = 0;
         this.audioUnderrunAdjustment();
-        this.clockUpdate(); //RTC clocking.
+        this.updateClock(); //RTC clocking.
         if (!this.halt) {
           this.executeIteration();
         } else {
@@ -1701,33 +1681,8 @@ GameBoyCore.prototype.executeHDMA = function() {
     --this.memory[0xff55];
   }
 };
-GameBoyCore.prototype.clockUpdate = function() {
-  if (this.cartridgeSlot.cartridge.hasRTC) {
-    var newTime = new Date().getTime();
-    var timeElapsed = newTime - this.lastIteration; //Get the numnber of milliseconds since this last executed.
-    this.lastIteration = newTime;
-    if (this.cartridgeSlot.cartridge.hasRTC && !this.RTCHALT) {
-      //Update the MBC3 RTC:
-      this.RTCSeconds += timeElapsed / 1000;
-      while (this.RTCSeconds >= 60) {
-        //System can stutter, so the seconds difference can get large, thus the "while".
-        this.RTCSeconds -= 60;
-        ++this.RTCMinutes;
-        if (this.RTCMinutes >= 60) {
-          this.RTCMinutes -= 60;
-          ++this.RTCHours;
-          if (this.RTCHours >= 24) {
-            this.RTCHours -= 24;
-            ++this.RTCDays;
-            if (this.RTCDays >= 512) {
-              this.RTCDays -= 512;
-              this.RTCDayOverFlow = true;
-            }
-          }
-        }
-      }
-    }
-  }
+GameBoyCore.prototype.updateClock = function() {
+  return this.cartridgeSlot.cartridge.updateClock();
 };
 GameBoyCore.prototype.renderScanLine = function(scanlineToRender) {
   this.pixelStart = scanlineToRender * 160;
@@ -3480,7 +3435,7 @@ GameBoyCore.prototype.memoryReadJumpCompile = function() {
       ) {
         if (this.cartridgeSlot.cartridge.cMBC7) {
           this.memoryReader[index] = this.memoryReadMBC7;
-        } else if (!this.cartridgeSlot.cartridge.cMBC3) {
+        } else if (!this.cartridgeSlot.cartridge.hasMBC3) {
           this.memoryReader[index] = this.memoryReadMBC;
         } else {
           //MBC3 RTC + RAM:
@@ -4015,40 +3970,7 @@ GameBoyCore.prototype.memoryReadMBC7 = function(address) {
   return 0xff;
 };
 GameBoyCore.prototype.memoryReadMBC3 = function(address) {
-  //Switchable RAM
-  if (
-    this.cartridgeSlot.cartridge.MBCRAMBanksEnabled ||
-      settings.alwaysAllowRWtoBanks
-  ) {
-    switch (this.cartridgeSlot.cartridge.currentMBCRAMBank) {
-      case 0x00:
-      case 0x01:
-      case 0x02:
-      case 0x03:
-        return this.cartridgeSlot.cartridge.MBCRam[
-          address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition
-        ];
-        break;
-      case 0x08:
-        return this.latchedSeconds;
-        break;
-      case 0x09:
-        return this.latchedMinutes;
-        break;
-      case 0x0a:
-        return this.latchedHours;
-        break;
-      case 0x0b:
-        return this.latchedLDays;
-        break;
-      case 0x0c:
-        return (this.RTCDayOverFlow ? 0x80 : 0) +
-          (this.RTCHALT ? 0x40 : 0) +
-          this.latchedHDays;
-    }
-  }
-  //console.log("Reading from invalid or disabled RAM.", 1);
-  return 0xff;
+  return this.cartridgeSlot.cartridge.mbc3.read(address);
 };
 GameBoyCore.prototype.memoryReadGBCMemory = function(address) {
   return this.GBCMemory[address + this.gbcRamBankPosition];
@@ -4152,7 +4074,7 @@ GameBoyCore.prototype.memoryWriteJumpCompile = function() {
         } else {
           this.memoryWriter[index] = this.cartIgnoreWrite;
         }
-      } else if (this.cartridgeSlot.cartridge.cMBC3) {
+      } else if (this.cartridgeSlot.cartridge.hasMBC3) {
         if (index < 0x2000) {
           this.memoryWriter[index] = this.MBCWriteEnable;
         } else if (index < 0x4000) {
@@ -4210,7 +4132,7 @@ GameBoyCore.prototype.memoryWriteJumpCompile = function() {
         this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xa200 ||
           this.cartridgeSlot.cartridge.numRAMBanks >= 1
       ) {
-        if (!this.cartridgeSlot.cartridge.cMBC3) {
+        if (!this.cartridgeSlot.cartridge.hasMBC3) {
           this.memoryWriter[index] = this.memoryWriteMBCRAM;
         } else {
           //MBC3 RTC + RAM:
@@ -4288,31 +4210,13 @@ GameBoyCore.prototype.MBC2WriteROMBank = function(address, data) {
   this.setCurrentMBC2AND3ROMBank();
 };
 GameBoyCore.prototype.MBC3WriteROMBank = function(address, data) {
-  //MBC3 ROM bank switching:
-  this.ROMBank1offs = data & 0x7f;
-  this.setCurrentMBC2AND3ROMBank();
+  return this.cartridgeSlot.cartridge.mbc3.writeROMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteRAMBank = function(address, data) {
-  this.cartridgeSlot.cartridge.currentMBCRAMBank = data;
-  if (data < 4) {
-    //MBC3 RAM bank switching
-    this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank <<
-      13) -
-      0xa000;
-  }
+  return this.cartridgeSlot.cartridge.mbc3.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteRTCLatch = function(address, data) {
-  if (data === 0) {
-    this.RTCisLatched = false;
-  } else if (!this.RTCisLatched) {
-    //Copy over the current RTC time for reading.
-    this.RTCisLatched = true;
-    this.latchedSeconds = this.RTCSeconds | 0;
-    this.latchedMinutes = this.RTCMinutes;
-    this.latchedHours = this.RTCHours;
-    this.latchedLDays = this.RTCDays & 0xff;
-    this.latchedHDays = this.RTCDays >> 8;
-  }
+  return this.cartridgeSlot.cartridge.mbc3.writeRTCLatch(address, data);
 };
 GameBoyCore.prototype.MBC5WriteROMBankLow = function(address, data) {
   //MBC5 ROM bank switching:
@@ -4366,71 +4270,7 @@ GameBoyCore.prototype.memoryWriteMBCRAM = function(address, data) {
   }
 };
 GameBoyCore.prototype.memoryWriteMBC3RAM = function(address, data) {
-  if (
-    this.cartridgeSlot.cartridge.MBCRAMBanksEnabled ||
-      settings.alwaysAllowRWtoBanks
-  ) {
-    switch (this.cartridgeSlot.cartridge.currentMBCRAMBank) {
-      case 0x00:
-      case 0x01:
-      case 0x02:
-      case 0x03:
-        this.onMBC3Write();
-        this.cartridgeSlot.cartridge.MBCRam[
-          address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition
-        ] = data;
-        break;
-      case 0x08:
-        if (data < 60) {
-          this.RTCSeconds = data;
-        } else {
-          console.log(
-            "(Bank #" +
-              this.cartridgeSlot.cartridge.currentMBCRAMBank +
-              ") RTC write out of range: " +
-              data
-          );
-        }
-        break;
-      case 0x09:
-        if (data < 60) {
-          this.RTCMinutes = data;
-        } else {
-          console.log(
-            "(Bank #" +
-              this.cartridgeSlot.cartridge.currentMBCRAMBank +
-              ") RTC write out of range: " +
-              data
-          );
-        }
-        break;
-      case 0x0a:
-        if (data < 24) {
-          this.RTCHours = data;
-        } else {
-          console.log(
-            "(Bank #" +
-              this.cartridgeSlot.cartridge.currentMBCRAMBank +
-              ") RTC write out of range: " +
-              data
-          );
-        }
-        break;
-      case 0x0b:
-        this.RTCDays = data & 0xff | this.RTCDays & 0x100;
-        break;
-      case 0x0c:
-        this.RTCDayOverFlow = data > 0x7f;
-        this.RTCHalt = (data & 0x40) === 0x40;
-        this.RTCDays = (data & 0x1) << 8 | this.RTCDays & 0xff;
-        break;
-      default:
-        console.log(
-          "Invalid MBC3 bank address selected: " +
-            this.cartridgeSlot.cartridge.currentMBCRAMBank
-        );
-    }
-  }
+  return this.cartridgeSlot.cartridge.mbc3.write(address, data);
 };
 GameBoyCore.prototype.memoryWriteGBCRAM = function(address, data) {
   this.GBCMemory[address + this.gbcRamBankPosition] = data;
@@ -4718,7 +4558,7 @@ GameBoyCore.prototype.DMAWrite = function(tilesToTransfer) {
       --tilesToTransfer;
     } while (tilesToTransfer > 0);
   }
-  //Update the HDMA registers to their next addresses:
+  // Update the HDMA registers to their next addresses:
   memory[0xff51] = source >> 8;
   memory[0xff52] = source & 0xf0;
   memory[0xff53] = destination >> 8;

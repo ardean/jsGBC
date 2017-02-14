@@ -61,7 +61,7 @@ export default class StateManager {
       gameboy.serialShiftTimer,
       gameboy.serialShiftTimerAllocated,
       gameboy.IRQEnableDelay,
-      gameboy.lastIteration,
+      gameboy.cartridgeSlot.cartridge.lastTime,
       gameboy.drewBlank,
       util.fromTypedArray(gameboy.frameBuffer),
       gameboy.bgEnabled,
@@ -158,18 +158,18 @@ export default class StateManager {
       gameboy.actualScanLine,
       gameboy.lastUnrenderedLine,
       gameboy.queuedScanLines,
-      gameboy.RTCisLatched,
-      gameboy.latchedSeconds,
-      gameboy.latchedMinutes,
-      gameboy.latchedHours,
-      gameboy.latchedLDays,
-      gameboy.latchedHDays,
-      gameboy.RTCSeconds,
-      gameboy.RTCMinutes,
-      gameboy.RTCHours,
-      gameboy.RTCDays,
-      gameboy.RTCDayOverFlow,
-      gameboy.RTCHALT,
+      gameboy.cartridgeSlot.cartridge.RTCisLatched,
+      gameboy.cartridgeSlot.cartridge.latchedSeconds,
+      gameboy.cartridgeSlot.cartridge.latchedMinutes,
+      gameboy.cartridgeSlot.cartridge.latchedHours,
+      gameboy.cartridgeSlot.cartridge.latchedLDays,
+      gameboy.cartridgeSlot.cartridge.latchedHDays,
+      gameboy.cartridgeSlot.cartridge.RTCSeconds,
+      gameboy.cartridgeSlot.cartridge.RTCMinutes,
+      gameboy.cartridgeSlot.cartridge.RTCHours,
+      gameboy.cartridgeSlot.cartridge.RTCDays,
+      gameboy.cartridgeSlot.cartridge.RTCDayOverFlow,
+      gameboy.cartridgeSlot.cartridge.RTCHALT,
       gameboy.usedBootROM,
       gameboy.skipPCIncrement,
       gameboy.STATTracker,
@@ -254,7 +254,11 @@ export default class StateManager {
     gameboy.serialShiftTimer = state[index++];
     gameboy.serialShiftTimerAllocated = state[index++];
     gameboy.IRQEnableDelay = state[index++];
-    gameboy.lastIteration = state[index++];
+    if (gameboy.cartridgeSlot.cartridge) {
+      gameboy.cartridgeSlot.cartridge.lastTime = state[index++];
+    } else {
+      index++;
+    }
     gameboy.drewBlank = state[index++];
     gameboy.frameBuffer = util.toTypedArray(state[index++], "int32");
     gameboy.bgEnabled = state[index++];
@@ -351,18 +355,22 @@ export default class StateManager {
     gameboy.actualScanLine = state[index++];
     gameboy.lastUnrenderedLine = state[index++];
     gameboy.queuedScanLines = state[index++];
-    gameboy.RTCisLatched = state[index++];
-    gameboy.latchedSeconds = state[index++];
-    gameboy.latchedMinutes = state[index++];
-    gameboy.latchedHours = state[index++];
-    gameboy.latchedLDays = state[index++];
-    gameboy.latchedHDays = state[index++];
-    gameboy.RTCSeconds = state[index++];
-    gameboy.RTCMinutes = state[index++];
-    gameboy.RTCHours = state[index++];
-    gameboy.RTCDays = state[index++];
-    gameboy.RTCDayOverFlow = state[index++];
-    gameboy.RTCHALT = state[index++];
+    if (gameboy.cartridgeSlot.cartridge) {
+      gameboy.cartridgeSlot.cartridge.RTCisLatched = state[index++];
+      gameboy.cartridgeSlot.cartridge.latchedSeconds = state[index++];
+      gameboy.cartridgeSlot.cartridge.latchedMinutes = state[index++];
+      gameboy.cartridgeSlot.cartridge.latchedHours = state[index++];
+      gameboy.cartridgeSlot.cartridge.latchedLDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.latchedHDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCSeconds = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCMinutes = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCHours = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCDayOverFlow = state[index++];
+      gameboy.cartridgeSlot.cartridge.RTCHALT = state[index++];
+    } else {
+      index += 12;
+    }
     gameboy.usedBootROM = state[index++];
     gameboy.skipPCIncrement = state[index++];
     gameboy.STATTracker = state[index++];
