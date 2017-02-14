@@ -6,17 +6,7 @@ SystemJS.config({
   },
   devConfig: {
     "map": {
-      "plugin-babel": "npm:systemjs-plugin-babel@0.0.20",
-      "jquery": "npm:jquery@3.1.1",
-      "jsfullscreen": "github:ardean/jsFullscreen@0.1.0"
-    },
-    "packages": {
-      "github:ardean/jsFullscreen@0.1.0": {
-        "map": {
-          "events": "npm:jspm-nodelibs-events@0.2.0",
-          "jquery": "npm:jquery@3.1.1"
-        }
-      }
+      "plugin-babel": "npm:systemjs-plugin-babel@0.0.20"
     }
   },
   transpiler: "plugin-babel",
@@ -43,8 +33,11 @@ SystemJS.config({
     "buffer": "npm:jspm-nodelibs-buffer@0.2.1",
     "constants": "npm:jspm-nodelibs-constants@0.2.0",
     "crypto": "npm:jspm-nodelibs-crypto@0.2.0",
+    "debounce": "npm:debounce@1.0.0",
     "events": "npm:jspm-nodelibs-events@0.2.0",
     "fs": "npm:jspm-nodelibs-fs@0.2.0",
+    "jquery": "npm:jquery@3.1.1",
+    "jsfullscreen": "github:ardean/jsFullscreen@0.1.0",
     "jsgamepad": "github:ardean/jsGamepad@0.1.0",
     "jspointerlock": "github:ardean/jsPointerLock@1.0.0",
     "os": "npm:jspm-nodelibs-os@0.2.0",
@@ -52,6 +45,7 @@ SystemJS.config({
     "process": "npm:jspm-nodelibs-process@0.2.0",
     "stream": "npm:jspm-nodelibs-stream@0.2.0",
     "string_decoder": "npm:jspm-nodelibs-string_decoder@0.2.0",
+    "timers": "npm:jspm-nodelibs-timers@0.2.0",
     "util": "npm:jspm-nodelibs-util@0.2.1",
     "vm": "npm:jspm-nodelibs-vm@0.2.0"
   },
@@ -100,7 +94,7 @@ SystemJS.config({
         "browserify-rsa": "npm:browserify-rsa@4.0.1",
         "bn.js": "npm:bn.js@4.11.6",
         "parse-asn1": "npm:parse-asn1@5.0.0",
-        "elliptic": "npm:elliptic@6.3.2"
+        "elliptic": "npm:elliptic@6.3.3"
       }
     },
     "npm:create-hmac@1.1.4": {
@@ -141,7 +135,7 @@ SystemJS.config({
     "npm:create-ecdh@4.0.0": {
       "map": {
         "bn.js": "npm:bn.js@4.11.6",
-        "elliptic": "npm:elliptic@6.3.2"
+        "elliptic": "npm:elliptic@6.3.3"
       }
     },
     "npm:browserify-cipher@1.0.0": {
@@ -173,14 +167,6 @@ SystemJS.config({
         "des.js": "npm:des.js@1.0.0"
       }
     },
-    "npm:elliptic@6.3.2": {
-      "map": {
-        "inherits": "npm:inherits@2.0.3",
-        "bn.js": "npm:bn.js@4.11.6",
-        "hash.js": "npm:hash.js@1.0.3",
-        "brorand": "npm:brorand@1.0.6"
-      }
-    },
     "npm:evp_bytestokey@1.0.0": {
       "map": {
         "create-hash": "npm:create-hash@1.1.2"
@@ -203,7 +189,7 @@ SystemJS.config({
     "npm:miller-rabin@4.0.0": {
       "map": {
         "bn.js": "npm:bn.js@4.11.6",
-        "brorand": "npm:brorand@1.0.6"
+        "brorand": "npm:brorand@1.0.7"
       }
     },
     "npm:sha.js@2.4.8": {
@@ -266,6 +252,35 @@ SystemJS.config({
       "map": {
         "events": "npm:jspm-nodelibs-events@0.2.0",
         "jquery": "npm:jquery@3.1.1"
+      }
+    },
+    "github:ardean/jsFullscreen@0.1.0": {
+      "map": {
+        "events": "npm:jspm-nodelibs-events@0.2.0",
+        "jquery": "npm:jquery@3.1.1"
+      }
+    },
+    "npm:elliptic@6.3.3": {
+      "map": {
+        "bn.js": "npm:bn.js@4.11.6",
+        "inherits": "npm:inherits@2.0.3",
+        "brorand": "npm:brorand@1.0.7",
+        "hash.js": "npm:hash.js@1.0.3"
+      }
+    },
+    "npm:debounce@1.0.0": {
+      "map": {
+        "date-now": "npm:date-now@1.0.1"
+      }
+    },
+    "npm:jspm-nodelibs-timers@0.2.0": {
+      "map": {
+        "timers-browserify": "npm:timers-browserify@1.4.2"
+      }
+    },
+    "npm:timers-browserify@1.4.2": {
+      "map": {
+        "process": "npm:process@0.11.9"
       }
     }
   }

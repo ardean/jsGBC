@@ -2,14 +2,21 @@ import { Buffer } from "buffer";
 import settings from "./settings.js";
 import GameBoyCore from "./core/index.js";
 import EventEmitter from "events";
+import debounce from "debounce";
 
 export default class GameBoy extends EventEmitter {
   constructor(canvas) {
     super();
 
+    this.debouncedAutoSave = debounce(this.autoSave.bind(this), 100);
+
     this.core = new GameBoyCore(canvas);
-    this.core.openMBC = this.openSRAM.bind(this);
-    this.core.openRTC = this.openRTC.bind(this);
+    this.core.loadSRAMState = this.loadSRAMState.bind(this);
+    this.core.loadRTCState = this.loadRTCState.bind(this);
+    this.core.onMBC3Write = () => {
+      if (!this.core.cartridgeSlot.cartridge) return;
+      this.debouncedAutoSave();
+    };
 
     this.isOn = false;
   }
@@ -20,8 +27,6 @@ export default class GameBoy extends EventEmitter {
 
     this.core.start(this.ROMImage);
     this.core.stopEmulator &= 1;
-    this.core.firstIteration = new Date().getTime();
-    this.core.iterations = 0;
     this.interval = setInterval(
       () => {
         if (
@@ -79,45 +84,30 @@ export default class GameBoy extends EventEmitter {
   }
 
   autoSave() {
-    this.saveSRAM();
-    this.saveRTC();
+    this.saveSRAMState(this.core.cartridgeSlot.cartridge.name);
+    this.saveRTCState(this.core.cartridgeSlot.cartridge.name);
   }
 
-  saveSRAM() {
-    var sram = this.core.saveSRAMState();
-    if (sram.length > 0) {
-      this.setLocalStorageValue(
-        "B64_SRAM_" + this.core.name,
-        arrayToBase64(sram)
-      );
+  saveSRAMState(filename) {
+    const sram = this.core.saveSRAMState();
+    if (sram) {
+      this.setLocalStorageValue("SRAM_" + filename, sram);
     }
   }
 
-  saveRTC() {
-    if (this.core.hasRTC) {
-      this.setLocalStorageValue(
-        "RTC_" + this.core.name,
-        this.core.saveRTCState()
-      );
+  saveRTCState(filename) {
+    const rtc = this.core.saveRTCState();
+    if (rtc) {
+      this.setLocalStorageValue("RTC_" + filename, rtc);
     }
   }
 
-  openSRAM(filename) {
-    const value = this.findLocalStorageValue("B64_SRAM_" + filename);
-    if (value) {
-      return new Buffer(value, "base64");
-    }
-
-    return [];
+  loadSRAMState(filename) {
+    return this.findLocalStorageValue("SRAM_" + filename);
   }
 
-  openRTC(filename) {
-    const value = this.findLocalStorageValue("RTC_" + filename);
-    if (value) {
-      return value;
-    }
-
-    return [];
+  loadRTCState(filename) {
+    return this.findLocalStorageValue("RTC_" + filename);
   }
 
   saveState(filename) {
@@ -125,7 +115,7 @@ export default class GameBoy extends EventEmitter {
     this.emit("stateSaved", { filename });
   }
 
-  openState(filename) {
+  loadState(filename) {
     const value = this.findLocalStorageValue(filename);
     if (value) {
       this.core.savedStateFileName = filename;
@@ -135,12 +125,12 @@ export default class GameBoy extends EventEmitter {
   }
 
   setLocalStorageValue(key, value) {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    window.localStorage.setItem(key, btoa(JSON.stringify(value)));
   }
 
   findLocalStorageValue(key) {
     if (window.localStorage.getItem(key) !== null) {
-      return JSON.parse(window.localStorage.getItem(key));
+      return JSON.parse(atob(window.localStorage.getItem(key)));
     }
   }
 }

@@ -234,5 +234,5 @@ function saveState() {
 
 function loadState() {
   const filename = gameboy.core.cartridgeSlot.cartridge.name + ".s0";
-  gameboy.openState(filename);
+  gameboy.loadState(filename);
 }

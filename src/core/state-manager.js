@@ -398,7 +398,6 @@ export default class StateManager {
     gameboy.CPUStopped = state[index++];
     gameboy.audioClocksUntilNextEvent = state[index++];
     gameboy.audioClocksUntilNextEventCounter = state[index];
-    gameboy.fromSaveState = true;
     gameboy.TickTable = util.toTypedArray(gameboy.TickTable, "uint8");
     gameboy.SecondaryTickTable = util.toTypedArray(
       gameboy.SecondaryTickTable,

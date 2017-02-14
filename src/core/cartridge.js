@@ -10,17 +10,17 @@ export default class Cartridge {
     this.MBCRam = []; //Switchable RAM (Used by games for more RAM) for the main memory range 0xA000 - 0xC000.
     this.MBC1Mode = false; //MBC1 Type (4/32, 16/8)
     this.MBCRAMBanksEnabled = false; //MBC RAM Access Control.
-    this.currMBCRAMBank = 0; //MBC Currently Indexed RAM Bank
-    this.currMBCRAMBankPosition = -0xa000; //MBC Position Adder;
+    this.currentMBCRAMBank = 0; //MBC Currently Indexed RAM Bank
+    this.currentMBCRAMBankPosition = -0xa000; //MBC Position Adder;
 
     this.cMBC1 = false; //Does the cartridge use MBC1?
     this.cMBC2 = false; //Does the cartridge use MBC2?
     this.cMBC3 = false; //Does the cartridge use MBC3?
     this.cMBC5 = false; //Does the cartridge use MBC5?
     this.cMBC7 = false; //Does the cartridge use MBC7?
-    this.cSRAM = false; //Does the cartridge use save RAM?
+    this.hasSRAM = false; //Does the cartridge use save RAM?
     this.cMMMO1 = false; //...
-    this.cBATT = false;
+    this.hasBattery = false;
     this.cRUMBLE = false; //Does the cartridge use the RUMBLE addressing (modified MBC5)?
     this.cCamera = false; //Is the cartridge actually a GameBoy Camera?
     this.cTAMA5 = false; //Does the cartridge use TAMA5? (Tamagotchi Cartridge)
@@ -52,7 +52,7 @@ export default class Cartridge {
 
   loadRom() {
     // TODO: move to gameboy core
-    //Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
+    // Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
     this.gameboy.usedBootROM = settings.bootBootRomFirst &&
       (!settings.forceGBBootRom && this.gameboy.GBCBOOTROM.length === 0x800 ||
         settings.forceGBBootRom && this.gameboy.GBBOOTROM.length === 0x100);
@@ -93,18 +93,20 @@ export default class Cartridge {
       //   this.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(romIndex); //Load in the game ROM.
       // }
     } else {
-      //Don't load in the boot ROM:
-      for (; romIndex < 0x4000; ++romIndex) {
+      // Don't load in the boot ROM:
+      while (romIndex < 0x4000) {
         this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(
           romIndex
         ) &
           0xff; // Load in the game ROM.
+        ++romIndex;
       }
     }
 
-    //Finish the decoding of the ROM binary:
-    for (; romIndex < romLength; ++romIndex) {
+    // Finish the decoding of the ROM binary:
+    while (romIndex < romLength) {
       this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff;
+      ++romIndex;
     }
 
     this.ROMBankEdge = Math.floor(this.ROM.length / 0x4000);
@@ -227,14 +229,14 @@ export default class Cartridge {
         break;
       case 0x02:
         this.cMBC1 = true;
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "MBC1 + SRAM";
         break;
       case 0x03:
         this.cMBC1 = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "MBC1 + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "MBC1 + SRAM + Battery";
         break;
       case 0x05:
         this.cMBC2 = true;
@@ -242,17 +244,17 @@ export default class Cartridge {
         break;
       case 0x06:
         this.cMBC2 = true;
-        this.cBATT = true;
-        this.typeName = "MBC2 + BATT";
+        this.hasBattery = true;
+        this.typeName = "MBC2 + Battery";
         break;
       case 0x08:
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "ROM + SRAM";
         break;
       case 0x09:
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "ROM + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "ROM + SRAM + Battery";
         break;
       case 0x0b:
         this.cMMMO1 = true;
@@ -260,27 +262,27 @@ export default class Cartridge {
         break;
       case 0x0c:
         this.cMMMO1 = true;
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "MMMO1 + SRAM";
         break;
       case 0x0d:
         this.cMMMO1 = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "MMMO1 + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "MMMO1 + SRAM + Battery";
         break;
       case 0x0f:
         this.cMBC3 = true;
         this.hasRTC = true;
-        this.cBATT = true;
-        this.typeName = "MBC3 + TIMER + BATT";
+        this.hasBattery = true;
+        this.typeName = "MBC3 + RTC + Battery";
         break;
       case 0x10:
         this.cMBC3 = true;
         this.hasRTC = true;
-        this.cBATT = true;
-        this.cSRAM = true;
-        this.typeName = "MBC3 + TIMER + BATT + SRAM";
+        this.hasBattery = true;
+        this.hasSRAM = true;
+        this.typeName = "MBC3 + RTC + Battery + SRAM";
         break;
       case 0x11:
         this.cMBC3 = true;
@@ -288,14 +290,14 @@ export default class Cartridge {
         break;
       case 0x12:
         this.cMBC3 = true;
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "MBC3 + SRAM";
         break;
       case 0x13:
         this.cMBC3 = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "MBC3 + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "MBC3 + SRAM + Battery";
         break;
       case 0x19:
         this.cMBC5 = true;
@@ -303,14 +305,14 @@ export default class Cartridge {
         break;
       case 0x1a:
         this.cMBC5 = true;
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "MBC5 + SRAM";
         break;
       case 0x1b:
         this.cMBC5 = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "MBC5 + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "MBC5 + SRAM + Battery";
         break;
       case 0x1c:
         this.cRUMBLE = true;
@@ -318,14 +320,14 @@ export default class Cartridge {
         break;
       case 0x1d:
         this.cRUMBLE = true;
-        this.cSRAM = true;
+        this.hasSRAM = true;
         this.typeName = "RUMBLE + SRAM";
         break;
       case 0x1e:
         this.cRUMBLE = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "RUMBLE + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "RUMBLE + SRAM + Battery";
         break;
       case 0x1f:
         this.cCamera = true;
@@ -333,9 +335,9 @@ export default class Cartridge {
         break;
       case 0x22:
         this.cMBC7 = true;
-        this.cSRAM = true;
-        this.cBATT = true;
-        this.typeName = "MBC7 + SRAM + BATT";
+        this.hasSRAM = true;
+        this.hasBattery = true;
+        this.typeName = "MBC7 + SRAM + Battery";
         break;
       case 0xfd:
         this.cTAMA5 = true;
@@ -365,7 +367,7 @@ export default class Cartridge {
       this.numRAMBanks = 4;
     } else if (this.cMBC5) {
       this.numRAMBanks = 16;
-    } else if (this.cSRAM) {
+    } else if (this.hasSRAM) {
       this.numRAMBanks = 1;
     }
 
@@ -374,10 +376,12 @@ export default class Cartridge {
     console.log("Actual bytes of MBC RAM allocated: " + this.allocatedRamBytes);
 
     if (this.numRAMBanks > 0) {
-      const mbcRam = typeof this.gameboy.openMBC === "function"
-        ? this.gameboy.openMBC(this.name)
-        : [];
-      if (mbcRam.length > 0) {
+      let mbcRam = null;
+      if (typeof this.gameboy.loadSRAMState === "function") {
+        mbcRam = this.gameboy.loadSRAMState(this.name);
+      }
+
+      if (mbcRam) {
         this.MBCRam = util.toTypedArray(mbcRam, "uint8");
       } else {
         this.MBCRam = util.getTypedArray(this.allocatedRamBytes, 0, "uint8");

@@ -18,6 +18,8 @@ Please checkout the [index-dist.html](https://ardean.github.io/jsGBC/index-dist.
 
 [MIT](LICENSE)
 
+This project is a mature fork of [GameBoy-Online](https://github.com/taisel/GameBoy-Online)
+
 [downloads-image]: https://img.shields.io/npm/dm/jsgbc.svg
 [downloads-url]: https://npmjs.org/package/jsgbc
 [npm-image]: https://img.shields.io/npm/v/jsgbc.svg

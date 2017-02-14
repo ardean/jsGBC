@@ -64,32 +64,33 @@ export default class AudioServer {
     const buffers = [];
     let bufferCount = 0;
 
-    for (; bufferCount < this.channelsAllocated; ++bufferCount) {
+    while (bufferCount < this.channelsAllocated) {
       buffers[bufferCount] = e.outputBuffer.getChannelData(bufferCount);
+      ++bufferCount;
     }
 
     this.refillResampledBuffer();
 
     let index = 0;
-    for (
-      ;
+    while (
       index < this.samplesPerCallback &&
-        this.resampleBufferStart !== this.resampleBufferEnd;
-      ++index
+        this.resampleBufferStart !== this.resampleBufferEnd
     ) {
-      for (
-        bufferCount = 0;
-        bufferCount < this.channelsAllocated;
-        ++bufferCount
-      ) {
+      bufferCount = 0;
+      while (bufferCount < this.channelsAllocated) {
         buffers[bufferCount][index] = this.resampledBuffer[
           this.resampleBufferStart++
         ] *
           this.volume;
+
+        ++bufferCount;
       }
+
       if (this.resampleBufferStart === this.resampleBufferSize) {
         this.resampleBufferStart = 0;
       }
+
+      ++index;
     }
 
     while (index < this.samplesPerCallback) {
@@ -105,6 +106,8 @@ export default class AudioServer {
   }
 
   setVolume(volume) {
+    // console.log("volume 0!");
+    // this.volume = 0;
     this.volume = Math.max(0, Math.min(1, volume));
   }
 
