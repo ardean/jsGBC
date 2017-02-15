@@ -2939,16 +2939,16 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "setCurrentROMBank",
           value: function setCurrentROMBank() {
             // Read the cartridge ROM data from RAM memory:
-            switch (this.ROMBank1Offset) {
+            switch (this.cartridge.gameboy.ROMBank1Offset) {
               case 0x00:
               case 0x20:
               case 0x40:
               case 0x60:
                 //Bank calls for 0x00, 0x20, 0x40, and 0x60 are really for 0x01, 0x21, 0x41, and 0x61.
-                this.currentROMBank = this.ROMBank1Offset % this.cartridgeSlot.cartridge.ROMBankEdge << 14;
+                this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge << 14;
                 break;
               default:
-                this.currentROMBank = this.ROMBank1Offset % this.cartridgeSlot.cartridge.ROMBankEdge - 1 << 14;
+                this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1 << 14;
             }
           }
         }]);
