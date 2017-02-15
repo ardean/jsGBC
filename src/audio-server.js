@@ -106,9 +106,9 @@ export default class AudioServer {
   }
 
   setVolume(volume) {
+    this.volume = Math.max(0, Math.min(1, volume));
     // console.log("volume 0!");
     // this.volume = 0;
-    this.volume = Math.max(0, Math.min(1, volume));
   }
 
   resetCallbackAPIAudioBuffer(sampleRate) {

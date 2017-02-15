@@ -38,7 +38,7 @@ export default class StateManager {
       gameboy.useGBCMode,
       gameboy.gbcRamBank,
       gameboy.gbcRamBankPosition,
-      gameboy.ROMBank1offs,
+      gameboy.ROMBank1Offset,
       gameboy.currentROMBank,
       gameboy.modeSTAT,
       gameboy.LYCMatchTriggerSTAT,
@@ -61,7 +61,8 @@ export default class StateManager {
       gameboy.serialShiftTimer,
       gameboy.serialShiftTimerAllocated,
       gameboy.IRQEnableDelay,
-      gameboy.cartridgeSlot.cartridge.lastTime,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.lastTime,
       gameboy.drewBlank,
       util.fromTypedArray(gameboy.frameBuffer),
       gameboy.bgEnabled,
@@ -158,18 +159,30 @@ export default class StateManager {
       gameboy.actualScanLine,
       gameboy.lastUnrenderedLine,
       gameboy.queuedScanLines,
-      gameboy.cartridgeSlot.cartridge.RTCisLatched,
-      gameboy.cartridgeSlot.cartridge.latchedSeconds,
-      gameboy.cartridgeSlot.cartridge.latchedMinutes,
-      gameboy.cartridgeSlot.cartridge.latchedHours,
-      gameboy.cartridgeSlot.cartridge.latchedLDays,
-      gameboy.cartridgeSlot.cartridge.latchedHDays,
-      gameboy.cartridgeSlot.cartridge.RTCSeconds,
-      gameboy.cartridgeSlot.cartridge.RTCMinutes,
-      gameboy.cartridgeSlot.cartridge.RTCHours,
-      gameboy.cartridgeSlot.cartridge.RTCDays,
-      gameboy.cartridgeSlot.cartridge.RTCDayOverFlow,
-      gameboy.cartridgeSlot.cartridge.RTCHALT,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCisLatched,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedSeconds,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedMinutes,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHours,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedLDays,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHDays,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCSeconds,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCMinutes,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHours,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDays,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDayOverFlow,
+      gameboy.cartridgeSlot.cartridge.hasRTC &&
+        gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHALT,
       gameboy.usedBootROM,
       gameboy.skipPCIncrement,
       gameboy.STATTracker,
@@ -231,7 +244,7 @@ export default class StateManager {
     gameboy.useGBCMode = state[index++];
     gameboy.gbcRamBank = state[index++];
     gameboy.gbcRamBankPosition = state[index++];
-    gameboy.ROMBank1offs = state[index++];
+    gameboy.ROMBank1Offset = state[index++];
     gameboy.currentROMBank = state[index++];
     gameboy.modeSTAT = state[index++];
     gameboy.LYCMatchTriggerSTAT = state[index++];
@@ -254,8 +267,8 @@ export default class StateManager {
     gameboy.serialShiftTimer = state[index++];
     gameboy.serialShiftTimerAllocated = state[index++];
     gameboy.IRQEnableDelay = state[index++];
-    if (gameboy.cartridgeSlot.cartridge) {
-      gameboy.cartridgeSlot.cartridge.lastTime = state[index++];
+    if (gameboy.cartridgeSlot.cartridge && gameboy.cartridgeSlot.cartridge.hasRTC) {
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.lastTime = state[index++];
     } else {
       index++;
     }
@@ -355,19 +368,19 @@ export default class StateManager {
     gameboy.actualScanLine = state[index++];
     gameboy.lastUnrenderedLine = state[index++];
     gameboy.queuedScanLines = state[index++];
-    if (gameboy.cartridgeSlot.cartridge) {
-      gameboy.cartridgeSlot.cartridge.RTCisLatched = state[index++];
-      gameboy.cartridgeSlot.cartridge.latchedSeconds = state[index++];
-      gameboy.cartridgeSlot.cartridge.latchedMinutes = state[index++];
-      gameboy.cartridgeSlot.cartridge.latchedHours = state[index++];
-      gameboy.cartridgeSlot.cartridge.latchedLDays = state[index++];
-      gameboy.cartridgeSlot.cartridge.latchedHDays = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCSeconds = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCMinutes = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCHours = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCDays = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCDayOverFlow = state[index++];
-      gameboy.cartridgeSlot.cartridge.RTCHALT = state[index++];
+    if (gameboy.cartridgeSlot.cartridge && gameboy.cartridgeSlot.cartridge.hasRTC) {
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCisLatched = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedSeconds = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedMinutes = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHours = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedLDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCSeconds = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCMinutes = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHours = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDays = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDayOverFlow = state[index++];
+      gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHALT = state[index++];
     } else {
       index += 12;
     }
@@ -406,10 +419,5 @@ export default class StateManager {
     gameboy.CPUStopped = state[index++];
     gameboy.audioClocksUntilNextEvent = state[index++];
     gameboy.audioClocksUntilNextEventCounter = state[index];
-    gameboy.TickTable = util.toTypedArray(gameboy.TickTable, "uint8");
-    gameboy.SecondaryTickTable = util.toTypedArray(
-      gameboy.SecondaryTickTable,
-      "uint8"
-    );
   }
 }

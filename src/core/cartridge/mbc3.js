@@ -1,5 +1,6 @@
 import EventEmitter from "events";
 import settings from "../../settings.js";
+import RTC from "./rtc.js";
 
 // TODO: remove gameboy
 
@@ -7,26 +8,13 @@ export default class MBC3 extends EventEmitter {
   constructor(cartridge) {
     super();
 
+    this.rtc = new RTC(this, cartridge);
     this.cartridge = cartridge;
-  }
-
-  writeRTCLatch(address, data) {
-    if (data === 0) {
-      this.cartridge.RTCisLatched = false;
-    } else if (!this.cartridge.RTCisLatched) {
-      // Copy over the current RTC time for reading.
-      this.cartridge.RTCisLatched = true;
-      this.cartridge.latchedSeconds = this.cartridge.RTCSeconds | 0;
-      this.cartridge.latchedMinutes = this.cartridge.RTCMinutes;
-      this.cartridge.latchedHours = this.cartridge.RTCHours;
-      this.cartridge.latchedLDays = this.cartridge.RTCDays & 0xff;
-      this.cartridge.latchedHDays = this.cartridge.RTCDays >> 8;
-    }
   }
 
   writeROMBank(address, data) {
     // MBC3 ROM bank switching:
-    this.cartridge.gameboy.ROMBank1offs = data & 0x7f;
+    this.cartridge.gameboy.ROMBank1Offset = data & 0x7f;
     this.cartridge.gameboy.setCurrentMBC2AND3ROMBank();
   }
 
@@ -53,49 +41,19 @@ export default class MBC3 extends EventEmitter {
           ] = data;
           break;
         case 0x08:
-          if (data < 60) {
-            this.cartridge.RTCSeconds = data;
-          } else {
-            console.log(
-              "(Bank #" +
-                this.cartridge.currentMBCRAMBank +
-                ") RTC write out of range: " +
-                data
-            );
-          }
+          this.rtc && this.rtc.writeSeconds(data);
           break;
         case 0x09:
-          if (data < 60) {
-            this.cartridge.RTCMinutes = data;
-          } else {
-            console.log(
-              "(Bank #" +
-                this.cartridge.currentMBCRAMBank +
-                ") RTC write out of range: " +
-                data
-            );
-          }
+          this.rtc && this.rtc.writeMinutes(data);
           break;
         case 0x0a:
-          if (data < 24) {
-            this.cartridge.RTCHours = data;
-          } else {
-            console.log(
-              "(Bank #" +
-                this.cartridge.currentMBCRAMBank +
-                ") RTC write out of range: " +
-                data
-            );
-          }
+          this.rtc && this.rtc.writeHours(data);
           break;
         case 0x0b:
-          this.cartridge.RTCDays = data & 0xff | this.cartridge.RTCDays & 0x100;
+          this.rtc && this.rtc.writeDaysLow(data);
           break;
         case 0x0c:
-          this.cartridge.RTCDayOverFlow = data > 0x7f;
-          this.cartridge.RTCHalt = (data & 0x40) === 0x40;
-          this.cartridge.RTCDays = (data & 0x1) << 8 |
-            this.cartridge.RTCDays & 0xff;
+          this.rtc && this.rtc.writeDaysHigh(data);
           break;
         default:
           console.log(
@@ -107,7 +65,7 @@ export default class MBC3 extends EventEmitter {
   }
 
   read(address) {
-    //Switchable RAM
+    // Switchable RAM
     if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
       switch (this.cartridge.currentMBCRAMBank) {
         case 0x00:
@@ -119,21 +77,19 @@ export default class MBC3 extends EventEmitter {
           ];
           break;
         case 0x08:
-          return this.cartridge.latchedSeconds;
+          return this.rtc && this.rtc.readSeconds();
           break;
         case 0x09:
-          return this.cartridge.latchedMinutes;
+          return this.rtc && this.rtc.readMinutes();
           break;
         case 0x0a:
-          return this.cartridge.latchedHours;
+          return this.rtc && this.rtc.readHours();
           break;
         case 0x0b:
-          return this.cartridge.latchedLDays;
+          return this.rtc && this.rtc.readDaysLow();
           break;
         case 0x0c:
-          return (this.cartridge.RTCDayOverFlow ? 0x80 : 0) +
-            (this.cartridge.RTCHALT ? 0x40 : 0) +
-            this.cartridge.latchedHDays;
+          return this.rtc && this.rtc.readDaysHigh();
       }
     }
     //console.log("Reading from invalid or disabled RAM.");

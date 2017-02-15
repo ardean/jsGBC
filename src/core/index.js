@@ -127,7 +127,7 @@ GameBoyCore.prototype.saveSRAMState = function() {
   return this.cartridgeSlot.cartridge.saveSRAMState();
 };
 GameBoyCore.prototype.saveRTCState = function() {
-  return this.cartridgeSlot.cartridge.saveRTCState();
+  return this.cartridgeSlot.cartridge.mbc3.rtc.saveState();
 };
 GameBoyCore.prototype.saveState = function() {
   return this.stateManager.save();
@@ -145,27 +145,14 @@ GameBoyCore.prototype.loadState = function(state) {
     : this.LSFR7Table;
   this.channel4VolumeShifter = this.channel4BitRange === 0x7fff ? 15 : 7;
 };
-GameBoyCore.prototype.loadRTCState = function() {
+GameBoyCore.prototype.loadRTCState2 = function() {
   if (
-    typeof this.loadRTCState === "function" &&
-      this.cartridgeSlot.cartridge.hasRTC
+    this.cartridgeSlot.cartridge &&
+      this.cartridgeSlot.cartridge.hasRTC &&
+      typeof this.loadRTCState === "function"
   ) {
-    var rtcData = this.loadRTCState(this.cartridgeSlot.cartridge.name);
-    var index = 0;
-
-    this.cartridgeSlot.cartridge.lastTime = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCisLatched = rtcData[index++];
-    this.cartridgeSlot.cartridge.latchedSeconds = rtcData[index++];
-    this.cartridgeSlot.cartridge.latchedMinutes = rtcData[index++];
-    this.cartridgeSlot.cartridge.latchedHours = rtcData[index++];
-    this.cartridgeSlot.cartridge.latchedLDays = rtcData[index++];
-    this.cartridgeSlot.cartridge.latchedHDays = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCSeconds = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCMinutes = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCHours = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCDays = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCDayOverFlow = rtcData[index++];
-    this.cartridgeSlot.cartridge.RTCHALT = rtcData[index];
+    const data = this.loadRTCState(this.cartridgeSlot.cartridge.name);
+    this.cartridgeSlot.cartridge.mbc3.rtc.loadState(data);
   }
 };
 GameBoyCore.prototype.start = function(rom) {
@@ -406,10 +393,13 @@ GameBoyCore.prototype.initBootstrap = function() {
   this.memory[0xff00] = 0xf; //Set the joypad state.
 };
 GameBoyCore.prototype.disableBootROM = function() {
-  //Remove any traces of the boot ROM from ROM memory.
-  for (var index = 0; index < 0x100; ++index) {
-    this.memory[index] = this.cartridgeSlot.cartridge.ROM[index]; //Replace the GameBoy or GameBoy Color boot ROM with the game ROM.
+  // Remove any traces of the boot ROM from ROM memory.
+  let index = 0;
+  while (index < 0x100) {
+    this.memory[index] = this.cartridgeSlot.cartridge.ROM[index]; // Replace the GameBoy or GameBoy Color boot ROM with the game ROM.
+    ++index;
   }
+
   if (this.usedGBCBootROM) {
     //Remove any traces of the boot ROM from ROM memory.
     for (index = 0x200; index < 0x900; ++index) {
@@ -1194,7 +1184,9 @@ GameBoyCore.prototype.run = function() {
       if (!this.CPUStopped) {
         this.stopEmulator = 0;
         this.audioUnderrunAdjustment();
-        this.updateClock(); //RTC clocking.
+        if (this.cartridgeSlot.cartridge.hasRTC) {
+            this.cartridgeSlot.cartridge.mbc3.rtc.updateClock();
+        }
         if (!this.halt) {
           this.executeIteration();
         } else {
@@ -3415,7 +3407,7 @@ GameBoyCore.prototype.memoryHighRead = function(address) {
 };
 GameBoyCore.prototype.memoryReadJumpCompile = function() {
   //Faster in some browsers, since we are doing less conditionals overall by implementing them in advance.
-  for (var index = 0x0000; index <= 0xffff; index++) {
+  for (let index = 0x0000; index <= 0xffff; index++) {
     if (index < 0x4000) {
       this.memoryReader[index] = this.memoryReadNormal;
     } else if (index < 0x8000) {
@@ -3988,7 +3980,7 @@ GameBoyCore.prototype.memoryReadBAD = function(address) {
   return 0xff;
 };
 GameBoyCore.prototype.VRAMDATAReadCGBCPU = function(address) {
-  //CPU Side Reading The VRAM (Optimized for GameBoy Color)
+  // CPU Side Reading The VRAM (Optimized for GameBoy Color)
   return this.modeSTAT > 2
     ? 0xff
     : this.currVRAMBank === 0
@@ -3996,48 +3988,32 @@ GameBoyCore.prototype.VRAMDATAReadCGBCPU = function(address) {
         : this.VRAM[address & 0x1fff];
 };
 GameBoyCore.prototype.VRAMDATAReadDMGCPU = function(address) {
-  //CPU Side Reading The VRAM (Optimized for classic GameBoy)
+  // CPU Side Reading The VRAM (Optimized for classic GameBoy)
   return this.modeSTAT > 2 ? 0xff : this.memory[address];
 };
 GameBoyCore.prototype.VRAMCHRReadCGBCPU = function(address) {
-  //CPU Side Reading the Character Data Map:
+  // CPU Side Reading the Character Data Map:
   return this.modeSTAT > 2 ? 0xff : this.BGCHRCurrentBank[address & 0x7ff];
 };
 GameBoyCore.prototype.VRAMCHRReadDMGCPU = function(address) {
-  //CPU Side Reading the Character Data Map:
+  // CPU Side Reading the Character Data Map:
   return this.modeSTAT > 2 ? 0xff : this.BGCHRBank1[address & 0x7ff];
 };
 GameBoyCore.prototype.setCurrentMBC1ROMBank = function() {
-  //Read the cartridge ROM data from RAM memory:
-  switch (this.ROMBank1offs) {
-    case 0x00:
-    case 0x20:
-    case 0x40:
-    case 0x60:
-      //Bank calls for 0x00, 0x20, 0x40, and 0x60 are really for 0x01, 0x21, 0x41, and 0x61.
-      this.currentROMBank = this.ROMBank1offs %
-        this.cartridgeSlot.cartridge.ROMBankEdge <<
-        14;
-      break;
-    default:
-      this.currentROMBank = this.ROMBank1offs %
-        this.cartridgeSlot.cartridge.ROMBankEdge -
-        1 <<
-        14;
-  }
+  return this.cartridgeSlot.cartridge.mbc1.setCurrentROMBank();
 };
 GameBoyCore.prototype.setCurrentMBC2AND3ROMBank = function() {
   //Read the cartridge ROM data from RAM memory:
   //Only map bank 0 to bank 1 here (MBC2 is like MBC1, but can only do 16 banks, so only the bank 0 quirk appears for MBC2):
   this.currentROMBank = Math.max(
-    this.ROMBank1offs % this.cartridgeSlot.cartridge.ROMBankEdge - 1,
+    this.ROMBank1Offset % this.cartridgeSlot.cartridge.ROMBankEdge - 1,
     0
   ) <<
     14;
 };
 GameBoyCore.prototype.setCurrentMBC5ROMBank = function() {
   //Read the cartridge ROM data from RAM memory:
-  this.currentROMBank = this.ROMBank1offs %
+  this.currentROMBank = this.ROMBank1Offset %
     this.cartridgeSlot.cartridge.ROMBankEdge -
     1 <<
     14;
@@ -4056,7 +4032,7 @@ GameBoyCore.prototype.memoryWriteJumpCompile = function() {
   //Faster in some browsers, since we are doing less conditionals overall by implementing them in advance.
   for (var index = 0x0000; index <= 0xffff; index++) {
     if (index < 0x8000) {
-      if (this.cartridgeSlot.cartridge.cMBC1) {
+      if (this.cartridgeSlot.cartridge.hasMBC1) {
         if (index < 0x2000) {
           this.memoryWriter[index] = this.MBCWriteEnable;
         } else if (index < 0x4000) {
@@ -4171,33 +4147,22 @@ GameBoyCore.prototype.memoryWriteJumpCompile = function() {
   this.registerWriteJumpCompile(); //Compile the I/O write functions separately...
 };
 GameBoyCore.prototype.MBCWriteEnable = function(address, data) {
-  //MBC RAM Bank Enable/Disable:
+  // MBC RAM Bank Enable/Disable:
   this.cartridgeSlot.cartridge.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; //If lower nibble is 0x0A, then enable, otherwise disable.
 };
 GameBoyCore.prototype.MBC1WriteROMBank = function(address, data) {
-  //MBC1 ROM bank switching:
-  this.ROMBank1offs = this.ROMBank1offs & 0x60 | data & 0x1f;
+  // MBC1 ROM bank switching:
+  this.ROMBank1Offset = this.ROMBank1Offset & 0x60 | data & 0x1f;
   this.setCurrentMBC1ROMBank();
 };
 GameBoyCore.prototype.MBC1WriteRAMBank = function(address, data) {
-  //MBC1 RAM bank switching
-  if (this.cartridgeSlot.cartridge.MBC1Mode) {
-    //4/32 Mode
-    this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0x03;
-    this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank <<
-      13) -
-      0xa000;
-  } else {
-    //16/8 Mode
-    this.ROMBank1offs = (data & 0x03) << 5 | this.ROMBank1offs & 0x1f;
-    this.setCurrentMBC1ROMBank();
-  }
+  this.cartridgeSlot.cartridge.mbc1.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.MBC1WriteType = function(address, data) {
-  //MBC1 mode setting:
+  // MBC1 mode setting:
   this.cartridgeSlot.cartridge.MBC1Mode = (data & 0x1) === 0x1;
   if (this.cartridgeSlot.cartridge.MBC1Mode) {
-    this.ROMBank1offs &= 0x1f;
+    this.ROMBank1Offset &= 0x1f;
     this.setCurrentMBC1ROMBank();
   } else {
     this.cartridgeSlot.cartridge.currentMBCRAMBank = 0;
@@ -4206,7 +4171,7 @@ GameBoyCore.prototype.MBC1WriteType = function(address, data) {
 };
 GameBoyCore.prototype.MBC2WriteROMBank = function(address, data) {
   //MBC2 ROM bank switching:
-  this.ROMBank1offs = data & 0x0f;
+  this.ROMBank1Offset = data & 0x0f;
   this.setCurrentMBC2AND3ROMBank();
 };
 GameBoyCore.prototype.MBC3WriteROMBank = function(address, data) {
@@ -4216,16 +4181,16 @@ GameBoyCore.prototype.MBC3WriteRAMBank = function(address, data) {
   return this.cartridgeSlot.cartridge.mbc3.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteRTCLatch = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc3.writeRTCLatch(address, data);
+  return this.cartridgeSlot.cartridge.mbc3.rtc.writeLatch(address, data);
 };
 GameBoyCore.prototype.MBC5WriteROMBankLow = function(address, data) {
   //MBC5 ROM bank switching:
-  this.ROMBank1offs = this.ROMBank1offs & 0x100 | data;
+  this.ROMBank1Offset = this.ROMBank1Offset & 0x100 | data;
   this.setCurrentMBC5ROMBank();
 };
 GameBoyCore.prototype.MBC5WriteROMBankHigh = function(address, data) {
   //MBC5 ROM bank switching (by least significant bit):
-  this.ROMBank1offs = (data & 0x01) << 8 | this.ROMBank1offs & 0xff;
+  this.ROMBank1Offset = (data & 0x01) << 8 | this.ROMBank1Offset & 0xff;
   this.setCurrentMBC5ROMBank();
 };
 GameBoyCore.prototype.MBC5WriteRAMBank = function(address, data) {
@@ -5591,7 +5556,7 @@ GameBoyCore.prototype.recompileBootIOWriteHandling = function() {
       ) => {
         if (this.inBootstrap) {
           this.cartridgeSlot.cartridge.useGBCMode = (data & 0x1) === 0;
-          //Exception to the GBC identifying code:
+          // Exception to the GBC identifying code:
           if (
             this.cartridgeSlot.cartridge.name +
               this.cartridgeSlot.cartridge.gameCode +
