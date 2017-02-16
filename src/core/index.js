@@ -146,7 +146,9 @@ GameBoyCore.prototype.loadRTCState2 = function() {
     typeof this.loadRTCState === "function"
   ) {
     const data = this.loadRTCState(this.cartridgeSlot.cartridge.name);
-    this.cartridgeSlot.cartridge.mbc3.rtc.loadState(data);
+    if (data) {
+      this.cartridgeSlot.cartridge.mbc.rtc.loadState(data);
+    }
   }
 };
 GameBoyCore.prototype.start = function(rom) {
@@ -5131,7 +5133,6 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function() {
       } else {
         this.BGCHRCurrentBank = this.BGCHRBank1;
       }
-
       //Only writable by GBC.
     };
     this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = (

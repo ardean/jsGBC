@@ -8221,7 +8221,9 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
       GameBoyCore.prototype.loadRTCState2 = function () {
         if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.hasRTC && typeof this.loadRTCState === "function") {
           var data = this.loadRTCState(this.cartridgeSlot.cartridge.name);
-          this.cartridgeSlot.cartridge.mbc3.rtc.loadState(data);
+          if (data) {
+            this.cartridgeSlot.cartridge.mbc.rtc.loadState(data);
+          }
         }
       };
       GameBoyCore.prototype.start = function (rom) {
@@ -12249,7 +12251,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             } else {
               _this5.BGCHRCurrentBank = _this5.BGCHRBank1;
             }
-
             //Only writable by GBC.
           };
           this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = function (address, data) {
