@@ -1,21 +1,20 @@
-import EventEmitter from "events";
 import settings from "../../settings.js";
 import RTC from "./rtc.js";
+import MBC from "./mbc.js";
 
 // TODO: remove gameboy
 
-export default class MBC3 extends EventEmitter {
+export default class MBC3 extends MBC {
   constructor(cartridge) {
-    super();
+    super(cartridge);
 
-    this.rtc = new RTC(this, cartridge);
-    this.cartridge = cartridge;
+    this.rtc = new RTC(this);
   }
 
   writeROMBank(address, data) {
     // MBC3 ROM bank switching:
     this.cartridge.gameboy.ROMBank1Offset = data & 0x7f;
-    this.cartridge.gameboy.setCurrentMBC2AND3ROMBank();
+    this.setCurrentROMBank();
   }
 
   writeRAMBank(address, data) {

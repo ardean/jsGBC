@@ -5,6 +5,8 @@ import EventEmitter from "events";
 import debounce from "debounce";
 
 export default class GameBoy extends EventEmitter {
+  buttons = ["right", "left", "up", "down", "a", "b", "select", "start"];
+
   constructor(canvas) {
     super();
 
@@ -31,9 +33,9 @@ export default class GameBoy extends EventEmitter {
       () => {
         if (
           !document.hidden &&
-            !document.msHidden &&
-            !document.mozHidden &&
-            !document.webkitHidden
+          !document.msHidden &&
+          !document.mozHidden &&
+          !document.webkitHidden
         ) {
           this.core.run();
         }
@@ -62,11 +64,11 @@ export default class GameBoy extends EventEmitter {
   }
 
   actionDown(action) {
-    this.core.JoyPadEvent(this.getButtonIndex(action), true);
+    this.core.joypad.down(this.getButtonIndex(action));
   }
 
   actionUp(action) {
-    this.core.JoyPadEvent(this.getButtonIndex(action), false);
+    this.core.joypad.up(this.getButtonIndex(action));
   }
 
   setSpeed(multiplier) {
@@ -74,13 +76,7 @@ export default class GameBoy extends EventEmitter {
   }
 
   getButtonIndex(action) {
-    const keymap = ["right", "left", "up", "down", "a", "b", "select", "start"];
-    for (let index = 0; index < keymap.length; index++) {
-      if (keymap[index] === action) {
-        return index;
-      }
-    }
-    return -1;
+    return this.buttons.indexOf(action);
   }
 
   autoSave() {

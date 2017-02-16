@@ -2,7 +2,10 @@ import util from "../util.js";
 import settings from "../../settings.js";
 import ROM from "./rom.js";
 import MBC1 from "./mbc1.js";
+import MBC2 from "./mbc2.js";
 import MBC3 from "./mbc3.js";
+import MBC5 from "./mbc5.js";
+import MBC7 from "./mbc7.js";
 
 export default class Cartridge {
   constructor(rom, gameboy) {
@@ -16,10 +19,10 @@ export default class Cartridge {
     this.currentMBCRAMBankPosition = -0xa000; // MBC Position Adder;
 
     this.hasMBC1 = false; // Does the cartridge use MBC1?
-    this.cMBC2 = false; // Does the cartridge use MBC2?
+    this.hasMBC2 = false; // Does the cartridge use MBC2?
     this.hasMBC3 = false; // Does the cartridge use MBC3?
-    this.cMBC5 = false; // Does the cartridge use MBC5?
-    this.cMBC7 = false; // Does the cartridge use MBC7?
+    this.hasMBC5 = false; // Does the cartridge use MBC5?
+    this.hasMBC7 = false; // Does the cartridge use MBC7?
     this.hasSRAM = false; // Does the cartridge use save RAM?
     this.cMMMO1 = false; // ...
     this.hasBattery = false;
@@ -66,10 +69,7 @@ export default class Cartridge {
       (!settings.forceGBBootRom && this.gameboy.GBCBOOTROM.length === 0x800 ||
         settings.forceGBBootRom && this.gameboy.GBBOOTROM.length === 0x100);
 
-    const romLength = this.rom.length;
-    if (romLength < 0x4000) throw new Error("ROM size too small.");
-
-    this.ROM = util.getTypedArray(romLength, 0, "uint8");
+    if (this.rom.length < 0x4000) throw new Error("ROM size too small.");
 
     let romIndex = 0;
     if (this.gameboy.usedBootROM) {
@@ -104,20 +104,14 @@ export default class Cartridge {
     } else {
       // Don't load in the boot ROM:
       while (romIndex < 0x4000) {
-        this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(
+        this.gameboy.memory[romIndex] = this.rom.getByte(
           romIndex
-        ) & 0xff; // Load in the game ROM.
+        ) & 0xff;
         ++romIndex;
       }
     }
 
-    // Finish the decoding of the ROM binary:
-    while (romIndex < romLength) {
-      this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff;
-      ++romIndex;
-    }
-
-    this.ROMBankEdge = Math.floor(this.ROM.length / 0x4000);
+    this.ROMBankEdge = Math.floor(this.rom.length / 0x4000);
   }
 
   interpret() {
@@ -172,7 +166,7 @@ export default class Cartridge {
         );
     }
 
-    //Check the GB/GBC mode byte:
+    // Check the GB/GBC mode byte:
     if (!this.gameboy.usedBootROM) {
       switch (this.colorCompatibilityByte) {
         case 0x00: // GB only
@@ -246,11 +240,11 @@ export default class Cartridge {
         this.typeName = "MBC1 + SRAM + Battery";
         break;
       case 0x05:
-        this.cMBC2 = true;
+        this.hasMBC2 = true;
         this.typeName = "MBC2";
         break;
       case 0x06:
-        this.cMBC2 = true;
+        this.hasMBC2 = true;
         this.hasBattery = true;
         this.typeName = "MBC2 + Battery";
         break;
@@ -307,16 +301,16 @@ export default class Cartridge {
         this.typeName = "MBC3 + SRAM + Battery";
         break;
       case 0x19:
-        this.cMBC5 = true;
+        this.hasMBC5 = true;
         this.typeName = "MBC5";
         break;
       case 0x1a:
-        this.cMBC5 = true;
+        this.hasMBC5 = true;
         this.hasSRAM = true;
         this.typeName = "MBC5 + SRAM";
         break;
       case 0x1b:
-        this.cMBC5 = true;
+        this.hasMBC5 = true;
         this.hasSRAM = true;
         this.hasBattery = true;
         this.typeName = "MBC5 + SRAM + Battery";
@@ -341,7 +335,7 @@ export default class Cartridge {
         this.typeName = "GameBoy Camera";
         break;
       case 0x22:
-        this.cMBC7 = true;
+        this.hasMBC7 = true;
         this.hasSRAM = true;
         this.hasBattery = true;
         this.typeName = "MBC7 + SRAM + Battery";
@@ -367,20 +361,37 @@ export default class Cartridge {
 
     if (this.hasMBC1) {
       this.mbc1 = new MBC1(this);
+      this.mbc = this.mbc1;
+    }
+
+    if (this.hasMBC2) {
+      this.mbc2 = new MBC2(this);
+      this.mbc = this.mbc2;
     }
 
     if (this.hasMBC3) {
       this.mbc3 = new MBC3(this);
+      this.mbc = this.mbc3;
+    }
+
+    if (this.hasMBC5) {
+      this.mbc5 = new MBC5(this);
+      this.mbc = this.mbc5;
+    }
+
+    if (this.hasMBC7) {
+      this.mbc7 = new MBC7(this);
+      this.mbc = this.mbc7;
     }
   }
 
   setupRAM() {
-    //Setup the auxilliary/switchable RAM:
-    if (this.cMBC2) {
+    // Setup the auxilliary/switchable RAM:
+    if (this.hasMBC2) {
       this.numRAMBanks = 1 / 16;
     } else if (this.hasMBC1 || this.cRUMBLE || this.hasMBC3 || this.cHuC3) {
       this.numRAMBanks = 4;
-    } else if (this.cMBC5) {
+    } else if (this.hasMBC5) {
       this.numRAMBanks = 16;
     } else if (this.hasSRAM) {
       this.numRAMBanks = 1;

@@ -1,7 +1,6 @@
 export default class RTC {
-  constructor(mbc3, cartridge) {
+  constructor(mbc3) {
     this.mbc3 = mbc3;
-    this.cartridge = cartridge;
   }
 
   // TODO: rename RTC vars
@@ -12,7 +11,7 @@ export default class RTC {
     } else {
       console.log(
         "(Bank #" +
-          this.cartridge.currentMBCRAMBank +
+          this.mbc3.cartridge.currentMBCRAMBank +
           ") RTC write out of range: " +
           data
       );
@@ -25,7 +24,7 @@ export default class RTC {
     } else {
       console.log(
         "(Bank #" +
-          this.cartridge.currentMBCRAMBank +
+          this.mbc3.cartridge.currentMBCRAMBank +
           ") RTC write out of range: " +
           data
       );
@@ -37,9 +36,9 @@ export default class RTC {
   }
 
   writeDaysHigh(data) {
-    this.cartridge.RTCDayOverFlow = data > 0x7f;
-    this.cartridge.RTCHalt = (data & 0x40) === 0x40;
-    this.cartridge.RTCDays = (data & 0x1) << 8 | this.cartridge.RTCDays & 0xff;
+    this.mbc3.cartridge.RTCDayOverFlow = data > 0x7f;
+    this.mbc3.cartridge.RTCHalt = (data & 0x40) === 0x40;
+    this.mbc3.cartridge.RTCDays = (data & 0x1) << 8 | this.mbc3.cartridge.RTCDays & 0xff;
   }
 
   writeHours(data) {
@@ -48,7 +47,7 @@ export default class RTC {
     } else {
       console.log(
         "(Bank #" +
-          this.cartridge.currentMBCRAMBank +
+          this.mbc3.cartridge.currentMBCRAMBank +
           ") RTC write out of range: " +
           data
       );

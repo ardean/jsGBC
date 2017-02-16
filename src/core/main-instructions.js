@@ -1,4 +1,5 @@
 import bitInstructions from "./bit-instructions";
+import SecondaryTickTable from "./secondary-tick-table.js";
 
 export default [
   //NOP
@@ -1721,7 +1722,7 @@ export default [
     //Increment the program counter to the next instruction:
     this.programCounter = this.programCounter + 1 & 0xffff;
     //Get how many CPU cycles the current 0xCBXX op code counts for:
-    this.CPUTicks += this.SecondaryTickTable[operationCode];
+    this.CPUTicks += SecondaryTickTable[operationCode];
     //Execute secondary OP codes for the 0xCB OP code call.
     bitInstructions[operationCode].apply(this);
   },

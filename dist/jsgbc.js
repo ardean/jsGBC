@@ -2403,11 +2403,12 @@ $__System.registerDynamic('12', ['11'], true, function ($__require, exports, mod
 $__System.register('a', ['f', '10', '12'], function (_export, _context) {
   "use strict";
 
-  var EventEmitter, debounce, _classCallCheck, _createClass, _possibleConstructorReturn, _inherits, settings, util, LCD, ROM, MBC1, RTC, MBC3, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, mainInstructions, TickTable, SecondaryTickTable, PostBootRegisterState, dutyLookup, initialState, StateManager, GameBoy$1, GamepadProfile;
+  var EventEmitter, debounce, _classCallCheck, _createClass, _possibleConstructorReturn, _inherits, settings, util, LCD, TickTable, ROM, MBC, MBC1, MBC2, RTC, MBC3, MBC5, MBC7, Cartridge, CartridgeSlot, Resampler, AudioServer, bitInstructions, SecondaryTickTable, mainInstructions, PostBootRegisterState, dutyLookup, initialState, StateManager, Joypad, GameBoy$1, GamepadProfile;
 
   function GameBoyCore(canvas, options) {
     options = options || {};
 
+    this.joypad = new Joypad(this);
     this.cartridgeSlot = new CartridgeSlot(this);
     this.lcd = new LCD(canvas, options, this);
     this.stateManager = new StateManager(this);
@@ -2419,8 +2420,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
     //GBC BOOT ROM
     //Add 2048 byte boot rom here if you are going to use it.
     this.GBCBOOTROM = [];
-    this.TickTable = TickTable;
-    this.SecondaryTickTable = SecondaryTickTable;
 
     this.memoryReadNormal = this.memoryReadNormal.bind(this);
     this.memoryWriteNormal = this.memoryWriteNormal.bind(this);
@@ -2442,34 +2441,29 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
     this.SpriteGBLayerRender = this.SpriteGBLayerRender.bind(this);
     this.SpriteGBCLayerRender = this.SpriteGBCLayerRender.bind(this);
 
-    this.CPUCyclesTotal = 0; //Relative CPU clocking to speed set, rounded appropriately.
-    this.CPUCyclesTotalBase = 0; //Relative CPU clocking to speed set base.
-    this.CPUCyclesTotalCurrent = 0; //Relative CPU clocking to speed set, the directly used value.
-    this.CPUCyclesTotalRoundoff = 0; //Clocking per iteration rounding catch.
-    this.baseCPUCyclesPerIteration = 0; //CPU clocks per iteration at 1x speed.
-    this.usedGBCBootROM = false; //Did we boot to the GBC boot ROM?
-    this.stopEmulator = 3; //Has the emulation been paused or a frame has ended?
-    this.IRQLineMatched = 0; //CPU IRQ assertion.
-    this.JoyPad = 0xff; //Joypad State (two four-bit states actually)
-    //Main RAM, MBC RAM, GBC Main RAM, VRAM, etc.
-    this.memoryReader = []; //Array of functions mapped to read back memory
-    this.memoryWriter = []; //Array of functions mapped to write to memory
-    this.memoryHighReader = []; //Array of functions mapped to read back 0xFFXX memory
-    this.memoryHighWriter = []; //Array of functions mapped to write to 0xFFXX memory
-    this.savedStateFileName = ""; //When loaded in as a save state, this will not be empty.
-    this.spriteCount = 252; //Mode 3 extra clocking counter (Depends on how many sprites are on the current line.).
-    this.LINECONTROL = []; //Array of functions to handle each scan line we do (onscreen + offscreen)
+    this.CPUCyclesTotal = 0; // Relative CPU clocking to speed set, rounded appropriately.
+    this.CPUCyclesTotalBase = 0; // Relative CPU clocking to speed set base.
+    this.CPUCyclesTotalCurrent = 0; // Relative CPU clocking to speed set, the directly used value.
+    this.CPUCyclesTotalRoundoff = 0; // Clocking per iteration rounding catch.
+    this.baseCPUCyclesPerIteration = 0; // CPU clocks per iteration at 1x speed.
+    this.usedGBCBootROM = false; // Did we boot to the GBC boot ROM?
+    this.stopEmulator = 3; // Has the emulation been paused or a frame has ended?
+    this.IRQLineMatched = 0; // CPU IRQ assertion.
+
+    // Main RAM, MBC RAM, GBC Main RAM, VRAM, etc.
+    this.memoryReader = []; // Array of functions mapped to read back memory
+    this.memoryWriter = []; // Array of functions mapped to write to memory
+    this.memoryHighReader = []; // Array of functions mapped to read back 0xFFXX memory
+    this.memoryHighWriter = []; // Array of functions mapped to write to 0xFFXX memory
+    this.savedStateFileName = ""; // When loaded in as a save state, this will not be empty.
+    this.spriteCount = 252; // Mode 3 extra clocking counter (Depends on how many sprites are on the current line.).
+    this.LINECONTROL = []; // Array of functions to handle each scan line we do (onscreen + offscreen)
     this.DISPLAYOFFCONTROL = [function () {
-      //Array of line 0 function to handle the LCD controller when it's off (Do nothing!).
+      // Array of line 0 function to handle the LCD controller when it's off (Do nothing!).
     }];
     this.LCDCONTROL = null; //Pointer to either LINECONTROL or DISPLAYOFFCONTROL.
     this.initializeLCDController(); //Compile the LCD controller functions.
 
-    //Gyro:
-    this.highX = 127;
-    this.lowX = 127;
-    this.highY = 127;
-    this.lowY = 127;
     //Sound variables:
     this.audioServer = null; //XAudioJS handle
     this.numSamplesTotal = 0; //Length of the sound buffers.
@@ -2861,6 +2855,29 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return LCD;
       }();
 
+      TickTable = [// Number of machine cycles for each instruction:
+      /*   0,  1,  2,  3,  4,  5,  6,  7,      8,  9,  A, B,  C,  D, E,  F*/
+      4, 12, 8, 8, 4, 4, 8, 4, 20, 8, 8, 8, 4, 4, 8, 4, //0
+      4, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, //1
+      8, 12, 8, 8, 4, 4, 8, 4, 8, 8, 8, 8, 4, 4, 8, 4, //2
+      8, 12, 8, 8, 12, 12, 12, 4, 8, 8, 8, 8, 4, 4, 8, 4, //3
+
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //4
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //5
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //6
+      8, 8, 8, 8, 8, 8, 4, 8, 4, 4, 4, 4, 4, 4, 8, 4, //7
+
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //8
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //9
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //A
+      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //B
+
+      8, 12, 12, 16, 12, 16, 8, 16, 8, 16, 12, 0, 12, 24, 8, 16, //C
+      8, 12, 12, 4, 12, 16, 8, 16, 8, 16, 12, 4, 12, 4, 8, 16, //D
+      12, 12, 8, 4, 4, 16, 8, 16, 16, 4, 16, 4, 4, 4, 8, 16, //E
+      12, 12, 8, 4, 4, 16, 8, 16, 12, 8, 16, 4, 0, 4, 8, 16 //F
+      ];
+
       ROM = function () {
         function ROM(data) {
           _classCallCheck(this, ROM);
@@ -2909,19 +2926,69 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return ROM;
       }();
 
-      MBC1 = function (_EventEmitter) {
-        _inherits(MBC1, _EventEmitter);
+      MBC = function (_EventEmitter) {
+        _inherits(MBC, _EventEmitter);
 
-        function MBC1(cartridge) {
-          _classCallCheck(this, MBC1);
+        function MBC(cartridge) {
+          _classCallCheck(this, MBC);
 
-          var _this = _possibleConstructorReturn(this, (MBC1.__proto__ || Object.getPrototypeOf(MBC1)).call(this));
+          var _this = _possibleConstructorReturn(this, (MBC.__proto__ || Object.getPrototypeOf(MBC)).call(this));
 
           _this.cartridge = cartridge;
           return _this;
         }
 
+        // TODO: for MBC2 & MBC3, compare with other MBCx
+
+
+        _createClass(MBC, [{
+          key: "setCurrentROMBank",
+          value: function setCurrentROMBank() {
+            //Read the cartridge ROM data from RAM memory:
+            //Only map bank 0 to bank 1 here (MBC2 is like MBC1, but can only do 16 banks, so only the bank 0 quirk appears for MBC2):
+            this.cartridge.gameboy.currentROMBank = Math.max(this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1, 0) << 14;
+          }
+        }, {
+          key: "writeEnable",
+          value: function writeEnable(address, data) {
+            // MBC RAM Bank Enable/Disable:
+            this.cartridge.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; //If lower nibble is 0x0A, then enable, otherwise disable.
+          }
+        }]);
+
+        return MBC;
+      }(EventEmitter);
+
+      MBC1 = function (_MBC) {
+        _inherits(MBC1, _MBC);
+
+        function MBC1() {
+          _classCallCheck(this, MBC1);
+
+          return _possibleConstructorReturn(this, (MBC1.__proto__ || Object.getPrototypeOf(MBC1)).apply(this, arguments));
+        }
+
         _createClass(MBC1, [{
+          key: "writeType",
+          value: function writeType(address, data) {
+            // MBC1 mode setting:
+            this.cartridge.MBC1Mode = (data & 0x1) === 0x1;
+            if (this.cartridge.MBC1Mode) {
+              this.cartridge.gameboy.ROMBank1Offset &= 0x1f;
+              this.setCurrentROMBank();
+            } else {
+              this.cartridge.currentMBCRAMBank = 0;
+              this.cartridge.currentMBCRAMBankPosition = -0xa000;
+            }
+          }
+        }, {
+          key: "writeROMBank",
+          value: function writeROMBank(address, data) {
+            // MBC1 ROM bank switching:
+            this.cartridge.gameboy.ROMBank1Offset = this.cartridge.gameboy.ROMBank1Offset & 0x60 | data & 0x1f;
+            this.setCurrentROMBank();
+          }
+        }, {
           key: "writeRAMBank",
           value: function writeRAMBank(address, data) {
             // MBC1 RAM bank switching
@@ -2932,7 +2999,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             } else {
               // 16/8 Mode
               this.cartridge.gameboy.ROMBank1Offset = (data & 0x03) << 5 | this.cartridge.gameboy.ROMBank1Offset & 0x1f;
-              this.cartridge.gameboy.setCurrentMBC1ROMBank();
+              this.setCurrentROMBank();
             }
           }
         }, {
@@ -2944,7 +3011,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               case 0x20:
               case 0x40:
               case 0x60:
-                //Bank calls for 0x00, 0x20, 0x40, and 0x60 are really for 0x01, 0x21, 0x41, and 0x61.
+                // Bank calls for 0x00, 0x20, 0x40, and 0x60 are really for 0x01, 0x21, 0x41, and 0x61.
                 this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge << 14;
                 break;
               default:
@@ -2954,14 +3021,34 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }]);
 
         return MBC1;
-      }(EventEmitter);
+      }(MBC);
+
+      MBC2 = function (_MBC) {
+        _inherits(MBC2, _MBC);
+
+        function MBC2() {
+          _classCallCheck(this, MBC2);
+
+          return _possibleConstructorReturn(this, (MBC2.__proto__ || Object.getPrototypeOf(MBC2)).apply(this, arguments));
+        }
+
+        _createClass(MBC2, [{
+          key: "writeROMBank",
+          value: function writeROMBank(address, data) {
+            // MBC2 ROM bank switching:
+            this.cartridge.gameboy.ROMBank1Offset = data & 0x0f;
+            this.setCurrentROMBank();
+          }
+        }]);
+
+        return MBC2;
+      }(MBC);
 
       RTC = function () {
-        function RTC(mbc3, cartridge) {
+        function RTC(mbc3) {
           _classCallCheck(this, RTC);
 
           this.mbc3 = mbc3;
-          this.cartridge = cartridge;
         }
 
         // TODO: rename RTC vars
@@ -2972,7 +3059,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 60) {
               this.RTCSeconds = data;
             } else {
-              console.log("(Bank #" + this.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -2981,7 +3068,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 60) {
               this.RTCMinutes = data;
             } else {
-              console.log("(Bank #" + this.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -2992,9 +3079,9 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }, {
           key: "writeDaysHigh",
           value: function writeDaysHigh(data) {
-            this.cartridge.RTCDayOverFlow = data > 0x7f;
-            this.cartridge.RTCHalt = (data & 0x40) === 0x40;
-            this.cartridge.RTCDays = (data & 0x1) << 8 | this.cartridge.RTCDays & 0xff;
+            this.mbc3.cartridge.RTCDayOverFlow = data > 0x7f;
+            this.mbc3.cartridge.RTCHalt = (data & 0x40) === 0x40;
+            this.mbc3.cartridge.RTCDays = (data & 0x1) << 8 | this.mbc3.cartridge.RTCDays & 0xff;
           }
         }, {
           key: "writeHours",
@@ -3002,7 +3089,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 24) {
               this.RTCHours = data;
             } else {
-              console.log("(Bank #" + this.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -3103,16 +3190,15 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return RTC;
       }();
 
-      MBC3 = function (_EventEmitter) {
-        _inherits(MBC3, _EventEmitter);
+      MBC3 = function (_MBC) {
+        _inherits(MBC3, _MBC);
 
         function MBC3(cartridge) {
           _classCallCheck(this, MBC3);
 
-          var _this = _possibleConstructorReturn(this, (MBC3.__proto__ || Object.getPrototypeOf(MBC3)).call(this));
+          var _this = _possibleConstructorReturn(this, (MBC3.__proto__ || Object.getPrototypeOf(MBC3)).call(this, cartridge));
 
-          _this.rtc = new RTC(_this, cartridge);
-          _this.cartridge = cartridge;
+          _this.rtc = new RTC(_this);
           return _this;
         }
 
@@ -3121,7 +3207,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           value: function writeROMBank(address, data) {
             // MBC3 ROM bank switching:
             this.cartridge.gameboy.ROMBank1Offset = data & 0x7f;
-            this.cartridge.gameboy.setCurrentMBC2AND3ROMBank();
+            this.setCurrentROMBank();
           }
         }, {
           key: "writeRAMBank",
@@ -3198,7 +3284,113 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }]);
 
         return MBC3;
-      }(EventEmitter);
+      }(MBC);
+
+      MBC5 = function (_MBC) {
+        _inherits(MBC5, _MBC);
+
+        function MBC5() {
+          _classCallCheck(this, MBC5);
+
+          return _possibleConstructorReturn(this, (MBC5.__proto__ || Object.getPrototypeOf(MBC5)).apply(this, arguments));
+        }
+
+        _createClass(MBC5, [{
+          key: "setCurrentROMBank",
+          value: function setCurrentROMBank() {
+            // Read the cartridge ROM data from RAM memory:
+            this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1 << 14;
+          }
+        }, {
+          key: "writeROMBankLow",
+          value: function writeROMBankLow(address, data) {
+            // MBC5 ROM bank switching:
+            this.cartridge.gameboy.ROMBank1Offset = this.cartridge.gameboy.ROMBank1Offset & 0x100 | data;
+            this.setCurrentROMBank();
+          }
+        }, {
+          key: "writeROMBankHigh",
+          value: function writeROMBankHigh(address, data) {
+            // MBC5 ROM bank switching (by least significant bit):
+            this.cartridge.gameboy.ROMBank1Offset = (data & 0x01) << 8 | this.cartridge.gameboy.ROMBank1Offset & 0xff;
+            this.setCurrentROMBank();
+          }
+        }, {
+          key: "writeRAMBank",
+          value: function writeRAMBank(address, data) {
+            // MBC5 RAM bank switching
+            this.cartridge.currentMBCRAMBank = data & 0xf;
+            this.cartridge.currentMBCRAMBankPosition = (this.cartridge.currentMBCRAMBank << 13) - 0xa000;
+          }
+        }]);
+
+        return MBC5;
+      }(MBC);
+
+      MBC7 = function (_MBC) {
+        _inherits(MBC7, _MBC);
+
+        function MBC7(cartridge) {
+          _classCallCheck(this, MBC7);
+
+          // Gyro
+          var _this = _possibleConstructorReturn(this, (MBC7.__proto__ || Object.getPrototypeOf(MBC7)).call(this, cartridge));
+
+          _this.highX = 127;
+          _this.lowX = 127;
+          _this.highY = 127;
+          _this.lowY = 127;
+          return _this;
+        }
+
+        _createClass(MBC7, [{
+          key: "applyGyroEvent",
+          value: function applyGyroEvent(x, y) {
+            x *= -100;
+            x += 2047;
+            this.highX = x >> 8;
+            this.lowX = x & 0xff;
+            y *= -100;
+            y += 2047;
+            this.highY = y >> 8;
+            this.lowY = y & 0xff;
+          }
+        }, {
+          key: "read",
+          value: function read(address) {
+            // Switchable RAM
+            if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+              switch (address) {
+                case 0xa000:
+                case 0xa060:
+                case 0xa070:
+                  return 0;
+                case 0xa080:
+                  // TODO: Gyro Control Register
+                  return 0;
+                case 0xa050:
+                  //Y High Byte
+                  return this.highY;
+                case 0xa040:
+                  //Y Low Byte
+                  return this.lowY;
+                case 0xa030:
+                  //X High Byte
+                  return this.highX;
+                case 0xa020:
+                  //X Low Byte:
+                  return this.lowX;
+                default:
+                  return this.cartridge.MBCRam[address + this.cartridge.currentMBCRAMBankPosition];
+              }
+            }
+            //console.log("Reading from disabled RAM.", 1);
+            return 0xff;
+          }
+        }]);
+
+        return MBC7;
+      }(MBC);
 
       Cartridge = function () {
         function Cartridge(rom, gameboy) {
@@ -3214,10 +3406,10 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           this.currentMBCRAMBankPosition = -0xa000; // MBC Position Adder;
 
           this.hasMBC1 = false; // Does the cartridge use MBC1?
-          this.cMBC2 = false; // Does the cartridge use MBC2?
+          this.hasMBC2 = false; // Does the cartridge use MBC2?
           this.hasMBC3 = false; // Does the cartridge use MBC3?
-          this.cMBC5 = false; // Does the cartridge use MBC5?
-          this.cMBC7 = false; // Does the cartridge use MBC7?
+          this.hasMBC5 = false; // Does the cartridge use MBC5?
+          this.hasMBC7 = false; // Does the cartridge use MBC7?
           this.hasSRAM = false; // Does the cartridge use save RAM?
           this.cMMMO1 = false; // ...
           this.hasBattery = false;
@@ -3256,10 +3448,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             // Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
             this.gameboy.usedBootROM = settings.bootBootRomFirst && (!settings.forceGBBootRom && this.gameboy.GBCBOOTROM.length === 0x800 || settings.forceGBBootRom && this.gameboy.GBBOOTROM.length === 0x100);
 
-            var romLength = this.rom.length;
-            if (romLength < 0x4000) throw new Error("ROM size too small.");
-
-            this.ROM = util.getTypedArray(romLength, 0, "uint8");
+            if (this.rom.length < 0x4000) throw new Error("ROM size too small.");
 
             var romIndex = 0;
             if (this.gameboy.usedBootROM) {
@@ -3294,18 +3483,12 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             } else {
               // Don't load in the boot ROM:
               while (romIndex < 0x4000) {
-                this.gameboy.memory[romIndex] = this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff; // Load in the game ROM.
+                this.gameboy.memory[romIndex] = this.rom.getByte(romIndex) & 0xff;
                 ++romIndex;
               }
             }
 
-            // Finish the decoding of the ROM binary:
-            while (romIndex < romLength) {
-              this.ROM[romIndex] = this.rom.getByte(romIndex) & 0xff;
-              ++romIndex;
-            }
-
-            this.ROMBankEdge = Math.floor(this.ROM.length / 0x4000);
+            this.ROMBankEdge = Math.floor(this.rom.length / 0x4000);
           }
         }, {
           key: "interpret",
@@ -3357,7 +3540,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                 console.log("RAM bank amount requested is unknown, will use maximum allowed by specified MBC type.");
             }
 
-            //Check the GB/GBC mode byte:
+            // Check the GB/GBC mode byte:
             if (!this.gameboy.usedBootROM) {
               switch (this.colorCompatibilityByte) {
                 case 0x00:
@@ -3425,11 +3608,11 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                 this.typeName = "MBC1 + SRAM + Battery";
                 break;
               case 0x05:
-                this.cMBC2 = true;
+                this.hasMBC2 = true;
                 this.typeName = "MBC2";
                 break;
               case 0x06:
-                this.cMBC2 = true;
+                this.hasMBC2 = true;
                 this.hasBattery = true;
                 this.typeName = "MBC2 + Battery";
                 break;
@@ -3486,16 +3669,16 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                 this.typeName = "MBC3 + SRAM + Battery";
                 break;
               case 0x19:
-                this.cMBC5 = true;
+                this.hasMBC5 = true;
                 this.typeName = "MBC5";
                 break;
               case 0x1a:
-                this.cMBC5 = true;
+                this.hasMBC5 = true;
                 this.hasSRAM = true;
                 this.typeName = "MBC5 + SRAM";
                 break;
               case 0x1b:
-                this.cMBC5 = true;
+                this.hasMBC5 = true;
                 this.hasSRAM = true;
                 this.hasBattery = true;
                 this.typeName = "MBC5 + SRAM + Battery";
@@ -3520,7 +3703,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                 this.typeName = "GameBoy Camera";
                 break;
               case 0x22:
-                this.cMBC7 = true;
+                this.hasMBC7 = true;
                 this.hasSRAM = true;
                 this.hasBattery = true;
                 this.typeName = "MBC7 + SRAM + Battery";
@@ -3546,21 +3729,38 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
 
             if (this.hasMBC1) {
               this.mbc1 = new MBC1(this);
+              this.mbc = this.mbc1;
+            }
+
+            if (this.hasMBC2) {
+              this.mbc2 = new MBC2(this);
+              this.mbc = this.mbc2;
             }
 
             if (this.hasMBC3) {
               this.mbc3 = new MBC3(this);
+              this.mbc = this.mbc3;
+            }
+
+            if (this.hasMBC5) {
+              this.mbc5 = new MBC5(this);
+              this.mbc = this.mbc5;
+            }
+
+            if (this.hasMBC7) {
+              this.mbc7 = new MBC7(this);
+              this.mbc = this.mbc7;
             }
           }
         }, {
           key: "setupRAM",
           value: function setupRAM() {
-            //Setup the auxilliary/switchable RAM:
-            if (this.cMBC2) {
+            // Setup the auxilliary/switchable RAM:
+            if (this.hasMBC2) {
               this.numRAMBanks = 1 / 16;
             } else if (this.hasMBC1 || this.cRUMBLE || this.hasMBC3 || this.cHuC3) {
               this.numRAMBanks = 4;
-            } else if (this.cMBC5) {
+            } else if (this.hasMBC5) {
               this.numRAMBanks = 16;
             } else if (this.hasSRAM) {
               this.numRAMBanks = 1;
@@ -5573,6 +5773,28 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
       function () {
         this.registerA |= 0x80;
       }];
+      SecondaryTickTable = [// Number of machine cycles for each 0xCBXX instruction:
+      /*  0, 1, 2, 3, 4, 5,  6, 7,        8, 9, A, B, C, D,  E, F*/
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //0
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //1
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //2
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //3
+
+      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //4
+      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //5
+      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //6
+      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //7
+
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //8
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //9
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //A
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //B
+
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //C
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //D
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //E
+      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8 //F
+      ];
       mainInstructions = [
       //NOP
       //#0x00:
@@ -7075,7 +7297,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         //Increment the program counter to the next instruction:
         this.programCounter = this.programCounter + 1 & 0xffff;
         //Get how many CPU cycles the current 0xCBXX op code counts for:
-        this.CPUTicks += this.SecondaryTickTable[operationCode];
+        this.CPUTicks += SecondaryTickTable[operationCode];
         //Execute secondary OP codes for the 0xCB OP code call.
         bitInstructions[operationCode].apply(this);
       },
@@ -7510,50 +7732,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.memoryWriter[this.stackPointer].apply(this, [this.stackPointer, this.programCounter & 0xff]);
         this.programCounter = 0x38;
       }];
-      TickTable = [// Number of machine cycles for each instruction:
-      /*   0,  1,  2,  3,  4,  5,  6,  7,      8,  9,  A, B,  C,  D, E,  F*/
-      4, 12, 8, 8, 4, 4, 8, 4, 20, 8, 8, 8, 4, 4, 8, 4, //0
-      4, 12, 8, 8, 4, 4, 8, 4, 12, 8, 8, 8, 4, 4, 8, 4, //1
-      8, 12, 8, 8, 4, 4, 8, 4, 8, 8, 8, 8, 4, 4, 8, 4, //2
-      8, 12, 8, 8, 12, 12, 12, 4, 8, 8, 8, 8, 4, 4, 8, 4, //3
-
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //4
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //5
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //6
-      8, 8, 8, 8, 8, 8, 4, 8, 4, 4, 4, 4, 4, 4, 8, 4, //7
-
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //8
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //9
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //A
-      4, 4, 4, 4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 4, 8, 4, //B
-
-      8, 12, 12, 16, 12, 16, 8, 16, 8, 16, 12, 0, 12, 24, 8, 16, //C
-      8, 12, 12, 4, 12, 16, 8, 16, 8, 16, 12, 4, 12, 4, 8, 16, //D
-      12, 12, 8, 4, 4, 16, 8, 16, 16, 4, 16, 4, 4, 4, 8, 16, //E
-      12, 12, 8, 4, 4, 16, 8, 16, 12, 8, 16, 4, 0, 4, 8, 16 //F
-      ];
-      SecondaryTickTable = [// Number of machine cycles for each 0xCBXX instruction:
-      /*  0, 1, 2, 3, 4, 5,  6, 7,        8, 9, A, B, C, D,  E, F*/
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //0
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //1
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //2
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //3
-
-      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //4
-      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //5
-      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //6
-      8, 8, 8, 8, 8, 8, 12, 8, 8, 8, 8, 8, 8, 8, 12, 8, //7
-
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //8
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //9
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //A
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //B
-
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //C
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //D
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8, //E
-      8, 8, 8, 8, 8, 8, 16, 8, 8, 8, 8, 8, 8, 8, 16, 8 //F
-      ];
       PostBootRegisterState = [// Dump of the post-BOOT I/O register state (From gambatte):
       0x0F, 0x00, 0x7C, 0xFF, 0x00, 0x00, 0x00, 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x80, 0xBF, 0xF3, 0xFF, 0xBF, 0xFF, 0x3F, 0x00, 0xFF, 0xBF, 0x7F, 0xFF, 0x9F, 0xFF, 0xBF, 0xFF, 0xFF, 0x00, 0x00, 0xBF, 0x77, 0xF3, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x91, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7E, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC0, 0xFF, 0xC1, 0x00, 0xFE, 0xFF, 0xFF, 0xFF, 0xF8, 0xFF, 0x00, 0x00, 0x00, 0x8F, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E, 0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 0x45, 0xEC, 0x52, 0xFA, 0x08, 0xB7, 0x07, 0x5D, 0x01, 0xFD, 0xC0, 0xFF, 0x08, 0xFC, 0x00, 0xE5, 0x0B, 0xF8, 0xC2, 0xCE, 0xF4, 0xF9, 0x0F, 0x7F, 0x45, 0x6D, 0x3D, 0xFE, 0x46, 0x97, 0x33, 0x5E, 0x08, 0xEF, 0xF1, 0xFF, 0x86, 0x83, 0x24, 0x74, 0x12, 0xFC, 0x00, 0x9F, 0xB4, 0xB7, 0x06, 0xD5, 0xD0, 0x7A, 0x00, 0x9E, 0x04, 0x5F, 0x41, 0x2F, 0x1D, 0x77, 0x36, 0x75, 0x81, 0xAA, 0x70, 0x3A, 0x98, 0xD1, 0x71, 0x02, 0x4D, 0x01, 0xC1, 0xFF, 0x0D, 0x00, 0xD3, 0x05, 0xF9, 0x00, 0x0B, 0x00];
       dutyLookup = [
@@ -7978,6 +8156,48 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return StateManager;
       }();
 
+      Joypad = function () {
+        // Joypad State (two four-bit states actually)
+
+        function Joypad(gameboy) {
+          _classCallCheck(this, Joypad);
+
+          this.initialValue = 0xf;
+          this.value = 0xff;
+
+          this.gameboy = gameboy;
+        } // for memory
+
+
+        _createClass(Joypad, [{
+          key: "down",
+          value: function down(key) {
+            this.value &= 0xff ^ 1 << key;
+            if (this.gameboy.cartridgeSlot.cartridge && !this.gameboy.cartridgeSlot.cartridge.useGBCMode && (!this.gameboy.usedBootROM || !this.gameboy.usedGBCBootROM)) {
+              this.gameboy.interruptsRequested |= 0x10; // A real GBC doesn't set this!
+              this.gameboy.remainingClocks = 0;
+              this.gameboy.checkIRQMatching();
+            }
+
+            this.writeToMemory();
+          }
+        }, {
+          key: "up",
+          value: function up(key) {
+            this.value |= 1 << key;
+            this.writeToMemory();
+          }
+        }, {
+          key: "writeToMemory",
+          value: function writeToMemory() {
+            this.gameboy.memory[0xff00] = (this.gameboy.memory[0xff00] & 0x30) + (((this.gameboy.memory[0xff00] & 0x20) === 0 ? this.value >> 4 : 0xf) & ((this.gameboy.memory[0xff00] & 0x10) === 0 ? this.value & 0xf : 0xf));
+            this.gameboy.CPUStopped = false;
+          }
+        }]);
+
+        return Joypad;
+      }();
+
       GameBoyCore.prototype.saveSRAMState = function () {
         return this.cartridgeSlot.cartridge.saveSRAMState();
       };
@@ -8055,8 +8275,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.memory = util.getTypedArray(0x10000, 0, "uint8");
         this.frameBuffer = util.getTypedArray(23040, 0xf8f8f8, "int32");
         this.BGCHRBank1 = util.getTypedArray(0x800, 0, "uint8");
-        this.TickTable = util.toTypedArray(this.TickTable, "uint8");
-        this.SecondaryTickTable = util.toTypedArray(this.SecondaryTickTable, "uint8");
         this.channel3PCM = util.getTypedArray(0x20, 0, "int8");
       };
       GameBoyCore.prototype.generateCacheArray = function (tileAmount) {
@@ -8241,20 +8459,20 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.channel4consecutive = this.channel2consecutive = this.channel1consecutive = false;
         this.VinLeftChannelMasterVolume = 8;
         this.VinRightChannelMasterVolume = 8;
-        this.memory[0xff00] = 0xf; //Set the joypad state.
+        this.memory[0xff00] = this.joypad.initialValue;
       };
       GameBoyCore.prototype.disableBootROM = function () {
         // Remove any traces of the boot ROM from ROM memory.
         var index = 0;
         while (index < 0x100) {
-          this.memory[index] = this.cartridgeSlot.cartridge.ROM[index]; // Replace the GameBoy or GameBoy Color boot ROM with the game ROM.
+          this.memory[index] = this.cartridgeSlot.cartridge.rom.getByte(index); // Replace the GameBoy or GameBoy Color boot ROM with the game ROM.
           ++index;
         }
 
         if (this.usedGBCBootROM) {
-          //Remove any traces of the boot ROM from ROM memory.
+          // Remove any traces of the boot ROM from ROM memory.
           for (index = 0x200; index < 0x900; ++index) {
-            this.memory[index] = this.cartridgeSlot.cartridge.ROM[index]; //Replace the GameBoy Color boot ROM with the game ROM.
+            this.memory[index] = this.cartridgeSlot.cartridge.rom.getByte(index); // Replace the GameBoy Color boot ROM with the game ROM.
           }
           if (!this.cartridgeSlot.cartridge.useGBCMode) {
             //Clean up the post-boot (GB mode only) state:
@@ -8280,30 +8498,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         if (this.audioServer) {
           this.initSound();
         }
-      };
-      GameBoyCore.prototype.JoyPadEvent = function (key, down) {
-        if (down) {
-          this.JoyPad &= 0xff ^ 1 << key;
-          if (this.cartridgeSlot.cartridge && !this.cartridgeSlot.cartridge.useGBCMode && (!this.usedBootROM || !this.usedGBCBootROM)) {
-            this.interruptsRequested |= 0x10; //A real GBC doesn't set this!
-            this.remainingClocks = 0;
-            this.checkIRQMatching();
-          }
-        } else {
-          this.JoyPad |= 1 << key;
-        }
-        this.memory[0xff00] = (this.memory[0xff00] & 0x30) + (((this.memory[0xff00] & 0x20) === 0 ? this.JoyPad >> 4 : 0xf) & ((this.memory[0xff00] & 0x10) === 0 ? this.JoyPad & 0xf : 0xf));
-        this.CPUStopped = false;
-      };
-      GameBoyCore.prototype.GyroEvent = function (x, y) {
-        x *= -100;
-        x += 2047;
-        this.highX = x >> 8;
-        this.lowX = x & 0xff;
-        y *= -100;
-        y += 2047;
-        this.highY = y >> 8;
-        this.lowY = y & 0xff;
       };
       GameBoyCore.prototype.initSound = function () {
         this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xffff / 0x1e0)), 1);
@@ -8530,7 +8724,8 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
       //Generate audio, but don't actually output it (Used for when sound is disabled by user/browser):
       GameBoyCore.prototype.generateAudioFake = function (numSamples) {
         if (this.soundMasterEnabled && !this.CPUStopped) {
-          for (var clockUpTo = 0; numSamples > 0;) {
+          var clockUpTo = 0;
+          while (numSamples > 0) {
             clockUpTo = Math.min(this.audioClocksUntilNextEventCounter, this.sequencerClocks, numSamples);
             this.audioClocksUntilNextEventCounter -= clockUpTo;
             this.sequencerClocks -= clockUpTo;
@@ -8546,7 +8741,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }
       };
       GameBoyCore.prototype.audioJIT = function () {
-        //Audio Sample Generation Timing:
+        // Audio Sample Generation Timing:
         if (settings.soundOn) {
           this.generateAudio(this.audioTicks);
         } else {
@@ -8913,33 +9108,37 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           if ((this.stopEmulator & 1) === 1) {
             if (!this.CPUStopped) {
               this.stopEmulator = 0;
+
               this.audioUnderrunAdjustment();
+
               if (this.cartridgeSlot.cartridge.hasRTC) {
                 this.cartridgeSlot.cartridge.mbc3.rtc.updateClock();
               }
+
               if (!this.halt) {
                 this.executeIteration();
               } else {
-                //Finish the HALT rundown execution.
+                // Finish the HALT rundown execution.
                 this.CPUTicks = 0;
                 this.calculateHALTPeriod();
-                if (this.halt) {
+
+                if (!this.halt) {
+                  this.executeIteration();
+                } else {
                   this.updateCore();
                   this.iterationEndRoutine();
-                } else {
-                  this.executeIteration();
                 }
               }
-              //Request the graphics target to be updated:
+              // Request the graphics target to be updated:
               this.lcd.requestDraw();
             } else {
               this.audioUnderrunAdjustment();
               this.audioTicks += this.CPUCyclesTotal;
               this.audioJIT();
-              this.stopEmulator |= 1; //End current loop.
+              this.stopEmulator |= 1; // End current loop.
             }
           } else {
-            //We can only get here if there was an internal error, but the loop was restarted.
+            // We can only get here if there was an internal error, but the loop was restarted.
             console.log("Iterator restarted a faulted core.", 2);
             pause();
           }
@@ -8973,7 +9172,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             this.skipPCIncrement = false;
           }
           //Get how many CPU cycles the current instruction counts for:
-          this.CPUTicks = this.TickTable[operationCode];
+          this.CPUTicks = TickTable[operationCode];
 
           //Execute the current instruction:
           mainInstructions[operationCode].apply(this);
@@ -10580,7 +10779,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             this.memoryReader[index] = this.cartridgeSlot.cartridge.useGBCMode ? this.VRAMCHRReadCGBCPU : this.VRAMCHRReadDMGCPU;
           } else if (index >= 0xa000 && index < 0xc000) {
             if (this.cartridgeSlot.cartridge.numRAMBanks === 1 / 16 && index < 0xa200 || this.cartridgeSlot.cartridge.numRAMBanks >= 1) {
-              if (this.cartridgeSlot.cartridge.cMBC7) {
+              if (this.cartridgeSlot.cartridge.hasMBC7) {
                 this.memoryReader[index] = this.memoryReadMBC7;
               } else if (!this.cartridgeSlot.cartridge.hasMBC3) {
                 this.memoryReader[index] = this.memoryReadMBC;
@@ -10612,7 +10811,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               case 0xff00:
                 //JOYPAD:
                 this.memoryHighReader[0] = this.memoryReader[0xff00] = function (address) {
-                  return 0xc0 | _this3.memory[0xff00]; //Top nibble retu =>rns as set.
+                  return 0xc0 | _this3.memory[0xff00]; // top nibble returns as set.
                 };
                 break;
               case 0xff01:
@@ -11000,7 +11199,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return this.memory[0xff00 | address];
       };
       GameBoyCore.prototype.memoryReadROM = function (address) {
-        return this.cartridgeSlot.cartridge.ROM[this.currentROMBank + address];
+        return this.cartridgeSlot.cartridge.rom.getByte(this.currentROMBank + address);
       };
       GameBoyCore.prototype.memoryReadMBC = function (address) {
         //Switchable RAM
@@ -11011,34 +11210,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return 0xff;
       };
       GameBoyCore.prototype.memoryReadMBC7 = function (address) {
-        //Switchable RAM
-        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          switch (address) {
-            case 0xa000:
-            case 0xa060:
-            case 0xa070:
-              return 0;
-            case 0xa080:
-              //TODO: Gyro Control Register
-              return 0;
-            case 0xa050:
-              //Y High Byte
-              return this.highY;
-            case 0xa040:
-              //Y Low Byte
-              return this.lowY;
-            case 0xa030:
-              //X High Byte
-              return this.highX;
-            case 0xa020:
-              //X Low Byte:
-              return this.lowX;
-            default:
-              return this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition];
-          }
-        }
-        //console.log("Reading from disabled RAM.", 1);
-        return 0xff;
+        return this.cartridgeSlot.cartridge.mbc7.read(address);
       };
       GameBoyCore.prototype.memoryReadMBC3 = function (address) {
         return this.cartridgeSlot.cartridge.mbc3.read(address);
@@ -11074,18 +11246,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         // CPU Side Reading the Character Data Map:
         return this.modeSTAT > 2 ? 0xff : this.BGCHRBank1[address & 0x7ff];
       };
-      GameBoyCore.prototype.setCurrentMBC1ROMBank = function () {
-        return this.cartridgeSlot.cartridge.mbc1.setCurrentROMBank();
-      };
-      GameBoyCore.prototype.setCurrentMBC2AND3ROMBank = function () {
-        //Read the cartridge ROM data from RAM memory:
-        //Only map bank 0 to bank 1 here (MBC2 is like MBC1, but can only do 16 banks, so only the bank 0 quirk appears for MBC2):
-        this.currentROMBank = Math.max(this.ROMBank1Offset % this.cartridgeSlot.cartridge.ROMBankEdge - 1, 0) << 14;
-      };
-      GameBoyCore.prototype.setCurrentMBC5ROMBank = function () {
-        //Read the cartridge ROM data from RAM memory:
-        this.currentROMBank = this.ROMBank1Offset % this.cartridgeSlot.cartridge.ROMBankEdge - 1 << 14;
-      };
       //Memory Writing:
       GameBoyCore.prototype.memoryWrite = function (address, data) {
         //Act as a wrapper for writing by compiled jumps to specific memory writing functions.
@@ -11110,7 +11270,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               } else {
                 this.memoryWriter[index] = this.MBC1WriteType;
               }
-            } else if (this.cartridgeSlot.cartridge.cMBC2) {
+            } else if (this.cartridgeSlot.cartridge.hasMBC2) {
               if (index < 0x1000) {
                 this.memoryWriter[index] = this.MBCWriteEnable;
               } else if (index >= 0x2100 && index < 0x2200) {
@@ -11128,7 +11288,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               } else {
                 this.memoryWriter[index] = this.MBC3WriteRTCLatch;
               }
-            } else if (this.cartridgeSlot.cartridge.cMBC5 || this.cartridgeSlot.cartridge.cRUMBLE || this.cartridgeSlot.cartridge.cMBC7) {
+            } else if (this.cartridgeSlot.cartridge.hasMBC5 || this.cartridgeSlot.cartridge.cRUMBLE || this.cartridgeSlot.cartridge.hasMBC7) {
               if (index < 0x2000) {
                 this.memoryWriter[index] = this.MBCWriteEnable;
               } else if (index < 0x3000) {
@@ -11200,32 +11360,19 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.registerWriteJumpCompile(); //Compile the I/O write functions separately...
       };
       GameBoyCore.prototype.MBCWriteEnable = function (address, data) {
-        // MBC RAM Bank Enable/Disable:
-        this.cartridgeSlot.cartridge.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; //If lower nibble is 0x0A, then enable, otherwise disable.
+        this.cartridgeSlot.cartridge.mbc.writeEnable(address, data);
       };
       GameBoyCore.prototype.MBC1WriteROMBank = function (address, data) {
-        // MBC1 ROM bank switching:
-        this.ROMBank1Offset = this.ROMBank1Offset & 0x60 | data & 0x1f;
-        this.setCurrentMBC1ROMBank();
+        this.cartridgeSlot.cartridge.mbc1.writeROMBank(address, data);
       };
       GameBoyCore.prototype.MBC1WriteRAMBank = function (address, data) {
         this.cartridgeSlot.cartridge.mbc1.writeRAMBank(address, data);
       };
       GameBoyCore.prototype.MBC1WriteType = function (address, data) {
-        // MBC1 mode setting:
-        this.cartridgeSlot.cartridge.MBC1Mode = (data & 0x1) === 0x1;
-        if (this.cartridgeSlot.cartridge.MBC1Mode) {
-          this.ROMBank1Offset &= 0x1f;
-          this.setCurrentMBC1ROMBank();
-        } else {
-          this.cartridgeSlot.cartridge.currentMBCRAMBank = 0;
-          this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = -0xa000;
-        }
+        this.cartridgeSlot.cartridge.mbc1.writeType(address, data);
       };
       GameBoyCore.prototype.MBC2WriteROMBank = function (address, data) {
-        //MBC2 ROM bank switching:
-        this.ROMBank1Offset = data & 0x0f;
-        this.setCurrentMBC2AND3ROMBank();
+        this.cartridgeSlot.cartridge.mbc2.writeROMBank(address, data);
       };
       GameBoyCore.prototype.MBC3WriteROMBank = function (address, data) {
         return this.cartridgeSlot.cartridge.mbc3.writeROMBank(address, data);
@@ -11237,19 +11384,13 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return this.cartridgeSlot.cartridge.mbc3.rtc.writeLatch(address, data);
       };
       GameBoyCore.prototype.MBC5WriteROMBankLow = function (address, data) {
-        //MBC5 ROM bank switching:
-        this.ROMBank1Offset = this.ROMBank1Offset & 0x100 | data;
-        this.setCurrentMBC5ROMBank();
+        return this.cartridgeSlot.cartridge.mbc5.writeROMBankLow(address, data);
       };
       GameBoyCore.prototype.MBC5WriteROMBankHigh = function (address, data) {
-        //MBC5 ROM bank switching (by least significant bit):
-        this.ROMBank1Offset = (data & 0x01) << 8 | this.ROMBank1Offset & 0xff;
-        this.setCurrentMBC5ROMBank();
+        return this.cartridgeSlot.cartridge.mbc5.writeROMBankHigh(address, data);
       };
       GameBoyCore.prototype.MBC5WriteRAMBank = function (address, data) {
-        //MBC5 RAM bank switching
-        this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0xf;
-        this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank << 13) - 0xa000;
+        return this.cartridgeSlot.cartridge.mbc5.writeRAMBank(address, data);
       };
       GameBoyCore.prototype.RUMBLEWriteRAMBank = function (address, data) {
         //MBC5 RAM bank switching
@@ -11481,7 +11622,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         //I/O Registers (GB + GBC):
         //JoyPad
         this.memoryHighWriter[0] = this.memoryWriter[0xff00] = function (address, data) {
-          _this4.memory[0xff00] = data & 0x30 | ((data & 0x20) === 0 ? _this4.JoyPad >> 4 : 0xf) & ((data & 0x10) === 0 ? _this4.JoyPad & 0xf : 0xf);
+          _this4.memory[0xff00] = data & 0x30 | ((data & 0x20) === 0 ? _this4.joypad.value >> 4 : 0xf) & ((data & 0x10) === 0 ? _this4.joypad.value & 0xf : 0xf);
         };
         //SB (Serial Transfer Data)
         this.memoryHighWriter[0x1] = this.memoryWriter[0xff01] = function (address, data) {
@@ -12108,6 +12249,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             } else {
               _this5.BGCHRCurrentBank = _this5.BGCHRBank1;
             }
+
             //Only writable by GBC.
           };
           this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = function (address, data) {
@@ -12354,6 +12496,8 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
 
           var _this = _possibleConstructorReturn(this, (GameBoy.__proto__ || Object.getPrototypeOf(GameBoy)).call(this));
 
+          _this.buttons = ["right", "left", "up", "down", "a", "b", "select", "start"];
+
           _this.debouncedAutoSave = debounce(_this.autoSave.bind(_this), 100);
 
           _this.core = new GameBoyCore(canvas);
@@ -12409,12 +12553,12 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }, {
           key: "actionDown",
           value: function actionDown(action) {
-            this.core.JoyPadEvent(this.getButtonIndex(action), true);
+            this.core.joypad.down(this.getButtonIndex(action));
           }
         }, {
           key: "actionUp",
           value: function actionUp(action) {
-            this.core.JoyPadEvent(this.getButtonIndex(action), false);
+            this.core.joypad.up(this.getButtonIndex(action));
           }
         }, {
           key: "setSpeed",
@@ -12424,13 +12568,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }, {
           key: "getButtonIndex",
           value: function getButtonIndex(action) {
-            var keymap = ["right", "left", "up", "down", "a", "b", "select", "start"];
-            for (var index = 0; index < keymap.length; index++) {
-              if (keymap[index] === action) {
-                return index;
-              }
-            }
-            return -1;
+            return this.buttons.indexOf(action);
           }
         }, {
           key: "autoSave",
