@@ -39,7 +39,7 @@ export default class StateManager {
       gameboy.gbcRamBank,
       gameboy.gbcRamBankPosition,
       gameboy.ROMBank1Offset,
-      gameboy.currentROMBank,
+      gameboy.cartridgeSlot.cartridge.mbc.currentROMBank,
       gameboy.modeSTAT,
       gameboy.LYCMatchTriggerSTAT,
       gameboy.mode2TriggerSTAT,
@@ -245,7 +245,11 @@ export default class StateManager {
     gameboy.gbcRamBank = state[index++];
     gameboy.gbcRamBankPosition = state[index++];
     gameboy.ROMBank1Offset = state[index++];
-    gameboy.currentROMBank = state[index++];
+    if (gameboy.cartridgeSlot.cartridge) {
+      gameboy.cartridgeSlot.cartridge.mbc.currentROMBank = state[index++];
+    } else {
+      ++index;
+    }
     gameboy.modeSTAT = state[index++];
     gameboy.LYCMatchTriggerSTAT = state[index++];
     gameboy.mode2TriggerSTAT = state[index++];

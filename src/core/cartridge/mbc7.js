@@ -25,7 +25,7 @@ export default class MBC7 extends MBC {
 
   read(address) {
     // Switchable RAM
-    if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+    if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
       switch (address) {
         case 0xa000:
         case 0xa060:
@@ -48,7 +48,7 @@ export default class MBC7 extends MBC {
           return this.lowX;
         default:
           return this.cartridge.MBCRam[
-            address + this.cartridge.currentMBCRAMBankPosition
+            address + this.currentRAMBankPosition
           ];
       }
     }

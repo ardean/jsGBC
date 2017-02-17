@@ -13,30 +13,30 @@ export default class MBC3 extends MBC {
 
   writeROMBank(address, data) {
     // MBC3 ROM bank switching:
-    this.cartridge.gameboy.ROMBank1Offset = data & 0x7f;
+    this.ROMBank1Offset = data & 0x7f;
     this.setCurrentROMBank();
   }
 
   writeRAMBank(address, data) {
-    this.cartridge.currentMBCRAMBank = data;
+    this.currentMBCRAMBank = data;
     if (data < 4) {
       // MBC3 RAM bank switching
-      this.cartridge.currentMBCRAMBankPosition = (this.cartridge.currentMBCRAMBank <<
+      this.currentRAMBankPosition = (this.currentMBCRAMBank <<
         13) -
         0xa000;
     }
   }
 
   write(address, data) {
-    if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-      switch (this.cartridge.currentMBCRAMBank) {
+    if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+      switch (this.currentMBCRAMBank) {
         case 0x00:
         case 0x01:
         case 0x02:
         case 0x03:
           this.emit("write");
           this.cartridge.MBCRam[
-            address + this.cartridge.currentMBCRAMBankPosition
+            address + this.currentRAMBankPosition
           ] = data;
           break;
         case 0x08:
@@ -57,7 +57,7 @@ export default class MBC3 extends MBC {
         default:
           console.log(
             "Invalid MBC3 bank address selected: " +
-              this.cartridge.currentMBCRAMBank
+              this.currentMBCRAMBank
           );
       }
     }
@@ -65,14 +65,14 @@ export default class MBC3 extends MBC {
 
   read(address) {
     // Switchable RAM
-    if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-      switch (this.cartridge.currentMBCRAMBank) {
+    if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+      switch (this.currentMBCRAMBank) {
         case 0x00:
         case 0x01:
         case 0x02:
         case 0x03:
           return this.cartridge.MBCRam[
-            address + this.cartridge.currentMBCRAMBankPosition
+            address + this.currentRAMBankPosition
           ];
           break;
         case 0x08:

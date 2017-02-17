@@ -15,7 +15,7 @@ export default class GameBoy extends EventEmitter {
     this.core = new GameBoyCore(canvas);
     this.core.loadSRAMState = this.loadSRAMState.bind(this);
     this.core.loadRTCState = this.loadRTCState.bind(this);
-    this.core.onMBC3Write = () => {
+    this.core.onMBCWrite = () => {
       if (!this.core.cartridgeSlot.cartridge) return;
       this.debouncedAutoSave();
     };

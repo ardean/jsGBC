@@ -121,7 +121,7 @@ GameBoyCore.prototype.saveSRAMState = function() {
   return this.cartridgeSlot.cartridge.saveSRAMState();
 };
 GameBoyCore.prototype.saveRTCState = function() {
-  return this.cartridgeSlot.cartridge.mbc3.rtc.saveState();
+  return this.cartridgeSlot.cartridge.mbc.rtc.saveState();
 };
 GameBoyCore.prototype.saveState = function() {
   return this.stateManager.save();
@@ -157,9 +157,9 @@ GameBoyCore.prototype.start = function(rom) {
   const cartridge = new Cartridge(rom, this);
   this.cartridgeSlot.insertCartridge(cartridge);
   this.cartridgeSlot.readCartridge();
-  if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.mbc3) {
-    this.cartridgeSlot.cartridge.mbc3.on("write", () => {
-      this.onMBC3Write && this.onMBC3Write();
+  if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.mbc) {
+    this.cartridgeSlot.cartridge.mbc.on("write", () => {
+      this.onMBCWrite && this.onMBCWrite();
     });
   }
 
@@ -1150,7 +1150,7 @@ GameBoyCore.prototype.run = function() {
         this.audioUnderrunAdjustment();
 
         if (this.cartridgeSlot.cartridge.hasRTC) {
-          this.cartridgeSlot.cartridge.mbc3.rtc.updateClock();
+          this.cartridgeSlot.cartridge.mbc.rtc.updateClock();
         }
 
         if (!this.halt) {
@@ -3876,27 +3876,17 @@ GameBoyCore.prototype.memoryHighReadNormal = function(address) {
 };
 GameBoyCore.prototype.memoryReadROM = function(address) {
   return this.cartridgeSlot.cartridge.rom.getByte(
-    this.currentROMBank + address
+    this.cartridgeSlot.cartridge.mbc.currentROMBank + address
   );
 };
 GameBoyCore.prototype.memoryReadMBC = function(address) {
-  //Switchable RAM
-  if (
-    this.cartridgeSlot.cartridge.MBCRAMBanksEnabled ||
-    settings.alwaysAllowRWtoBanks
-  ) {
-    return this.cartridgeSlot.cartridge.MBCRam[
-      address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition
-    ];
-  }
-  //console.log("Reading from disabled RAM.", 1);
-  return 0xff;
+  return this.cartridgeSlot.cartridge.mbc.readRAM(address);
 };
 GameBoyCore.prototype.memoryReadMBC7 = function(address) {
-  return this.cartridgeSlot.cartridge.mbc7.read(address);
+  return this.cartridgeSlot.cartridge.mbc.read(address);
 };
 GameBoyCore.prototype.memoryReadMBC3 = function(address) {
-  return this.cartridgeSlot.cartridge.mbc3.read(address);
+  return this.cartridgeSlot.cartridge.mbc.read(address);
 };
 GameBoyCore.prototype.memoryReadGBCMemory = function(address) {
   return this.GBCMemory[address + this.gbcRamBankPosition];
@@ -4065,47 +4055,47 @@ GameBoyCore.prototype.MBCWriteEnable = function(address, data) {
   this.cartridgeSlot.cartridge.mbc.writeEnable(address, data);
 };
 GameBoyCore.prototype.MBC1WriteROMBank = function(address, data) {
-  this.cartridgeSlot.cartridge.mbc1.writeROMBank(address, data);
+  this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
 };
 GameBoyCore.prototype.MBC1WriteRAMBank = function(address, data) {
-  this.cartridgeSlot.cartridge.mbc1.writeRAMBank(address, data);
+  this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.MBC1WriteType = function(address, data) {
-  this.cartridgeSlot.cartridge.mbc1.writeType(address, data);
+  this.cartridgeSlot.cartridge.mbc.writeType(address, data);
 };
 GameBoyCore.prototype.MBC2WriteROMBank = function(address, data) {
-  this.cartridgeSlot.cartridge.mbc2.writeROMBank(address, data);
+  this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteROMBank = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc3.writeROMBank(address, data);
+  return this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteRAMBank = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc3.writeRAMBank(address, data);
+  return this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.MBC3WriteRTCLatch = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc3.rtc.writeLatch(address, data);
+  return this.cartridgeSlot.cartridge.mbc.rtc.writeLatch(address, data);
 };
 GameBoyCore.prototype.MBC5WriteROMBankLow = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc5.writeROMBankLow(address, data);
+  return this.cartridgeSlot.cartridge.mbc.writeROMBankLow(address, data);
 };
 GameBoyCore.prototype.MBC5WriteROMBankHigh = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc5.writeROMBankHigh(address, data);
+  return this.cartridgeSlot.cartridge.mbc.writeROMBankHigh(address, data);
 };
 GameBoyCore.prototype.MBC5WriteRAMBank = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc5.writeRAMBank(address, data);
+  return this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
 };
 GameBoyCore.prototype.RUMBLEWriteRAMBank = function(address, data) {
   //MBC5 RAM bank switching
   //Like MBC5, but bit 3 of the lower nibble is used for rumbling and bit 2 is ignored.
-  this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0x03;
-  this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank <<
+  this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank = data & 0x03;
+  this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition = (this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank <<
     13) -
     0xa000;
 };
 GameBoyCore.prototype.HuC3WriteRAMBank = function(address, data) {
   //HuC3 RAM bank switching
-  this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0x03;
-  this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank <<
+  this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank = data & 0x03;
+  this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition = (this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank <<
     13) -
     0xa000;
 };
@@ -4120,16 +4110,16 @@ GameBoyCore.prototype.memoryHighWriteNormal = function(address, data) {
 };
 GameBoyCore.prototype.memoryWriteMBCRAM = function(address, data) {
   if (
-    this.cartridgeSlot.cartridge.MBCRAMBanksEnabled ||
+    this.cartridgeSlot.cartridge.mbc.MBCRAMBanksEnabled ||
     settings.alwaysAllowRWtoBanks
   ) {
     this.cartridgeSlot.cartridge.MBCRam[
-      address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition
+      address + this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition
     ] = data;
   }
 };
 GameBoyCore.prototype.memoryWriteMBC3RAM = function(address, data) {
-  return this.cartridgeSlot.cartridge.mbc3.write(address, data);
+  return this.cartridgeSlot.cartridge.mbc.write(address, data);
 };
 GameBoyCore.prototype.memoryWriteGBCRAM = function(address, data) {
   this.GBCMemory[address + this.gbcRamBankPosition] = data;
@@ -5133,6 +5123,7 @@ GameBoyCore.prototype.recompileModelSpecificIOWriteHandling = function() {
       } else {
         this.BGCHRCurrentBank = this.BGCHRBank1;
       }
+
       //Only writable by GBC.
     };
     this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = (

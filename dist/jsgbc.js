@@ -2935,24 +2935,38 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           var _this = _possibleConstructorReturn(this, (MBC.__proto__ || Object.getPrototypeOf(MBC)).call(this));
 
           _this.cartridge = cartridge;
+          _this.MBCRAMBanksEnabled = false; // MBC RAM Access Control.
+          _this.currentRAMBankPosition = -0xa000; // MBC Position Adder;
+          _this.currentMBCRAMBank = 0; // MBC Currently Indexed RAM Bank
+          _this.ROMBankEdge = Math.floor(cartridge.rom.length / 0x4000);
           return _this;
         }
 
-        // TODO: for MBC2 & MBC3, compare with other MBCx
-
-
         _createClass(MBC, [{
+          key: "readRAM",
+          value: function readRAM(address) {
+            // Switchable RAM
+            if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+              return this.cartridge.MBCRam[address + this.currentRAMBankPosition];
+            }
+            //console.log("Reading from disabled RAM.");
+            return 0xff;
+          }
+
+          // TODO: for MBC2 & MBC3, compare with other MBCx
+
+        }, {
           key: "setCurrentROMBank",
           value: function setCurrentROMBank() {
             //Read the cartridge ROM data from RAM memory:
             //Only map bank 0 to bank 1 here (MBC2 is like MBC1, but can only do 16 banks, so only the bank 0 quirk appears for MBC2):
-            this.cartridge.gameboy.currentROMBank = Math.max(this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1, 0) << 14;
+            this.currentROMBank = Math.max(this.ROMBank1Offset % this.ROMBankEdge - 1, 0) << 14;
           }
         }, {
           key: "writeEnable",
           value: function writeEnable(address, data) {
             // MBC RAM Bank Enable/Disable:
-            this.cartridge.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; //If lower nibble is 0x0A, then enable, otherwise disable.
+            this.MBCRAMBanksEnabled = (data & 0x0f) === 0x0a; // If lower nibble is 0x0A, then enable, otherwise disable.
           }
         }]);
 
@@ -2974,18 +2988,18 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             // MBC1 mode setting:
             this.cartridge.MBC1Mode = (data & 0x1) === 0x1;
             if (this.cartridge.MBC1Mode) {
-              this.cartridge.gameboy.ROMBank1Offset &= 0x1f;
+              this.ROMBank1Offset &= 0x1f;
               this.setCurrentROMBank();
             } else {
-              this.cartridge.currentMBCRAMBank = 0;
-              this.cartridge.currentMBCRAMBankPosition = -0xa000;
+              this.currentMBCRAMBank = 0;
+              this.currentRAMBankPosition = -0xa000;
             }
           }
         }, {
           key: "writeROMBank",
           value: function writeROMBank(address, data) {
             // MBC1 ROM bank switching:
-            this.cartridge.gameboy.ROMBank1Offset = this.cartridge.gameboy.ROMBank1Offset & 0x60 | data & 0x1f;
+            this.ROMBank1Offset = this.ROMBank1Offset & 0x60 | data & 0x1f;
             this.setCurrentROMBank();
           }
         }, {
@@ -2994,11 +3008,11 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             // MBC1 RAM bank switching
             if (this.cartridge.MBC1Mode) {
               // 4/32 Mode
-              this.cartridge.currentMBCRAMBank = data & 0x03;
-              this.cartridge.currentMBCRAMBankPosition = (this.cartridge.currentMBCRAMBank << 13) - 0xa000;
+              this.currentMBCRAMBank = data & 0x03;
+              this.currentRAMBankPosition = (this.currentMBCRAMBank << 13) - 0xa000;
             } else {
               // 16/8 Mode
-              this.cartridge.gameboy.ROMBank1Offset = (data & 0x03) << 5 | this.cartridge.gameboy.ROMBank1Offset & 0x1f;
+              this.ROMBank1Offset = (data & 0x03) << 5 | this.ROMBank1Offset & 0x1f;
               this.setCurrentROMBank();
             }
           }
@@ -3006,16 +3020,16 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "setCurrentROMBank",
           value: function setCurrentROMBank() {
             // Read the cartridge ROM data from RAM memory:
-            switch (this.cartridge.gameboy.ROMBank1Offset) {
+            switch (this.ROMBank1Offset) {
               case 0x00:
               case 0x20:
               case 0x40:
               case 0x60:
                 // Bank calls for 0x00, 0x20, 0x40, and 0x60 are really for 0x01, 0x21, 0x41, and 0x61.
-                this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge << 14;
+                this.currentROMBank = this.ROMBank1Offset % this.ROMBankEdge << 14;
                 break;
               default:
-                this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1 << 14;
+                this.currentROMBank = this.ROMBank1Offset % this.ROMBankEdge - 1 << 14;
             }
           }
         }]);
@@ -3036,7 +3050,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "writeROMBank",
           value: function writeROMBank(address, data) {
             // MBC2 ROM bank switching:
-            this.cartridge.gameboy.ROMBank1Offset = data & 0x0f;
+            this.ROMBank1Offset = data & 0x0f;
             this.setCurrentROMBank();
           }
         }]);
@@ -3045,10 +3059,10 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
       }(MBC);
 
       RTC = function () {
-        function RTC(mbc3) {
+        function RTC(mbc) {
           _classCallCheck(this, RTC);
 
-          this.mbc3 = mbc3;
+          this.mbc = mbc;
         }
 
         // TODO: rename RTC vars
@@ -3059,7 +3073,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 60) {
               this.RTCSeconds = data;
             } else {
-              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -3068,7 +3082,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 60) {
               this.RTCMinutes = data;
             } else {
-              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -3079,9 +3093,9 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         }, {
           key: "writeDaysHigh",
           value: function writeDaysHigh(data) {
-            this.mbc3.cartridge.RTCDayOverFlow = data > 0x7f;
-            this.mbc3.cartridge.RTCHalt = (data & 0x40) === 0x40;
-            this.mbc3.cartridge.RTCDays = (data & 0x1) << 8 | this.mbc3.cartridge.RTCDays & 0xff;
+            this.mbc.cartridge.RTCDayOverFlow = data > 0x7f;
+            this.mbc.cartridge.RTCHalt = (data & 0x40) === 0x40;
+            this.mbc.cartridge.RTCDays = (data & 0x1) << 8 | this.mbc.cartridge.RTCDays & 0xff;
           }
         }, {
           key: "writeHours",
@@ -3089,7 +3103,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             if (data < 24) {
               this.RTCHours = data;
             } else {
-              console.log("(Bank #" + this.mbc3.cartridge.currentMBCRAMBank + ") RTC write out of range: " + data);
+              console.log("(Bank #" + this.mbc.currentMBCRAMBank + ") RTC write out of range: " + data);
             }
           }
         }, {
@@ -3206,29 +3220,29 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "writeROMBank",
           value: function writeROMBank(address, data) {
             // MBC3 ROM bank switching:
-            this.cartridge.gameboy.ROMBank1Offset = data & 0x7f;
+            this.ROMBank1Offset = data & 0x7f;
             this.setCurrentROMBank();
           }
         }, {
           key: "writeRAMBank",
           value: function writeRAMBank(address, data) {
-            this.cartridge.currentMBCRAMBank = data;
+            this.currentMBCRAMBank = data;
             if (data < 4) {
               // MBC3 RAM bank switching
-              this.cartridge.currentMBCRAMBankPosition = (this.cartridge.currentMBCRAMBank << 13) - 0xa000;
+              this.currentRAMBankPosition = (this.currentMBCRAMBank << 13) - 0xa000;
             }
           }
         }, {
           key: "write",
           value: function write(address, data) {
-            if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-              switch (this.cartridge.currentMBCRAMBank) {
+            if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+              switch (this.currentMBCRAMBank) {
                 case 0x00:
                 case 0x01:
                 case 0x02:
                 case 0x03:
                   this.emit("write");
-                  this.cartridge.MBCRam[address + this.cartridge.currentMBCRAMBankPosition] = data;
+                  this.cartridge.MBCRam[address + this.currentRAMBankPosition] = data;
                   break;
                 case 0x08:
                   this.rtc && this.rtc.writeSeconds(data);
@@ -3246,7 +3260,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                   this.rtc && this.rtc.writeDaysHigh(data);
                   break;
                 default:
-                  console.log("Invalid MBC3 bank address selected: " + this.cartridge.currentMBCRAMBank);
+                  console.log("Invalid MBC3 bank address selected: " + this.currentMBCRAMBank);
               }
             }
           }
@@ -3254,13 +3268,13 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "read",
           value: function read(address) {
             // Switchable RAM
-            if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-              switch (this.cartridge.currentMBCRAMBank) {
+            if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+              switch (this.currentMBCRAMBank) {
                 case 0x00:
                 case 0x01:
                 case 0x02:
                 case 0x03:
-                  return this.cartridge.MBCRam[address + this.cartridge.currentMBCRAMBankPosition];
+                  return this.cartridge.MBCRam[address + this.currentRAMBankPosition];
                   break;
                 case 0x08:
                   return this.rtc && this.rtc.readSeconds();
@@ -3299,28 +3313,28 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "setCurrentROMBank",
           value: function setCurrentROMBank() {
             // Read the cartridge ROM data from RAM memory:
-            this.cartridge.gameboy.currentROMBank = this.cartridge.gameboy.ROMBank1Offset % this.cartridge.ROMBankEdge - 1 << 14;
+            this.currentROMBank = this.ROMBank1Offset % this.ROMBankEdge - 1 << 14;
           }
         }, {
           key: "writeROMBankLow",
           value: function writeROMBankLow(address, data) {
             // MBC5 ROM bank switching:
-            this.cartridge.gameboy.ROMBank1Offset = this.cartridge.gameboy.ROMBank1Offset & 0x100 | data;
+            this.ROMBank1Offset = this.ROMBank1Offset & 0x100 | data;
             this.setCurrentROMBank();
           }
         }, {
           key: "writeROMBankHigh",
           value: function writeROMBankHigh(address, data) {
             // MBC5 ROM bank switching (by least significant bit):
-            this.cartridge.gameboy.ROMBank1Offset = (data & 0x01) << 8 | this.cartridge.gameboy.ROMBank1Offset & 0xff;
+            this.ROMBank1Offset = (data & 0x01) << 8 | this.ROMBank1Offset & 0xff;
             this.setCurrentROMBank();
           }
         }, {
           key: "writeRAMBank",
           value: function writeRAMBank(address, data) {
             // MBC5 RAM bank switching
-            this.cartridge.currentMBCRAMBank = data & 0xf;
-            this.cartridge.currentMBCRAMBankPosition = (this.cartridge.currentMBCRAMBank << 13) - 0xa000;
+            this.currentMBCRAMBank = data & 0xf;
+            this.currentRAMBankPosition = (this.currentMBCRAMBank << 13) - 0xa000;
           }
         }]);
 
@@ -3359,7 +3373,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "read",
           value: function read(address) {
             // Switchable RAM
-            if (this.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+            if (this.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
               switch (address) {
                 case 0xa000:
                 case 0xa060:
@@ -3381,7 +3395,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                   //X Low Byte:
                   return this.lowX;
                 default:
-                  return this.cartridge.MBCRam[address + this.cartridge.currentMBCRAMBankPosition];
+                  return this.cartridge.MBCRam[address + this.currentRAMBankPosition];
               }
             }
             //console.log("Reading from disabled RAM.", 1);
@@ -3401,9 +3415,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
 
           this.MBCRam = []; // Switchable RAM (Used by games for more RAM) for the main memory range 0xA000 - 0xC000.
           this.MBC1Mode = false; // MBC1 Type (4/32, 16/8)
-          this.MBCRAMBanksEnabled = false; // MBC RAM Access Control.
-          this.currentMBCRAMBank = 0; // MBC Currently Indexed RAM Bank
-          this.currentMBCRAMBankPosition = -0xa000; // MBC Position Adder;
 
           this.hasMBC1 = false; // Does the cartridge use MBC1?
           this.hasMBC2 = false; // Does the cartridge use MBC2?
@@ -3430,24 +3441,17 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           this.RAMBanks = [0, 1, 2, 4, 16]; // Used to map the RAM banks to maximum size the MBC used can do.
           this.numRAMBanks = 0; // How many RAM banks were actually allocated?
 
-          this.loadRom();
+          this.parseROM();
         }
 
         _createClass(Cartridge, [{
-          key: "saveSRAMState",
-          value: function saveSRAMState() {
-            if (!this.hasBattery || this.MBCRam.length === 0) return; // No battery backup...
-
-            // return the MBC RAM for backup...
-            return util.fromTypedArray(this.MBCRam);
-          }
-        }, {
-          key: "loadRom",
-          value: function loadRom() {
+          key: "parseROM",
+          value: function parseROM() {
             // TODO: move to gameboy core
             // Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
             this.gameboy.usedBootROM = settings.bootBootRomFirst && (!settings.forceGBBootRom && this.gameboy.GBCBOOTROM.length === 0x800 || settings.forceGBBootRom && this.gameboy.GBBOOTROM.length === 0x100);
 
+            // http://www.enliten.force9.co.uk/gameboy/carthead.htm
             if (this.rom.length < 0x4000) throw new Error("ROM size too small.");
 
             var romIndex = 0;
@@ -3487,8 +3491,6 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
                 ++romIndex;
               }
             }
-
-            this.ROMBankEdge = Math.floor(this.rom.length / 0x4000);
           }
         }, {
           key: "interpret",
@@ -3570,7 +3572,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               }
             } else {
               console.log("used boot rom");
-              this.useGBCMode = this.gameboy.usedGBCBootROM; //Allow the GBC boot ROM to run in GBC mode...
+              this.useGBCMode = this.gameboy.usedGBCBootROM; // Allow the GBC boot ROM to run in GBC mode...
             }
 
             var oldLicenseCode = this.rom.getByte(0x14b);
@@ -3729,28 +3731,25 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
 
             if (this.hasMBC1) {
               this.mbc1 = new MBC1(this);
-              this.mbc = this.mbc1;
             }
 
             if (this.hasMBC2) {
               this.mbc2 = new MBC2(this);
-              this.mbc = this.mbc2;
             }
 
             if (this.hasMBC3) {
               this.mbc3 = new MBC3(this);
-              this.mbc = this.mbc3;
             }
 
             if (this.hasMBC5) {
               this.mbc5 = new MBC5(this);
-              this.mbc = this.mbc5;
             }
 
             if (this.hasMBC7) {
               this.mbc7 = new MBC7(this);
-              this.mbc = this.mbc7;
             }
+
+            this.mbc = this.mbc1 || this.mbc2 || this.mbc3 || this.mbc5 || this.mbc7 || null;
           }
         }, {
           key: "setupRAM",
@@ -3784,6 +3783,14 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             }
 
             this.gameboy.loadRTCState2();
+          }
+        }, {
+          key: "saveSRAMState",
+          value: function saveSRAMState() {
+            if (!this.hasBattery || this.MBCRam.length === 0) return; // No battery backup...
+
+            // return the MBC RAM for backup...
+            return util.fromTypedArray(this.MBCRam);
           }
         }]);
 
@@ -7947,7 +7954,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           key: "save",
           value: function save() {
             var gameboy = this.gameboy;
-            return [gameboy.inBootstrap, gameboy.registerA, gameboy.FZero, gameboy.FSubtract, gameboy.FHalfCarry, gameboy.FCarry, gameboy.registerB, gameboy.registerC, gameboy.registerD, gameboy.registerE, gameboy.registersHL, gameboy.stackPointer, gameboy.programCounter, gameboy.halt, gameboy.IME, gameboy.hdmaRunning, gameboy.CPUTicks, gameboy.doubleSpeedShifter, util.fromTypedArray(gameboy.memory), util.fromTypedArray(gameboy.VRAM), gameboy.currVRAMBank, util.fromTypedArray(gameboy.GBCMemory), gameboy.useGBCMode, gameboy.gbcRamBank, gameboy.gbcRamBankPosition, gameboy.ROMBank1Offset, gameboy.currentROMBank, gameboy.modeSTAT, gameboy.LYCMatchTriggerSTAT, gameboy.mode2TriggerSTAT, gameboy.mode1TriggerSTAT, gameboy.mode0TriggerSTAT, gameboy.LCDisOn, gameboy.gfxWindowCHRBankPosition, gameboy.gfxWindowDisplay, gameboy.gfxSpriteShow, gameboy.gfxSpriteNormalHeight, gameboy.gfxBackgroundCHRBankPosition, gameboy.gfxBackgroundBankOffset, gameboy.TIMAEnabled, gameboy.DIVTicks, gameboy.LCDTicks, gameboy.timerTicks, gameboy.TACClocker, gameboy.serialTimer, gameboy.serialShiftTimer, gameboy.serialShiftTimerAllocated, gameboy.IRQEnableDelay, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.lastTime, gameboy.drewBlank, util.fromTypedArray(gameboy.frameBuffer), gameboy.bgEnabled, gameboy.BGPriorityEnabled, gameboy.channel1FrequencyTracker, gameboy.channel1FrequencyCounter, gameboy.channel1totalLength, gameboy.channel1envelopeVolume, gameboy.channel1envelopeType, gameboy.channel1envelopeSweeps, gameboy.channel1envelopeSweepsLast, gameboy.channel1consecutive, gameboy.channel1frequency, gameboy.channel1SweepFault, gameboy.channel1ShadowFrequency, gameboy.channel1timeSweep, gameboy.channel1lastTimeSweep, gameboy.channel1Swept, gameboy.channel1frequencySweepDivider, gameboy.channel1decreaseSweep, gameboy.channel2FrequencyTracker, gameboy.channel2FrequencyCounter, gameboy.channel2totalLength, gameboy.channel2envelopeVolume, gameboy.channel2envelopeType, gameboy.channel2envelopeSweeps, gameboy.channel2envelopeSweepsLast, gameboy.channel2consecutive, gameboy.channel2frequency, gameboy.channel3canPlay, gameboy.channel3totalLength, gameboy.channel3patternType, gameboy.channel3frequency, gameboy.channel3consecutive, util.fromTypedArray(gameboy.channel3PCM), gameboy.channel4FrequencyPeriod, gameboy.channel4lastSampleLookup, gameboy.channel4totalLength, gameboy.channel4envelopeVolume, gameboy.channel4currentVolume, gameboy.channel4envelopeType, gameboy.channel4envelopeSweeps, gameboy.channel4envelopeSweepsLast, gameboy.channel4consecutive, gameboy.channel4BitRange, gameboy.soundMasterEnabled, gameboy.VinLeftChannelMasterVolume, gameboy.VinRightChannelMasterVolume, gameboy.leftChannel1, gameboy.leftChannel2, gameboy.leftChannel3, gameboy.leftChannel4, gameboy.rightChannel1, gameboy.rightChannel2, gameboy.rightChannel3, gameboy.rightChannel4, gameboy.channel1currentSampleLeft, gameboy.channel1currentSampleRight, gameboy.channel2currentSampleLeft, gameboy.channel2currentSampleRight, gameboy.channel3currentSampleLeft, gameboy.channel3currentSampleRight, gameboy.channel4currentSampleLeft, gameboy.channel4currentSampleRight, gameboy.channel1currentSampleLeftSecondary, gameboy.channel1currentSampleRightSecondary, gameboy.channel2currentSampleLeftSecondary, gameboy.channel2currentSampleRightSecondary, gameboy.channel3currentSampleLeftSecondary, gameboy.channel3currentSampleRightSecondary, gameboy.channel4currentSampleLeftSecondary, gameboy.channel4currentSampleRightSecondary, gameboy.channel1currentSampleLeftTrimary, gameboy.channel1currentSampleRightTrimary, gameboy.channel2currentSampleLeftTrimary, gameboy.channel2currentSampleRightTrimary, gameboy.mixerOutputCache, gameboy.channel1DutyTracker, gameboy.channel1CachedDuty, gameboy.channel2DutyTracker, gameboy.channel2CachedDuty, gameboy.channel1Enabled, gameboy.channel2Enabled, gameboy.channel3Enabled, gameboy.channel4Enabled, gameboy.sequencerClocks, gameboy.sequencePosition, gameboy.channel3Counter, gameboy.channel4Counter, gameboy.cachedChannel3Sample, gameboy.cachedChannel4Sample, gameboy.channel3FrequencyPeriod, gameboy.channel3lastSampleLookup, gameboy.actualScanLine, gameboy.lastUnrenderedLine, gameboy.queuedScanLines, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCisLatched, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedSeconds, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedMinutes, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHours, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedLDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCSeconds, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCMinutes, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHours, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDayOverFlow, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHALT, gameboy.usedBootROM, gameboy.skipPCIncrement, gameboy.STATTracker, gameboy.gbcRamBankPositionECHO, gameboy.windowY, gameboy.windowX, util.fromTypedArray(gameboy.gbcOBJRawPalette), util.fromTypedArray(gameboy.gbcBGRawPalette), util.fromTypedArray(gameboy.gbOBJPalette), util.fromTypedArray(gameboy.gbBGPalette), util.fromTypedArray(gameboy.gbcOBJPalette), util.fromTypedArray(gameboy.gbcBGPalette), util.fromTypedArray(gameboy.gbBGColorizedPalette), util.fromTypedArray(gameboy.gbOBJColorizedPalette), util.fromTypedArray(gameboy.cachedBGPaletteConversion), util.fromTypedArray(gameboy.cachedOBJPaletteConversion), util.fromTypedArray(gameboy.BGCHRBank1), util.fromTypedArray(gameboy.BGCHRBank2), gameboy.haltPostClocks, gameboy.interruptsRequested, gameboy.interruptsEnabled, gameboy.remainingClocks, gameboy.colorizedGBPalettes, gameboy.backgroundY, gameboy.backgroundX, gameboy.CPUStopped, gameboy.audioClocksUntilNextEvent, gameboy.audioClocksUntilNextEventCounter];
+            return [gameboy.inBootstrap, gameboy.registerA, gameboy.FZero, gameboy.FSubtract, gameboy.FHalfCarry, gameboy.FCarry, gameboy.registerB, gameboy.registerC, gameboy.registerD, gameboy.registerE, gameboy.registersHL, gameboy.stackPointer, gameboy.programCounter, gameboy.halt, gameboy.IME, gameboy.hdmaRunning, gameboy.CPUTicks, gameboy.doubleSpeedShifter, util.fromTypedArray(gameboy.memory), util.fromTypedArray(gameboy.VRAM), gameboy.currVRAMBank, util.fromTypedArray(gameboy.GBCMemory), gameboy.useGBCMode, gameboy.gbcRamBank, gameboy.gbcRamBankPosition, gameboy.ROMBank1Offset, gameboy.cartridgeSlot.cartridge.mbc.currentROMBank, gameboy.modeSTAT, gameboy.LYCMatchTriggerSTAT, gameboy.mode2TriggerSTAT, gameboy.mode1TriggerSTAT, gameboy.mode0TriggerSTAT, gameboy.LCDisOn, gameboy.gfxWindowCHRBankPosition, gameboy.gfxWindowDisplay, gameboy.gfxSpriteShow, gameboy.gfxSpriteNormalHeight, gameboy.gfxBackgroundCHRBankPosition, gameboy.gfxBackgroundBankOffset, gameboy.TIMAEnabled, gameboy.DIVTicks, gameboy.LCDTicks, gameboy.timerTicks, gameboy.TACClocker, gameboy.serialTimer, gameboy.serialShiftTimer, gameboy.serialShiftTimerAllocated, gameboy.IRQEnableDelay, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.lastTime, gameboy.drewBlank, util.fromTypedArray(gameboy.frameBuffer), gameboy.bgEnabled, gameboy.BGPriorityEnabled, gameboy.channel1FrequencyTracker, gameboy.channel1FrequencyCounter, gameboy.channel1totalLength, gameboy.channel1envelopeVolume, gameboy.channel1envelopeType, gameboy.channel1envelopeSweeps, gameboy.channel1envelopeSweepsLast, gameboy.channel1consecutive, gameboy.channel1frequency, gameboy.channel1SweepFault, gameboy.channel1ShadowFrequency, gameboy.channel1timeSweep, gameboy.channel1lastTimeSweep, gameboy.channel1Swept, gameboy.channel1frequencySweepDivider, gameboy.channel1decreaseSweep, gameboy.channel2FrequencyTracker, gameboy.channel2FrequencyCounter, gameboy.channel2totalLength, gameboy.channel2envelopeVolume, gameboy.channel2envelopeType, gameboy.channel2envelopeSweeps, gameboy.channel2envelopeSweepsLast, gameboy.channel2consecutive, gameboy.channel2frequency, gameboy.channel3canPlay, gameboy.channel3totalLength, gameboy.channel3patternType, gameboy.channel3frequency, gameboy.channel3consecutive, util.fromTypedArray(gameboy.channel3PCM), gameboy.channel4FrequencyPeriod, gameboy.channel4lastSampleLookup, gameboy.channel4totalLength, gameboy.channel4envelopeVolume, gameboy.channel4currentVolume, gameboy.channel4envelopeType, gameboy.channel4envelopeSweeps, gameboy.channel4envelopeSweepsLast, gameboy.channel4consecutive, gameboy.channel4BitRange, gameboy.soundMasterEnabled, gameboy.VinLeftChannelMasterVolume, gameboy.VinRightChannelMasterVolume, gameboy.leftChannel1, gameboy.leftChannel2, gameboy.leftChannel3, gameboy.leftChannel4, gameboy.rightChannel1, gameboy.rightChannel2, gameboy.rightChannel3, gameboy.rightChannel4, gameboy.channel1currentSampleLeft, gameboy.channel1currentSampleRight, gameboy.channel2currentSampleLeft, gameboy.channel2currentSampleRight, gameboy.channel3currentSampleLeft, gameboy.channel3currentSampleRight, gameboy.channel4currentSampleLeft, gameboy.channel4currentSampleRight, gameboy.channel1currentSampleLeftSecondary, gameboy.channel1currentSampleRightSecondary, gameboy.channel2currentSampleLeftSecondary, gameboy.channel2currentSampleRightSecondary, gameboy.channel3currentSampleLeftSecondary, gameboy.channel3currentSampleRightSecondary, gameboy.channel4currentSampleLeftSecondary, gameboy.channel4currentSampleRightSecondary, gameboy.channel1currentSampleLeftTrimary, gameboy.channel1currentSampleRightTrimary, gameboy.channel2currentSampleLeftTrimary, gameboy.channel2currentSampleRightTrimary, gameboy.mixerOutputCache, gameboy.channel1DutyTracker, gameboy.channel1CachedDuty, gameboy.channel2DutyTracker, gameboy.channel2CachedDuty, gameboy.channel1Enabled, gameboy.channel2Enabled, gameboy.channel3Enabled, gameboy.channel4Enabled, gameboy.sequencerClocks, gameboy.sequencePosition, gameboy.channel3Counter, gameboy.channel4Counter, gameboy.cachedChannel3Sample, gameboy.cachedChannel4Sample, gameboy.channel3FrequencyPeriod, gameboy.channel3lastSampleLookup, gameboy.actualScanLine, gameboy.lastUnrenderedLine, gameboy.queuedScanLines, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCisLatched, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedSeconds, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedMinutes, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHours, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedLDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.latchedHDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCSeconds, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCMinutes, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHours, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDays, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCDayOverFlow, gameboy.cartridgeSlot.cartridge.hasRTC && gameboy.cartridgeSlot.cartridge.mbc3.rtc.RTCHALT, gameboy.usedBootROM, gameboy.skipPCIncrement, gameboy.STATTracker, gameboy.gbcRamBankPositionECHO, gameboy.windowY, gameboy.windowX, util.fromTypedArray(gameboy.gbcOBJRawPalette), util.fromTypedArray(gameboy.gbcBGRawPalette), util.fromTypedArray(gameboy.gbOBJPalette), util.fromTypedArray(gameboy.gbBGPalette), util.fromTypedArray(gameboy.gbcOBJPalette), util.fromTypedArray(gameboy.gbcBGPalette), util.fromTypedArray(gameboy.gbBGColorizedPalette), util.fromTypedArray(gameboy.gbOBJColorizedPalette), util.fromTypedArray(gameboy.cachedBGPaletteConversion), util.fromTypedArray(gameboy.cachedOBJPaletteConversion), util.fromTypedArray(gameboy.BGCHRBank1), util.fromTypedArray(gameboy.BGCHRBank2), gameboy.haltPostClocks, gameboy.interruptsRequested, gameboy.interruptsEnabled, gameboy.remainingClocks, gameboy.colorizedGBPalettes, gameboy.backgroundY, gameboy.backgroundX, gameboy.CPUStopped, gameboy.audioClocksUntilNextEvent, gameboy.audioClocksUntilNextEventCounter];
           }
         }, {
           key: "load",
@@ -7982,7 +7989,11 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             gameboy.gbcRamBank = state[index++];
             gameboy.gbcRamBankPosition = state[index++];
             gameboy.ROMBank1Offset = state[index++];
-            gameboy.currentROMBank = state[index++];
+            if (gameboy.cartridgeSlot.cartridge) {
+              gameboy.cartridgeSlot.cartridge.mbc.currentROMBank = state[index++];
+            } else {
+              ++index;
+            }
             gameboy.modeSTAT = state[index++];
             gameboy.LYCMatchTriggerSTAT = state[index++];
             gameboy.mode2TriggerSTAT = state[index++];
@@ -8202,7 +8213,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return this.cartridgeSlot.cartridge.saveSRAMState();
       };
       GameBoyCore.prototype.saveRTCState = function () {
-        return this.cartridgeSlot.cartridge.mbc3.rtc.saveState();
+        return this.cartridgeSlot.cartridge.mbc.rtc.saveState();
       };
       GameBoyCore.prototype.saveState = function () {
         return this.stateManager.save();
@@ -8234,9 +8245,9 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         var cartridge = new Cartridge(rom, this);
         this.cartridgeSlot.insertCartridge(cartridge);
         this.cartridgeSlot.readCartridge();
-        if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.mbc3) {
-          this.cartridgeSlot.cartridge.mbc3.on("write", function () {
-            _this.onMBC3Write && _this.onMBC3Write();
+        if (this.cartridgeSlot.cartridge && this.cartridgeSlot.cartridge.mbc) {
+          this.cartridgeSlot.cartridge.mbc.on("write", function () {
+            _this.onMBCWrite && _this.onMBCWrite();
           });
         }
 
@@ -9114,7 +9125,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
               this.audioUnderrunAdjustment();
 
               if (this.cartridgeSlot.cartridge.hasRTC) {
-                this.cartridgeSlot.cartridge.mbc3.rtc.updateClock();
+                this.cartridgeSlot.cartridge.mbc.rtc.updateClock();
               }
 
               if (!this.halt) {
@@ -11201,21 +11212,16 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         return this.memory[0xff00 | address];
       };
       GameBoyCore.prototype.memoryReadROM = function (address) {
-        return this.cartridgeSlot.cartridge.rom.getByte(this.currentROMBank + address);
+        return this.cartridgeSlot.cartridge.rom.getByte(this.cartridgeSlot.cartridge.mbc.currentROMBank + address);
       };
       GameBoyCore.prototype.memoryReadMBC = function (address) {
-        //Switchable RAM
-        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          return this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition];
-        }
-        //console.log("Reading from disabled RAM.", 1);
-        return 0xff;
+        return this.cartridgeSlot.cartridge.mbc.readRAM(address);
       };
       GameBoyCore.prototype.memoryReadMBC7 = function (address) {
-        return this.cartridgeSlot.cartridge.mbc7.read(address);
+        return this.cartridgeSlot.cartridge.mbc.read(address);
       };
       GameBoyCore.prototype.memoryReadMBC3 = function (address) {
-        return this.cartridgeSlot.cartridge.mbc3.read(address);
+        return this.cartridgeSlot.cartridge.mbc.read(address);
       };
       GameBoyCore.prototype.memoryReadGBCMemory = function (address) {
         return this.GBCMemory[address + this.gbcRamBankPosition];
@@ -11365,45 +11371,45 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.cartridgeSlot.cartridge.mbc.writeEnable(address, data);
       };
       GameBoyCore.prototype.MBC1WriteROMBank = function (address, data) {
-        this.cartridgeSlot.cartridge.mbc1.writeROMBank(address, data);
+        this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
       };
       GameBoyCore.prototype.MBC1WriteRAMBank = function (address, data) {
-        this.cartridgeSlot.cartridge.mbc1.writeRAMBank(address, data);
+        this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
       };
       GameBoyCore.prototype.MBC1WriteType = function (address, data) {
-        this.cartridgeSlot.cartridge.mbc1.writeType(address, data);
+        this.cartridgeSlot.cartridge.mbc.writeType(address, data);
       };
       GameBoyCore.prototype.MBC2WriteROMBank = function (address, data) {
-        this.cartridgeSlot.cartridge.mbc2.writeROMBank(address, data);
+        this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
       };
       GameBoyCore.prototype.MBC3WriteROMBank = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc3.writeROMBank(address, data);
+        return this.cartridgeSlot.cartridge.mbc.writeROMBank(address, data);
       };
       GameBoyCore.prototype.MBC3WriteRAMBank = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc3.writeRAMBank(address, data);
+        return this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
       };
       GameBoyCore.prototype.MBC3WriteRTCLatch = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc3.rtc.writeLatch(address, data);
+        return this.cartridgeSlot.cartridge.mbc.rtc.writeLatch(address, data);
       };
       GameBoyCore.prototype.MBC5WriteROMBankLow = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc5.writeROMBankLow(address, data);
+        return this.cartridgeSlot.cartridge.mbc.writeROMBankLow(address, data);
       };
       GameBoyCore.prototype.MBC5WriteROMBankHigh = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc5.writeROMBankHigh(address, data);
+        return this.cartridgeSlot.cartridge.mbc.writeROMBankHigh(address, data);
       };
       GameBoyCore.prototype.MBC5WriteRAMBank = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc5.writeRAMBank(address, data);
+        return this.cartridgeSlot.cartridge.mbc.writeRAMBank(address, data);
       };
       GameBoyCore.prototype.RUMBLEWriteRAMBank = function (address, data) {
         //MBC5 RAM bank switching
         //Like MBC5, but bit 3 of the lower nibble is used for rumbling and bit 2 is ignored.
-        this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0x03;
-        this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank << 13) - 0xa000;
+        this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank = data & 0x03;
+        this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition = (this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank << 13) - 0xa000;
       };
       GameBoyCore.prototype.HuC3WriteRAMBank = function (address, data) {
         //HuC3 RAM bank switching
-        this.cartridgeSlot.cartridge.currentMBCRAMBank = data & 0x03;
-        this.cartridgeSlot.cartridge.currentMBCRAMBankPosition = (this.cartridgeSlot.cartridge.currentMBCRAMBank << 13) - 0xa000;
+        this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank = data & 0x03;
+        this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition = (this.cartridgeSlot.cartridge.mbc.currentMBCRAMBank << 13) - 0xa000;
       };
       GameBoyCore.prototype.cartIgnoreWrite = function (address, data) {
         //We might have encountered illegal RAM writing or such, so just do nothing...
@@ -11415,12 +11421,12 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
         this.memory[0xff00 | address] = data;
       };
       GameBoyCore.prototype.memoryWriteMBCRAM = function (address, data) {
-        if (this.cartridgeSlot.cartridge.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
-          this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.currentMBCRAMBankPosition] = data;
+        if (this.cartridgeSlot.cartridge.mbc.MBCRAMBanksEnabled || settings.alwaysAllowRWtoBanks) {
+          this.cartridgeSlot.cartridge.MBCRam[address + this.cartridgeSlot.cartridge.mbc.currentRAMBankPosition] = data;
         }
       };
       GameBoyCore.prototype.memoryWriteMBC3RAM = function (address, data) {
-        return this.cartridgeSlot.cartridge.mbc3.write(address, data);
+        return this.cartridgeSlot.cartridge.mbc.write(address, data);
       };
       GameBoyCore.prototype.memoryWriteGBCRAM = function (address, data) {
         this.GBCMemory[address + this.gbcRamBankPosition] = data;
@@ -12251,6 +12257,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
             } else {
               _this5.BGCHRCurrentBank = _this5.BGCHRBank1;
             }
+
             //Only writable by GBC.
           };
           this.memoryHighWriter[0x51] = this.memoryWriter[0xff51] = function (address, data) {
@@ -12504,7 +12511,7 @@ $__System.register('a', ['f', '10', '12'], function (_export, _context) {
           _this.core = new GameBoyCore(canvas);
           _this.core.loadSRAMState = _this.loadSRAMState.bind(_this);
           _this.core.loadRTCState = _this.loadRTCState.bind(_this);
-          _this.core.onMBC3Write = function () {
+          _this.core.onMBCWrite = function () {
             if (!_this.core.cartridgeSlot.cartridge) return;
             _this.debouncedAutoSave();
           };

@@ -14,9 +14,6 @@ export default class Cartridge {
 
     this.MBCRam = []; // Switchable RAM (Used by games for more RAM) for the main memory range 0xA000 - 0xC000.
     this.MBC1Mode = false; // MBC1 Type (4/32, 16/8)
-    this.MBCRAMBanksEnabled = false; // MBC RAM Access Control.
-    this.currentMBCRAMBank = 0; // MBC Currently Indexed RAM Bank
-    this.currentMBCRAMBankPosition = -0xa000; // MBC Position Adder;
 
     this.hasMBC1 = false; // Does the cartridge use MBC1?
     this.hasMBC2 = false; // Does the cartridge use MBC2?
@@ -52,23 +49,17 @@ export default class Cartridge {
     this.RAMBanks = [0, 1, 2, 4, 16]; // Used to map the RAM banks to maximum size the MBC used can do.
     this.numRAMBanks = 0; // How many RAM banks were actually allocated?
 
-    this.loadRom();
+    this.parseROM();
   }
 
-  saveSRAMState() {
-    if (!this.hasBattery || this.MBCRam.length === 0) return; // No battery backup...
-
-    // return the MBC RAM for backup...
-    return util.fromTypedArray(this.MBCRam);
-  }
-
-  loadRom() {
+  parseROM() {
     // TODO: move to gameboy core
     // Load the first two ROM banks (0x0000 - 0x7FFF) into regular gameboy memory:
     this.gameboy.usedBootROM = settings.bootBootRomFirst &&
       (!settings.forceGBBootRom && this.gameboy.GBCBOOTROM.length === 0x800 ||
         settings.forceGBBootRom && this.gameboy.GBBOOTROM.length === 0x100);
 
+    // http://www.enliten.force9.co.uk/gameboy/carthead.htm
     if (this.rom.length < 0x4000) throw new Error("ROM size too small.");
 
     let romIndex = 0;
@@ -104,14 +95,10 @@ export default class Cartridge {
     } else {
       // Don't load in the boot ROM:
       while (romIndex < 0x4000) {
-        this.gameboy.memory[romIndex] = this.rom.getByte(
-          romIndex
-        ) & 0xff;
+        this.gameboy.memory[romIndex] = this.rom.getByte(romIndex) & 0xff;
         ++romIndex;
       }
     }
-
-    this.ROMBankEdge = Math.floor(this.rom.length / 0x4000);
   }
 
   interpret() {
@@ -202,7 +189,7 @@ export default class Cartridge {
       }
     } else {
       console.log("used boot rom");
-      this.useGBCMode = this.gameboy.usedGBCBootROM; //Allow the GBC boot ROM to run in GBC mode...
+      this.useGBCMode = this.gameboy.usedGBCBootROM; // Allow the GBC boot ROM to run in GBC mode...
     }
 
     const oldLicenseCode = this.rom.getByte(0x14b);
@@ -361,28 +348,30 @@ export default class Cartridge {
 
     if (this.hasMBC1) {
       this.mbc1 = new MBC1(this);
-      this.mbc = this.mbc1;
     }
 
     if (this.hasMBC2) {
       this.mbc2 = new MBC2(this);
-      this.mbc = this.mbc2;
     }
 
     if (this.hasMBC3) {
       this.mbc3 = new MBC3(this);
-      this.mbc = this.mbc3;
     }
 
     if (this.hasMBC5) {
       this.mbc5 = new MBC5(this);
-      this.mbc = this.mbc5;
     }
 
     if (this.hasMBC7) {
       this.mbc7 = new MBC7(this);
-      this.mbc = this.mbc7;
     }
+
+    this.mbc = this.mbc1 ||
+      this.mbc2 ||
+      this.mbc3 ||
+      this.mbc5 ||
+      this.mbc7 ||
+      null;
   }
 
   setupRAM() {
@@ -415,5 +404,12 @@ export default class Cartridge {
     }
 
     this.gameboy.loadRTCState2();
+  }
+
+  saveSRAMState() {
+    if (!this.hasBattery || this.MBCRam.length === 0) return; // No battery backup...
+
+    // return the MBC RAM for backup...
+    return util.fromTypedArray(this.MBCRam);
   }
 }
