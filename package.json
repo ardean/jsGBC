@@ -1,8 +1,8 @@
 {
   "name": "jsgbc",
   "productName": "jsGBC",
-  "version": "0.3.0",
-  "description": "A GameBoy Color Emulator written in JavaScript",
+  "version": "0.4.0",
+  "description": "A GameBoy Color Emulator",
   "main": "app/index.js",
   "repository": "https://github.com/ardean/jsGBC",
   "bugs": "https://github.com/ardean/jsGBC/issues",
@@ -22,31 +22,28 @@
   ],
   "scripts": {
     "start": "ELECTRON_ENV=development electron ./",
-    "pack": "build --dir",
-    "dist": "build",
-    "build": "npm run cleanup && npm run build-src && npm run build-src-min && npm run build-docs",
-    "build-src": "jspm build src/index.js dist/jsgbc.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\"",
-    "build-src-min": "jspm build src/index.js dist/jsgbc.min.js --global-name jsGBC --format umd --externals events --global-deps \"{'events':'EventEmitter'}\" --minify --skip-source-maps",
-    "build-docs": "jspm build demo/index.js docs/index.js && cpy *.{html,css} docs/ && cpy images/**/*.png docs/images && npm run build-docs-dist",
-    "build-docs-dist": "cpy dist/jsgbc.min.js docs/",
-    "cleanup": "del-cli dist"
+    "build": "npm run build-src && gulp build && cpy index.js app/dist/ && npm run build-assets && build",
+    "build-src": "jspm build src/index.js index.js --minify --skip-source-maps",
+    "build-assets": "cpy bower_components/jsgbc-ui/images/*.png app/dist/bower_components/jsgbc-ui/images/ && cpy bower_components/webcomponentsjs/webcomponents.min.js app/dist/bower_components/webcomponentsjs/"
   },
   "devDependencies": {
+    "bower": "^1.8.0",
     "cpy-cli": "^1.0.1",
-    "del-cli": "^0.2.1",
     "electron": "^1.4.15",
     "electron-builder": "^13.0.0",
-    "jspm": "^0.17.0-beta.38"
+    "gulp": "^3.9.1",
+    "gulp-inject": "^4.2.0",
+    "gulp-vulcanize": "^6.1.0",
+    "jspm": "^0.17.0-beta.38",
+    "require-dir": "^0.3.1"
   },
   "jspm": {
     "name": "jsgbc",
     "main": "src/index.js",
     "dependencies": {
-      "debounce": "npm:debounce@^1.0.0",
       "jquery": "npm:jquery@^3.1.1",
       "jsgamepad": "github:ardean/jsGamepad@^0.1.0",
-      "jsfullscreen": "github:ardean/jsFullscreen@^0.1.0",
-      "jspointerlock": "github:ardean/jsPointerLock@^1.0.0"
+      "jsgbc-core": "github:ardean/jsGBC-core@^0.3.2"
     },
     "devDependencies": {
       "plugin-babel": "npm:systemjs-plugin-babel@^0.0.20"

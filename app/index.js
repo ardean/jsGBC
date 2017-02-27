@@ -11,10 +11,9 @@ let romPathToLoad = process.argv[1] || null;
 
 const openROMDialog = new OpenROMDialog(openROM);
 const mainWindowServer = new WindowServer(
-  path.join(__dirname, "../index.html"),
-  {
+  path.join(__dirname, "./dist/index.html"), {
     width: 400,
-    height: 709,
+    height: 731,
     frame: false,
     titleBarStyle: "hidden",
     resizable: false,

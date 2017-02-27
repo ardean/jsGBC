@@ -33,13 +33,11 @@ SystemJS.config({
     "buffer": "npm:jspm-nodelibs-buffer@0.2.1",
     "constants": "npm:jspm-nodelibs-constants@0.2.0",
     "crypto": "npm:jspm-nodelibs-crypto@0.2.0",
-    "debounce": "npm:debounce@1.0.0",
     "events": "npm:jspm-nodelibs-events@0.2.0",
     "fs": "npm:jspm-nodelibs-fs@0.2.0",
     "jquery": "npm:jquery@3.1.1",
-    "jsfullscreen": "github:ardean/jsFullscreen@0.1.0",
     "jsgamepad": "github:ardean/jsGamepad@0.1.0",
-    "jspointerlock": "github:ardean/jsPointerLock@1.0.0",
+    "jsgbc-core": "github:ardean/jsGBC-core@0.3.2",
     "os": "npm:jspm-nodelibs-os@0.2.0",
     "path": "npm:jspm-nodelibs-path@0.2.1",
     "process": "npm:jspm-nodelibs-process@0.2.0",
@@ -94,7 +92,7 @@ SystemJS.config({
         "browserify-rsa": "npm:browserify-rsa@4.0.1",
         "bn.js": "npm:bn.js@4.11.6",
         "parse-asn1": "npm:parse-asn1@5.0.0",
-        "elliptic": "npm:elliptic@6.3.3"
+        "elliptic": "npm:elliptic@6.4.0"
       }
     },
     "npm:create-hmac@1.1.4": {
@@ -135,7 +133,7 @@ SystemJS.config({
     "npm:create-ecdh@4.0.0": {
       "map": {
         "bn.js": "npm:bn.js@4.11.6",
-        "elliptic": "npm:elliptic@6.3.3"
+        "elliptic": "npm:elliptic@6.4.0"
       }
     },
     "npm:browserify-cipher@1.0.0": {
@@ -189,7 +187,7 @@ SystemJS.config({
     "npm:miller-rabin@4.0.0": {
       "map": {
         "bn.js": "npm:bn.js@4.11.6",
-        "brorand": "npm:brorand@1.0.7"
+        "brorand": "npm:brorand@1.1.0"
       }
     },
     "npm:sha.js@2.4.8": {
@@ -210,7 +208,7 @@ SystemJS.config({
     "npm:stream-browserify@2.0.1": {
       "map": {
         "inherits": "npm:inherits@2.0.3",
-        "readable-stream": "npm:readable-stream@2.2.2"
+        "readable-stream": "npm:readable-stream@2.2.3"
       }
     },
     "npm:des.js@1.0.0": {
@@ -226,46 +224,15 @@ SystemJS.config({
         "minimalistic-assert": "npm:minimalistic-assert@1.0.0"
       }
     },
-    "npm:readable-stream@2.2.2": {
-      "map": {
-        "isarray": "npm:isarray@1.0.0",
-        "inherits": "npm:inherits@2.0.3",
-        "string_decoder": "npm:string_decoder@0.10.31",
-        "buffer-shims": "npm:buffer-shims@1.0.0",
-        "process-nextick-args": "npm:process-nextick-args@1.0.7",
-        "core-util-is": "npm:core-util-is@1.0.2",
-        "util-deprecate": "npm:util-deprecate@1.0.2"
-      }
-    },
     "npm:jspm-nodelibs-string_decoder@0.2.0": {
       "map": {
         "string_decoder-browserify": "npm:string_decoder@0.10.31"
-      }
-    },
-    "github:ardean/jsPointerLock@1.0.0": {
-      "map": {
-        "jquery": "npm:jquery@3.1.1",
-        "events": "npm:jspm-nodelibs-events@0.2.0"
       }
     },
     "github:ardean/jsGamepad@0.1.0": {
       "map": {
         "events": "npm:jspm-nodelibs-events@0.2.0",
         "jquery": "npm:jquery@3.1.1"
-      }
-    },
-    "github:ardean/jsFullscreen@0.1.0": {
-      "map": {
-        "events": "npm:jspm-nodelibs-events@0.2.0",
-        "jquery": "npm:jquery@3.1.1"
-      }
-    },
-    "npm:elliptic@6.3.3": {
-      "map": {
-        "bn.js": "npm:bn.js@4.11.6",
-        "inherits": "npm:inherits@2.0.3",
-        "brorand": "npm:brorand@1.0.7",
-        "hash.js": "npm:hash.js@1.0.3"
       }
     },
     "npm:debounce@1.0.0": {
@@ -281,6 +248,40 @@ SystemJS.config({
     "npm:timers-browserify@1.4.2": {
       "map": {
         "process": "npm:process@0.11.9"
+      }
+    },
+    "github:ardean/jsGBC-core@0.3.2": {
+      "map": {
+        "debounce": "npm:debounce@1.0.0"
+      }
+    },
+    "npm:readable-stream@2.2.3": {
+      "map": {
+        "isarray": "npm:isarray@1.0.0",
+        "inherits": "npm:inherits@2.0.3",
+        "string_decoder": "npm:string_decoder@0.10.31",
+        "process-nextick-args": "npm:process-nextick-args@1.0.7",
+        "buffer-shims": "npm:buffer-shims@1.0.0",
+        "util-deprecate": "npm:util-deprecate@1.0.2",
+        "core-util-is": "npm:core-util-is@1.0.2"
+      }
+    },
+    "npm:elliptic@6.4.0": {
+      "map": {
+        "bn.js": "npm:bn.js@4.11.6",
+        "inherits": "npm:inherits@2.0.3",
+        "minimalistic-crypto-utils": "npm:minimalistic-crypto-utils@1.0.1",
+        "minimalistic-assert": "npm:minimalistic-assert@1.0.0",
+        "hmac-drbg": "npm:hmac-drbg@1.0.0",
+        "brorand": "npm:brorand@1.1.0",
+        "hash.js": "npm:hash.js@1.0.3"
+      }
+    },
+    "npm:hmac-drbg@1.0.0": {
+      "map": {
+        "hash.js": "npm:hash.js@1.0.3",
+        "minimalistic-assert": "npm:minimalistic-assert@1.0.0",
+        "minimalistic-crypto-utils": "npm:minimalistic-crypto-utils@1.0.1"
       }
     }
   }

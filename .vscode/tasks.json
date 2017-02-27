@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0",
+  "command": "gulp",
+  "isShellCommand": true,
+  "tasks": [{
+    "taskName": "dev",
+    "args": [],
+    "isBuildCommand": true,
+    "problemMatcher": [
+      "$lessCompile",
+      "$tsc",
+      "$jshint"
+    ]
+  }]
+}

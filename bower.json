@@ -1,0 +1,33 @@
+{
+  "name": "jsgbc",
+  "description": "A GameBoy Color Emulator",
+  "main": "app/index.js",
+  "authors": [
+    "ardean"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "gameboy",
+    "color",
+    "emulator",
+    "gameboy-color",
+    "gameboy-color-emulator",
+    "gbc",
+    "html5",
+    "html5-canvas",
+    "canvas",
+    "jsgbc"
+  ],
+  "homepage": "https://github.com/ardean/jsGBC",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "jspm_packages",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jsgbc-ui": "jsGBC-ui#v0.1.7"
+  }
+}

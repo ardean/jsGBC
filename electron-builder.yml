@@ -5,6 +5,10 @@
   mac: {
     category: "public.app-category.games"
   },
+  "files": [
+    "app/**/*",
+    "package.json"
+  ],
   fileAssociations: [{
     ext: "gbc",
     name: "GameBoy Color ROM"

@@ -1,8 +1,6 @@
 .DS_Store
 node_modules
 jspm_packages
-jsgbc-darwin-x64
+bower_components
 *.log
-/dist/mac
-/old
-/build/gbc.*
+dist
