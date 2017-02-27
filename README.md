@@ -1,8 +1,9 @@
 # jsGBC
 
-[![NPM Version][npm-image]][downloads-url]
-[![NPM Downloads][downloads-image]][downloads-url]
+[![Github Version][gh-image]][gh-url]
+[![Github Downloads][downloads-image]][downloads-url]
 [![License][license-image]][license-url]
+[![NPM][npm-image]][npm-url]
 
 **A GameBoy Color Emulator**
 
@@ -12,9 +13,11 @@
 
 [MIT](LICENSE.md)
 
-[npm-image]: https://img.shields.io/npm/v/jsgbc.svg
-[npm-url]: https://npmjs.org/package/jsgbc
-[downloads-image]: https://img.shields.io/npm/dm/jsgbc.svg
-[downloads-url]: https://npmjs.org/package/jsgbc
+[gh-image]: https://img.shields.io/github/release/ardean/jsGBC.svg
+[gh-url]: https://github.com/ardean/jsGBC
+[downloads-image]: https://img.shields.io/github/downloads/ardean/jsGBC/latest/total.svg
+[downloads-url]: https://github.com/ardean/jsGBC
 [license-image]: https://img.shields.io/npm/l/jsgbc.svg
 [license-url]: LICENSE.md
+[npm-image]: https://img.shields.io/npm/v/jsgbc.svg
+[npm-url]: https://www.npmjs.com/package/jsgbc
