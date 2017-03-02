@@ -12,29 +12,29 @@
 
 ## Controls
 
-- Keyboard **keys**
-  - A (**l**, **v**)
-  - B (**k**, **x**)
-  - START (**enter**)
-  - SELECT (**shift**)
-  - ↑ (**up**, **w**)
-  - ↓ (**down**, **s**)
-  - ← (**left**, **a**)
-  - → (**right**, **d**)
-  - SPEED (**p**)
+> Keyboard **keys**
+- A (**l**, **v**)
+- B (**k**, **x**)
+- START (**enter**)
+- SELECT (**shift**)
+- ↑ (**up**, **w**)
+- ↓ (**down**, **s**)
+- ← (**left**, **a**)
+- → (**right**, **d**)
+- SPEED (**p**)
 
-- Gamepad [**button index**](https://www.w3.org/TR/gamepad/#remapping)
-  - A (**1**)
-  - B (**0**)
-  - START (**9**)
-  - SELECT (**8**)
-  - ↑ (**12**)
-  - ↓ (**13**)
-  - ← (**14**)
-  - → (**15**)
-  - SPEED (**7**)
+> Gamepad [**button index**](https://www.w3.org/TR/gamepad/#remapping)
+- A (**1**)
+- B (**0**)
+- START (**9**)
+- SELECT (**8**)
+- ↑ (**12**)
+- ↓ (**13**)
+- ← (**14**)
+- → (**15**)
+- SPEED (**7**)
 
-- Software Buttons from **[jsGBC-ui](https://github.com/ardean/jsGBC-ui/)**
+> Software Buttons from **[jsGBC-ui](https://github.com/ardean/jsGBC-ui/)**
 
 ## Features
 
@@ -55,7 +55,7 @@
 
 ## Web
 
-Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [Demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern Browser.
+Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern Browser.
 
 ## Core
 
