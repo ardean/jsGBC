@@ -23,6 +23,7 @@
   - → (**right**, **d**)
   - SPEED (**p**)
 
+
 > Gamepad [**button index**](https://www.w3.org/TR/gamepad/#remapping)
   - A (**1**)
   - B (**0**)
@@ -33,6 +34,7 @@
   - ← (**14**)
   - → (**15**)
   - SPEED (**7**)
+
 
 > Software Buttons from **[jsGBC-ui](https://github.com/ardean/jsGBC-ui/)**
 
