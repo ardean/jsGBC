@@ -1,19 +1,17 @@
 import $ from "jquery";
-import actions from "./actions.js";
+import keyboardMapping from "./keyboard-mapping.js";
 
 class KeyboardButtons {
   bind(gameboy) {
     window.addEventListener("keydown", ({ keyCode }) => {
-      const action = actions.fromKeyboard(keyCode);
-      if (action) {
-        gameboy.actionDown(action);
+      if (gameboy.actions.is(keyboardMapping[keyCode])) {
+        gameboy.actionDown(keyboardMapping[keyCode]);
       }
     });
 
     window.addEventListener("keyup", ({ keyCode }) => {
-      const action = actions.fromKeyboard(keyCode);
-      if (action) {
-        gameboy.actionUp(action);
+      if (gameboy.actions.is(keyboardMapping[keyCode])) {
+        gameboy.actionUp(keyboardMapping[keyCode]);
       }
     });
   }

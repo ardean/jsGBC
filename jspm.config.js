@@ -37,7 +37,7 @@ SystemJS.config({
     "fs": "npm:jspm-nodelibs-fs@0.2.0",
     "jquery": "npm:jquery@3.1.1",
     "jsgamepad": "github:ardean/jsGamepad@0.1.0",
-    "jsgbc-core": "github:ardean/jsGBC-core@0.3.2",
+    "jsgbc-core": "github:ardean/jsGBC-core@0.4.0",
     "os": "npm:jspm-nodelibs-os@0.2.0",
     "path": "npm:jspm-nodelibs-path@0.2.1",
     "process": "npm:jspm-nodelibs-process@0.2.0",
@@ -250,7 +250,7 @@ SystemJS.config({
         "process": "npm:process@0.11.9"
       }
     },
-    "github:ardean/jsGBC-core@0.3.2": {
+    "github:ardean/jsGBC-core@0.4.0": {
       "map": {
         "debounce": "npm:debounce@1.0.0"
       }

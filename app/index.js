@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const OpenROMDialog = require("./open-rom-dialog");
-const { isOSX, isProduction } = require("./util");
+const { isOSX, isWindows, isProduction } = require("./util");
 const WindowServer = require("./window-server");
 const createMenuTemplate = require("./menu");
 const { log } = require("util");
@@ -10,14 +10,22 @@ const fs = require("fs");
 let romPathToLoad = process.argv[1] || null;
 
 const openROMDialog = new OpenROMDialog(openROM);
+let indexPath = path.join(__dirname, "./dist/index.html");
+if (!isProduction()) {
+  indexPath = path.join(__dirname, "../index.html");
+}
+
 const mainWindowServer = new WindowServer(
-  path.join(__dirname, "./dist/index.html"), {
+  indexPath, {
     width: 400,
     height: 731,
-    frame: false,
+    useContentSize: true,
+    frame: isWindows(),
     titleBarStyle: "hidden",
     resizable: false,
-    transparent: true
+    transparent: true,
+    fullscreenable: true,
+    useContentSize: true
   }
 );
 
@@ -46,7 +54,7 @@ app
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
         createMenuTemplate(mainWindowServer, {
-          openROMDialog: openROMDialog
+          openROMDialog
         })
       )
     );

@@ -3,7 +3,7 @@ import GameBoy from "jsgbc-core";
 import softwareButtons from "./software-buttons.js";
 import keyboardButtons from "./keyboard-buttons.js";
 import gamepadButtons from "./gamepad-buttons.js";
-import initElectron from "./electron.js";
+import initElectron from "./electron/index.js";
 
 if (window.WebComponentsReady) {
   init();
@@ -14,10 +14,9 @@ if (window.WebComponentsReady) {
 function init() {
   const $jsGBCui = $("jsgbc-ui");
   const jsGBCui = $jsGBCui.get(0);
-  const $screen = $(jsGBCui.screenElement);
   const gameboy = new GameBoy(jsGBCui.lcdElement);
 
-  initElectron(gameboy);
+  initElectron(gameboy, jsGBCui);
 
   keyboardButtons.bind(gameboy);
   softwareButtons.bind(gameboy, jsGBCui);

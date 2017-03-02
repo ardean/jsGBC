@@ -1,31 +1,28 @@
 import $ from "jquery";
 import gamepad from "jsgamepad";
-import actions from "./actions.js";
+import { Standard as gamepadMapping } from "./gamepad-mappings.js";
 
 // TODO: implement save & load state in core
 
 class GamepadButtons {
   bind(gameboy) {
     gamepad.on("buttonPressed", ({ buttonIndex, button, gamepad }) => {
-      const action = actions.fromGamepad(buttonIndex);
-      if (action) {
-        gameboy.actionDown(action);
+      if (gameboy.actions.is(gamepadMapping[buttonIndex])) {
+        gameboy.actionDown(gamepadMapping[buttonIndex]);
       }
     });
 
     gamepad.on("buttonChanged", ({ buttonIndex, button, gamepad }) => {
-      const action = actions.fromGamepad(buttonIndex);
-      if (action) {
-        gameboy.actionChange(action, {
+      if (gameboy.actions.is(gamepadMapping[buttonIndex])) {
+        gameboy.actionChange(gamepadMapping[buttonIndex], {
           value: button.value
         });
       }
     });
 
     gamepad.on("buttonReleased", ({ buttonIndex, button, gamepad }) => {
-      const action = actions.fromGamepad(buttonIndex);
-      if (action) {
-        gameboy.actionUp(action);
+      if (gameboy.actions.is(gamepadMapping[buttonIndex])) {
+        gameboy.actionUp(gamepadMapping[buttonIndex]);
       }
     });
 

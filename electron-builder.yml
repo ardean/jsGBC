@@ -5,7 +5,11 @@
   mac: {
     category: "public.app-category.games"
   },
-  "files": [
+  nsis: {
+    oneClick: true,
+    perMachine: true
+  },
+  files: [
     "app/**/*",
     "package.json"
   ],
