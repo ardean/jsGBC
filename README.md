@@ -10,6 +10,23 @@
 
 **[Download Latest Release][downloads-url]**
 
+## Features
+
+> Screen
+
+- Pixelated
+- Fullscreen Mode
+
+> Files
+
+- ROM Upload (**.gb** / **.gbc**)
+- Battery File Download / Upload (**.sav**)
+<!--- States Download / Upload (**.s0**) TODO: -->
+
+> File Associations
+
+- **.gb** / **.gbc**
+
 ## Controls
 
 > Keyboard **keys**
@@ -37,23 +54,6 @@
 - SPEED (**7**)
 
 > Software Buttons from **[jsGBC-ui](https://github.com/ardean/jsGBC-ui/)**
-
-## Features
-
-> Screen
-
-- Pixelated
-- Fullscreen Mode
-
-> Files
-
-- ROM Upload (**.gb** / **.gbc**)
-- Battery File Download / Upload (**.sav**)
-<!--- States Download / Upload (**.s0**) TODO: -->
-
-> File Associations
-
-- **.gb** / **.gbc**
 
 ## Web
 
