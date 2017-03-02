@@ -13,6 +13,7 @@
 ## Controls
 
 > Keyboard **keys**
+
 - A (**l**, **v**)
 - B (**k**, **x**)
 - START (**enter**)
@@ -24,6 +25,7 @@
 - SPEED (**p**)
 
 > Gamepad [**button index**](https://www.w3.org/TR/gamepad/#remapping)
+
 - A (**1**)
 - B (**0**)
 - START (**9**)
