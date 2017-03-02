@@ -4,3 +4,6 @@ jspm_packages
 bower_components
 *.log
 dist
+/index.html
+/index.js
+/index.css
