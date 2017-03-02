@@ -16,7 +16,7 @@
 [gh-image]: https://img.shields.io/github/release/ardean/jsGBC.svg
 [gh-url]: https://github.com/ardean/jsGBC
 [downloads-image]: https://img.shields.io/github/downloads/ardean/jsGBC/latest/total.svg
-[downloads-url]: https://github.com/ardean/jsGBC
+[downloads-url]: https://github.com/ardean/jsGBC/releases
 [license-image]: https://img.shields.io/npm/l/jsgbc.svg
 [license-url]: LICENSE.md
 [npm-image]: https://img.shields.io/npm/v/jsgbc.svg
