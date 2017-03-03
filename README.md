@@ -21,7 +21,7 @@
 
 - ROM Upload (**.gb** / **.gbc**)
 - Battery File Download / Upload (**.sav**)
-<!--- States Download / Upload (**.s0**) TODO: -->
+- **NYI!** States Download / Upload (**.s0**)
 
 > File Associations
 
@@ -55,13 +55,10 @@
 
 > Software Buttons from **[jsGBC-ui](https://github.com/ardean/jsGBC-ui/)**
 
-## Web
+## Emulator
 
-Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern Browser.
-
-## Core
-
-Please check [jsGBC-core](https://github.com/ardean/jsGBC-core) for more information about the core emulator.
+Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern browser.
+For more information about the core emulator see [jsGBC-core](https://github.com/ardean/jsGBC-core).
 
 ## License
 
