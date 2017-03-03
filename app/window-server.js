@@ -20,10 +20,20 @@ class WindowServer extends EventEmitter {
     });
 
     this.window.on("enter-full-screen", () => {
-      this.sendToClient("requestFullscreen");
+      if (this.requestedFromClient) {
+        this.requestedFromClient = false;
+      } else {
+        this.sendToClient("requestFullscreen");
+      }
+
       this.enableFullscreen();
     }).on("leave-full-screen", () => {
-      this.sendToClient("cancelFullscreen");
+      if (this.requestedFromClient) {
+        this.requestedFromClient = false;
+      } else {
+        this.sendToClient("cancelFullscreen");
+      }
+
       this.disableFullscreen();
     });
 
@@ -31,9 +41,11 @@ class WindowServer extends EventEmitter {
       this.isClientReady = true;
       this.emit("clientReady");
     }).on("requestFullscreen", () => {
-      this.enableFullscreen();
+      this.requestedFromClient = true;
+      this.window.setFullScreen(true);
     }).on("cancelFullscreen", () => {
-      this.disableFullscreen();
+      this.requestedFromClient = true;
+      this.window.setFullScreen(false);
     });
 
     this.window.loadURL(indexUrl);
@@ -46,11 +58,9 @@ class WindowServer extends EventEmitter {
 
   enableFullscreen() {
     this.window.setResizable(true);
-    this.window.setFullScreen(true);
   }
 
   disableFullscreen() {
-    this.window.setFullScreen(false);
     this.window.setResizable(false);
   }
 

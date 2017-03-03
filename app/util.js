@@ -1,3 +1,5 @@
+const ELECTRON_ENV = (process.env.ELECTRON_ENV || "").trim();
+
 function isOSX() {
   return process.platform === "darwin";
 }
@@ -11,11 +13,11 @@ function isLinux() {
 }
 
 function isProduction() {
-  return process.env.ELECTRON_ENV !== "development";
+  return ELECTRON_ENV !== "development";
 }
 
 function isDevelopment() {
-  return process.env.ELECTRON_ENV === "development";
+  return ELECTRON_ENV === "development";
 }
 
 module.exports = {
