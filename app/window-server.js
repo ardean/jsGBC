@@ -26,7 +26,7 @@ class WindowServer extends EventEmitter {
         this.sendToClient("requestFullscreen");
       }
 
-      this.enableFullscreen();
+      this.window.setResizable(true);
     }).on("leave-full-screen", () => {
       if (this.requestedFromClient) {
         this.requestedFromClient = false;
@@ -34,7 +34,7 @@ class WindowServer extends EventEmitter {
         this.sendToClient("cancelFullscreen");
       }
 
-      this.disableFullscreen();
+      this.window.setResizable(false);
     });
 
     ipcMain.on("ready", () => {
@@ -54,14 +54,6 @@ class WindowServer extends EventEmitter {
       this.window = null;
       this.emit("closed");
     });
-  }
-
-  enableFullscreen() {
-    this.window.setResizable(true);
-  }
-
-  disableFullscreen() {
-    this.window.setResizable(false);
   }
 
   sendToClient(name, options) {

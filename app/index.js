@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const OpenROMDialog = require("./open-rom-dialog");
-const { isOSX, isWindows, isProduction } = require("./util");
+const { isMacOS, isWindows, isProduction } = require("./util");
 const WindowServer = require("./window-server");
 const createMenuTemplate = require("./menu");
 const { log } = require("util");
@@ -20,7 +20,7 @@ const mainWindowServer = new WindowServer(
     width: 400,
     height: 731,
     useContentSize: true,
-    frame: isWindows(),
+    frame: false,
     titleBarStyle: "hidden",
     resizable: false,
     transparent: true,
@@ -60,7 +60,7 @@ app
     );
   })
   .on("window-all-closed", () => {
-    if (!isOSX()) {
+    if (!isMacOS()) {
       app.quit();
     }
   })

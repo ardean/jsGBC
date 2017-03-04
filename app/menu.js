@@ -1,9 +1,8 @@
 const { app, shell } = require("electron");
-const { isOSX } = require("./util");
+const { isMacOS } = require("./util");
 
-module.exports = function(mainWindowServer, options) {
-  const gamepadMappingMenu = [
-    {
+module.exports = function (mainWindowServer, options) {
+  const gamepadMappingMenu = [{
       label: "Standard",
       type: "radio",
       checked: true
@@ -14,21 +13,17 @@ module.exports = function(mainWindowServer, options) {
     }
   ];
 
-  const menu = [
-    {
+  const menu = [{
       label: "File",
-      submenu: [
-        {
-          label: "Open ROM...",
-          accelerator: "CmdOrCtrl+O",
-          click: options.openROMDialog.show
-        }
-      ]
+      submenu: [{
+        label: "Open ROM...",
+        accelerator: "CmdOrCtrl+O",
+        click: options.openROMDialog.show
+      }]
     },
     {
       label: "View",
-      submenu: [
-        {
+      submenu: [{
           role: "reload"
         },
         {
@@ -41,20 +36,17 @@ module.exports = function(mainWindowServer, options) {
     },
     {
       label: "Gamepads",
-      submenu: [
-        {
-          label: "Mapping",
-          submenu: gamepadMappingMenu
-        }
-      ]
+      submenu: [{
+        label: "Mapping",
+        submenu: gamepadMappingMenu
+      }]
     }
   ];
 
-  if (isOSX()) {
+  if (isMacOS()) {
     menu.unshift({
       label: app.getName(),
-      submenu: [
-        {
+      submenu: [{
           label: "About",
           click() {
             shell.openExternal("https://github.com/ardean/jsGBC");

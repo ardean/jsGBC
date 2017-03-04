@@ -57,8 +57,8 @@
 
 ## Emulator
 
-Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern browser.
 For more information about the core emulator see [jsGBC-core](https://github.com/ardean/jsGBC-core).
+Checkout [jsGBC-web](https://github.com/ardean/jsGBC-web/) and the [demo](https://ardean.github.io/jsGBC-web/) to run jsGBC in a modern browser.
 
 ## License
 

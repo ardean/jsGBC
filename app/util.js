@@ -1,6 +1,6 @@
 const ELECTRON_ENV = (process.env.ELECTRON_ENV || "").trim();
 
-function isOSX() {
+function isMacOS() {
   return process.platform === "darwin";
 }
 
@@ -21,7 +21,7 @@ function isDevelopment() {
 }
 
 module.exports = {
-  isOSX,
+  isMacOS,
   isWindows,
   isLinux,
   isProduction,

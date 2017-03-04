@@ -2,17 +2,8 @@ import $ from "jquery";
 
 class SoftwareButtons {
   bind(gameboy, jsGBCui) {
-    jsGBCui.addEventListener("down", ({ detail }) => {
-      if (gameboy.actions.is(detail.button)) {
-        gameboy.actionDown(detail.button);
-      }
-    });
-
-    jsGBCui.addEventListener("up", ({ detail }) => {
-      if (gameboy.actions.is(detail.button)) {
-        gameboy.actionUp(detail.button);
-      }
-    });
+    jsGBCui.addEventListener("down", ({ detail }) => gameboy.actionDown(detail.button));
+    jsGBCui.addEventListener("up", ({ detail }) => gameboy.actionUp(detail.button));
   }
 }
 
