@@ -6,7 +6,7 @@ export default function (gameboy, jsGBCui) {
   if (require) {
     const { ipcRenderer } = require("electron");
 
-    if (!isWindows()) {
+    if (isWindows()) {
       $("body").css("padding-top", 0);
     }
 
