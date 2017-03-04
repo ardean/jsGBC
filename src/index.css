@@ -22,7 +22,6 @@ body {
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  padding-top: 22px;
 }
 
 ::selection {
