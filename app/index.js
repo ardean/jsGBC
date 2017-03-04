@@ -19,13 +19,12 @@ const mainWindowServer = new WindowServer(
   indexPath, {
     width: 400,
     height: 731,
-    useContentSize: true,
     frame: !isMacOS(),
     titleBarStyle: "hidden",
+    useContentSize: true,
     resizable: false,
     transparent: true,
-    fullscreenable: true,
-    useContentSize: true
+    fullscreenable: true
   }
 );
 
