@@ -20,7 +20,7 @@ const mainWindowServer = new WindowServer(
     width: 400,
     height: 731,
     useContentSize: true,
-    frame: false,
+    frame: !isMacOS(),
     titleBarStyle: "hidden",
     resizable: false,
     transparent: true,

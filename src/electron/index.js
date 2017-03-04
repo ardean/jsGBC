@@ -1,9 +1,14 @@
 import $ from "jquery";
 import Fullscreen from "./fullscreen.js";
+import { isWindows } from "../util.js";
 
 export default function (gameboy, jsGBCui) {
   if (require) {
     const { ipcRenderer } = require("electron");
+
+    if (!isWindows()) {
+      $("body").css("padding-top", 0);
+    }
 
     const fullscreen = new Fullscreen();
     fullscreen.on("change", isActive => {

@@ -28,6 +28,6 @@
     "tests"
   ],
   "dependencies": {
-    "jsgbc-ui": "jsGBC-ui#v0.2.2"
+    "jsgbc-ui": "jsGBC-ui#v0.2.3"
   }
 }
