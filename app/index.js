@@ -7,6 +7,11 @@ const { log } = require("util");
 const path = require("path");
 const fs = require("fs");
 
+let windowHeight = 732;
+if (isWindows()) {
+  windowHeight = 710;
+}
+
 let romPathToLoad = process.argv[1] || null;
 
 const openROMDialog = new OpenROMDialog(openROM);
@@ -18,7 +23,7 @@ if (!isProduction()) {
 const mainWindowServer = new WindowServer(
   indexPath, {
     width: 400,
-    height: 731,
+    height: windowHeight,
     frame: !isMacOS(),
     titleBarStyle: "hidden",
     useContentSize: true,
