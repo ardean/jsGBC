@@ -6,12 +6,21 @@ export default function (gameboy, jsGBCui) {
     const { ipcRenderer } = require("electron");
 
     const fullscreen = new Fullscreen();
+    let isServerRequested = false;
     fullscreen.on("change", isActive => {
       if (isActive) {
-        ipcRenderer.send("requestFullscreen");
+        if (isServerRequested) {
+          isServerRequested = false;
+        } else {
+          ipcRenderer.send("maximize");
+        }
         jsGBCui.fullscreen = true;
       } else {
-        ipcRenderer.send("cancelFullscreen");
+        if (isServerRequested) {
+          isServerRequested = false;
+        } else {
+          ipcRenderer.send("unmaximize");
+        }
         jsGBCui.fullscreen = false;
       }
     });
@@ -23,8 +32,10 @@ export default function (gameboy, jsGBCui) {
     ipcRenderer.on("open-rom", (e, rom) => {
       gameboy.replaceCartridge(rom);
     }).on("requestFullscreen", () => {
+      isServerRequested = true;
       fullscreen.request();
     }).on("cancelFullscreen", () => {
+      isServerRequested = true;
       fullscreen.cancel();
     });
 

@@ -1,6 +1,7 @@
 const { BrowserWindow, ipcMain } = require("electron");
 const EventEmitter = require("events");
 const url = require("url");
+const { isMacOS } = require("./util.js");
 
 class WindowServer extends EventEmitter {
   constructor(url, options) {
@@ -19,33 +20,35 @@ class WindowServer extends EventEmitter {
       slashes: true
     });
 
-    this.window.on("enter-full-screen", () => {
-      if (this.requestedFromClient) {
-        this.requestedFromClient = false;
-      } else {
+    if (isMacOS()) {
+      this.window.on("enter-full-screen", () => {
+        this.window.setResizable(true);
+        if (this.isClientRequested) return this.isClientRequested = false;
         this.sendToClient("requestFullscreen");
-      }
-
-      this.window.setResizable(true);
-    }).on("leave-full-screen", () => {
-      if (this.requestedFromClient) {
-        this.requestedFromClient = false;
-      } else {
+      }).on("leave-full-screen", () => {
+        this.window.setResizable(false);
+        if (this.isClientRequested) return this.isClientRequested = false;
         this.sendToClient("cancelFullscreen");
-      }
-
-      this.window.setResizable(false);
-    });
+      });
+    } else {
+      this.window.on("maximize", () => {
+        if (this.isClientRequested) return this.isClientRequested = false;
+        this.sendToClient("requestFullscreen");
+      }).on("unmaximize", () => {
+        if (this.isClientRequested) return this.isClientRequested = false;
+        this.sendToClient("cancelFullscreen");
+      });
+    }
 
     ipcMain.on("ready", () => {
       this.isClientReady = true;
       this.emit("clientReady");
-    }).on("requestFullscreen", () => {
-      this.requestedFromClient = true;
-      this.window.setFullScreen(true);
-    }).on("cancelFullscreen", () => {
-      this.requestedFromClient = true;
-      this.window.setFullScreen(false);
+    }).on("maximize", () => {
+      this.isClientRequested = true;
+      this.maximize();
+    }).on("unmaximize", () => {
+      this.isClientRequested = true;
+      this.unmaximize();
     });
 
     this.window.loadURL(indexUrl);
@@ -58,6 +61,22 @@ class WindowServer extends EventEmitter {
 
   sendToClient(name, options) {
     this.window.webContents.send(name, options);
+  }
+
+  maximize() {
+    if (isMacOS()) {
+      this.window.setFullScreen(true);
+    } else {
+      this.window.maximize();
+    }
+  }
+
+  unmaximize() {
+    if (isMacOS()) {
+      this.window.setFullScreen(false);
+    } else {
+      this.window.unmaximize();
+    }
   }
 
   get isWindowOpen() {

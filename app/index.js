@@ -28,7 +28,7 @@ const mainWindowServer = new WindowServer(
     titleBarStyle: "hidden",
     useContentSize: true,
     resizable: false,
-    transparent: true,
+    transparent: isMacOS(),
     fullscreenable: true
   }
 );

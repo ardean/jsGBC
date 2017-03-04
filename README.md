@@ -6,9 +6,9 @@
 [![License][license-image]][license-url]
 [![Github Downloads][downloads-image]][downloads-url]
 
-![Screenshot](docs/screenshot.png)
-
 **[Download Latest Release][downloads-url]**
+
+![Screenshot](docs/screenshot.png)
 
 ## Features
 
