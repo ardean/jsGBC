@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const OpenROMDialog = require("./open-rom-dialog");
+const OpenBatteryFileDialog = require("./open-battery-file-dialog");
 const { isMacOS, isWindows, isProduction } = require("./util");
 const WindowServer = require("./window-server");
 const createMenuTemplate = require("./menu");
@@ -15,6 +16,7 @@ if (isWindows()) {
 let romPathToLoad = process.argv[1] || null;
 
 const openROMDialog = new OpenROMDialog(openROM);
+const openBatteryFileDialog = new OpenBatteryFileDialog(openBatteryFile);
 let indexPath = path.join(__dirname, "./dist/index.html");
 if (!isProduction()) {
   indexPath = path.join(__dirname, "../index.html");
@@ -58,7 +60,9 @@ app
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
         createMenuTemplate(mainWindowServer, {
-          openROMDialog
+          openROMDialog,
+          openBatteryFileDialog,
+          saveBatteryFile
         })
       )
     );
@@ -81,4 +85,19 @@ function openROM(romPath) {
   } catch (e) {
     log(e);
   }
+}
+
+function openBatteryFile(batteryFilePath) {
+  if (!batteryFilePath) return;
+
+  try {
+    const fileContent = fs.readFileSync(batteryFilePath);
+    mainWindowServer.sendToClient("open-battery-file", fileContent);
+  } catch (e) {
+    log(e);
+  }
+}
+
+function saveBatteryFile() {
+  mainWindowServer.sendToClient("save-battery-file");
 }

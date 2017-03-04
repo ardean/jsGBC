@@ -3,15 +3,10 @@ const { isMacOS } = require("./util");
 
 module.exports = function (mainWindowServer, options) {
   const gamepadMappingMenu = [{
-      label: "Standard",
-      type: "radio",
-      checked: true
-    },
-    {
-      label: "GameCube",
-      type: "radio"
-    }
-  ];
+    label: "Standard",
+    type: "radio",
+    checked: true
+  }];
 
   const menu = [{
       label: "File",
@@ -19,6 +14,14 @@ module.exports = function (mainWindowServer, options) {
         label: "Open ROM...",
         accelerator: "CmdOrCtrl+O",
         click: options.openROMDialog.show
+      }, {
+        label: "Open Battery File...",
+        accelerator: "CmdOrCtrl+B",
+        click: options.openBatteryFileDialog.show
+      }, {
+        label: "Save Battery File",
+        accelerator: "CmdOrCtrl+S",
+        click: options.saveBatteryFile
       }]
     },
     {

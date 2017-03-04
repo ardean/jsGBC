@@ -1,4 +1,5 @@
 import $ from "jquery";
+import { util } from "jsgbc-core";
 import Fullscreen from "./fullscreen.js";
 
 export default function (gameboy, jsGBCui) {
@@ -31,6 +32,10 @@ export default function (gameboy, jsGBCui) {
 
     ipcRenderer.on("open-rom", (e, rom) => {
       gameboy.replaceCartridge(rom);
+    }).on("open-battery-file", (e, batteryFile) => {
+      gameboy.loadBatteryFileArrayBuffer(batteryFile);
+    }).on("save-battery-file", () => {
+      util.downloadFile(gameboy.core.cartridgeSlot.cartridge.name + ".sav", gameboy.getBatteryFileArrayBuffer());
     }).on("requestFullscreen", () => {
       isServerRequested = true;
       fullscreen.request();

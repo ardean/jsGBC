@@ -1,7 +1,7 @@
 {
   "name": "jsgbc",
   "productName": "jsGBC",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "A cross-platform, free and open-source GameBoy Color Emulator written in JavaScript",
   "main": "app/index.js",
   "repository": "https://github.com/ardean/jsGBC",
@@ -45,7 +45,7 @@
     "dependencies": {
       "jquery": "npm:jquery@^3.1.1",
       "jsgamepad": "github:ardean/jsGamepad@^0.1.0",
-      "jsgbc-core": "github:ardean/jsGBC-core@^0.4.0"
+      "jsgbc-core": "github:ardean/jsGBC-core@^0.4.2"
     },
     "devDependencies": {
       "plugin-babel": "npm:systemjs-plugin-babel@^0.0.20"
