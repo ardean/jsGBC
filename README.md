@@ -14,8 +14,8 @@
 
 > Screen
 
-- Pixelated
-- Fullscreen Mode
+- Pixelated (**toggle using menu**)
+- Fullscreen Mode (**double click on screen**)
 
 > Files
 
