@@ -27,6 +27,11 @@ module.exports = function (mainWindowServer, options) {
     {
       label: "View",
       submenu: [{
+          label: "Pixelated",
+          type: "checkbox",
+          checked: true,
+          click: options.togglePixelation
+        }, {
           role: "reload"
         },
         {

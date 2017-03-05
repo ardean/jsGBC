@@ -62,7 +62,8 @@ app
         createMenuTemplate(mainWindowServer, {
           openROMDialog,
           openBatteryFileDialog,
-          saveBatteryFile
+          saveBatteryFile,
+          togglePixelation
         })
       )
     );
@@ -100,4 +101,8 @@ function openBatteryFile(batteryFilePath) {
 
 function saveBatteryFile() {
   mainWindowServer.sendToClient("save-battery-file");
+}
+
+function togglePixelation(menuItem) {
+  mainWindowServer.sendToClient("toggle-pixelation", menuItem.checked);
 }

@@ -5,6 +5,7 @@ import Fullscreen from "./fullscreen.js";
 export default function (gameboy, jsGBCui) {
   if (require) {
     const { ipcRenderer } = require("electron");
+    const $jsGBCui = $(jsGBCui);
 
     const fullscreen = new Fullscreen();
     let isServerRequested = false;
@@ -36,12 +37,19 @@ export default function (gameboy, jsGBCui) {
       gameboy.loadBatteryFileArrayBuffer(batteryFile);
     }).on("save-battery-file", () => {
       util.downloadFile(gameboy.core.cartridgeSlot.cartridge.name + ".sav", gameboy.getBatteryFileArrayBuffer());
-    }).on("requestFullscreen", () => {
+    }).on("toggle-pixelation", (e, hasPixelation) => {
+      if (hasPixelation) {
+        $jsGBCui.removeAttr("no-pixelation");
+      } else {
+        $jsGBCui.attr("no-pixelation", true);
+      }
+    }).on("toggle-fullscreen", (e, isActive) => {
       isServerRequested = true;
-      fullscreen.request();
-    }).on("cancelFullscreen", () => {
-      isServerRequested = true;
-      fullscreen.cancel();
+      if (isActive) {
+        fullscreen.request();
+      } else {
+        fullscreen.cancel();
+      }
     });
 
     ipcRenderer.send("ready");

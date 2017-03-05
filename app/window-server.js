@@ -24,19 +24,19 @@ class WindowServer extends EventEmitter {
       this.window.on("enter-full-screen", () => {
         this.window.setResizable(true);
         if (this.isClientRequested) return this.isClientRequested = false;
-        this.sendToClient("requestFullscreen");
+        this.sendToClient("toggle-fullscreen", true);
       }).on("leave-full-screen", () => {
         this.window.setResizable(false);
         if (this.isClientRequested) return this.isClientRequested = false;
-        this.sendToClient("cancelFullscreen");
+        this.sendToClient("toggle-fullscreen", false);
       });
     } else {
       this.window.on("maximize", () => {
         if (this.isClientRequested) return this.isClientRequested = false;
-        this.sendToClient("requestFullscreen");
+        this.sendToClient("toggle-fullscreen", true);
       }).on("unmaximize", () => {
         if (this.isClientRequested) return this.isClientRequested = false;
-        this.sendToClient("cancelFullscreen");
+        this.sendToClient("toggle-fullscreen", false);
       });
     }
 
