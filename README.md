@@ -1,5 +1,7 @@
 # jsGBC
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/ardean/jsGBC.svg)](https://greenkeeper.io/)
+
 > A cross-platform, free and open-source GameBoy Color Emulator written in JavaScript.
 
 [![Github Version][gh-image]][gh-url]
