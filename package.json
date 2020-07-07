@@ -30,7 +30,7 @@
   "devDependencies": {
     "bower": "^1.8.0",
     "cpy-cli": "^1.0.1",
-    "electron": "^1.4.15",
+    "electron": "^9.1.0",
     "electron-builder": "^13.0.0",
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.1",
